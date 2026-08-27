@@ -1,0 +1,44 @@
+appId: io.github.yangke-nz.price-action-mark
+productName: Price Action Mark
+copyright: Copyright © 2026 Ke Yang
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - out/**/*
+  - package.json
+
+# The bundled snapshot is read from process.resourcesPath at runtime, so it
+# ships beside the app rather than inside the asar — it is data, and a user
+# looking for the raw series should be able to find it.
+extraResources:
+  - from: data/es_data.json
+    to: data/es_data.json
+
+asar: true
+compression: normal
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Price Action Mark
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.finance
+
+linux:
+  target:
+    - AppImage
+  category: Office

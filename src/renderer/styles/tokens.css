@@ -1,0 +1,113 @@
+/**
+ * The palette, defined once. Both build targets and every component read these;
+ * the chart reads them too, via getComputedStyle, so no colour is ever written
+ * twice in two languages.
+ *
+ * Green up / red down is the trading convention, and it is also the classic
+ * red-green colour-blindness failure. The steps below were picked by measuring
+ * rather than by eye: a dark green against a lighter red lets LIGHTNESS carry
+ * the separation where hue cannot, giving dE 7.8 (light) and 8.6 (dark) under
+ * simulated protanopia and deuteranopia. The obvious bright pairing
+ * #0ca30c / #d03b3b fails outright at dE 4.1.
+ *
+ * --ema is the one non-directional mark, and it has to read as neither up nor
+ * down. Blue is the safe axis: protan and deuteran vision compress red-green
+ * but leave blue-yellow intact, so #4338ca / #93a5f4 sit dE 40+ from BOTH the
+ * up and down steps under either simulation, against a dE 8 threshold. They
+ * are also kept dE 13+ from --focus, so a moving average never reads as a
+ * focused control.
+ *
+ * Marks need 3:1 against the surface; text needs 4.5:1. That is why the delta
+ * values use separate --up-text / --down-text steps: #e34948 only reaches
+ * 3.85:1 on the light surface.
+ *
+ * Every token is declared in THREE scopes: bare :root, the dark media query,
+ * and :root[data-theme="dark"]. Miss one and the in-app toggle and the OS
+ * setting disagree. If you change a colour, change it in all three.
+ */
+
+:root {
+  color-scheme: light;
+
+  --plane: #eef2f6;
+  --surface: #fbfcfd;
+  --surface-2: #f4f7fa;
+
+  --ink: #0c1015;
+  --ink-2: #4d5560;
+  --muted: #828b96;
+
+  --grid: #e2e7ec;
+  --axis: #c9d1d9;
+  --hair: rgb(12 16 21 / 10%);
+
+  --up: #006300;
+  --down: #e34948;
+  --neutral: #828b96;
+  --up-text: #006300;
+  --down-text: #d03b3b;
+  --ema: #4338ca;
+
+  --focus: #2a78d6;
+  --shadow: 0 1px 2px rgb(12 16 21 / 5%), 0 8px 24px -12px rgb(12 16 21 / 18%);
+
+  --sans: "Archivo Variable", "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --plane: #0b0d10;
+    --surface: #15181c;
+    --surface-2: #1b1f24;
+
+    --ink: #f2f5f8;
+    --ink-2: #a8b1bc;
+    --muted: #6d7681;
+
+    --grid: #23282e;
+    --axis: #333a42;
+    --hair: rgb(242 245 248 / 10%);
+
+    --up: #008300;
+    --down: #e66767;
+    --neutral: #6d7681;
+    --up-text: #0ca30c;
+    --down-text: #e66767;
+    --ema: #93a5f4;
+
+    --focus: #3987e5;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --plane: #0b0d10;
+  --surface: #15181c;
+  --surface-2: #1b1f24;
+
+  --ink: #f2f5f8;
+  --ink-2: #a8b1bc;
+  --muted: #6d7681;
+
+  --grid: #23282e;
+  --axis: #333a42;
+  --hair: rgb(242 245 248 / 10%);
+
+  --up: #008300;
+  --down: #e66767;
+  --neutral: #6d7681;
+  --up-text: #0ca30c;
+  --down-text: #e66767;
+  --ema: #93a5f4;
+
+  --focus: #3987e5;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+}

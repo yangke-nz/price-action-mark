@@ -1,0 +1,55 @@
+{
+  "name": "price-action-mark",
+  "version": "2.0.0",
+  "description": "Price action charting — draw and mark up daily bars. Electron desktop app and a single-file HTML artifact from one Svelte codebase.",
+  "author": "Ke Yang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yangke-nz/price-action-mark.git"
+  },
+  "homepage": "https://github.com/yangke-nz/price-action-mark#readme",
+  "bugs": {
+    "url": "https://github.com/yangke-nz/price-action-mark/issues"
+  },
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.ts",
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "npm run typecheck && electron-vite build",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "artifact": "vite build --config vite.artifact.config.ts && node scripts/inline-artifact.ts",
+    "data": "node scripts/fetch-data.ts",
+    "csv": "node scripts/export-csv.ts",
+    "smoke": "electron scripts/smoke.cjs dist/preview.html",
+    "smoke:app": "electron scripts/smoke.cjs --app",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "svelte-check --tsconfig tsconfig.web.json --threshold warning",
+    "clean": "node -e \"for (const d of ['out','dist','dist-artifact','release']) require('fs').rmSync(d,{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "lightweight-charts": "5.2.1"
+  },
+  "devDependencies": {
+    "@fontsource-variable/archivo": "^5.2.5",
+    "@fontsource/ibm-plex-mono": "^5.2.5",
+    "@sveltejs/vite-plugin-svelte": "6.2.4",
+    "@tsconfig/svelte": "5.0.8",
+    "@types/node": "^24.0.0",
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "svelte": "5.56.10",
+    "svelte-check": "4.7.6",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}

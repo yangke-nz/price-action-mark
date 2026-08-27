@@ -1,0 +1,15 @@
+# One line-ending policy: LF, in the repo and in the working tree. Git for
+# Windows sets core.autocrlf=true system-wide, so without this a fresh clone
+# checks out CRLF and every file in the tree immediately reads as modified.
+* text=auto eol=lf
+
+# Generated. Collapsed in GitHub diffs, excluded from the language stats.
+package-lock.json   linguist-generated=true
+data/es_data.json   linguist-generated=true
+data/ES_F_daily.csv linguist-generated=true
+
+# Never line-ending-converted (resources/ holds the packaging icons).
+*.woff2 binary
+*.png   binary
+*.ico   binary
+*.icns  binary
