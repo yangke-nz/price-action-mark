@@ -1,0 +1,1285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Reference for Price Action Mark's marking layer: all 31 rules with measured hit rates, the structure dials, the walk-forward findings, and how detectors get tested.">
+<style>
+  /* Reset. The CSS below assumes no inherited margins: spacing is set
+     explicitly or comes from flex/grid gap. */
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, p, ul, figure { margin: 0; padding: 0; }
+  ul { list-style: none; }
+  img, svg { max-width: 100%; display: block; }
+</style>
+<title>The Marking Layer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ------------------------------------------------------------------ */
+  /* Tokens, lifted from src/renderer/styles/tokens.css.                 */
+  /* Three scopes, exactly as the app declares them: bare :root, the     */
+  /* dark media query, and the explicit stamp. Miss one and the toggle   */
+  /* and the OS setting disagree.                                        */
+  /* ------------------------------------------------------------------ */
+  :root {
+    color-scheme: light;
+
+    --plane: #eef2f6;
+    --surface: #fbfcfd;
+    --surface-2: #f4f7fa;
+
+    --ink: #0c1015;
+    --ink-2: #4d5560;
+    --muted: #828b96;
+
+    --grid: #e2e7ec;
+    --axis: #c9d1d9;
+    --hair: rgb(12 16 21 / 10%);
+
+    --up: #006300;
+    --down: #e34948;
+    --neutral: #828b96;
+    --up-text: #006300;
+    --down-text: #d03b3b;
+    --ema: #4338ca;
+    --ema-wash: rgb(67 56 202 / 9%);
+
+    --focus: #2a78d6;
+    --shadow: 0 1px 2px rgb(12 16 21 / 5%), 0 8px 24px -12px rgb(12 16 21 / 18%);
+
+    --sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
+
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --plane: #0b0d10;
+      --surface: #15181c;
+      --surface-2: #1b1f24;
+
+      --ink: #f2f5f8;
+      --ink-2: #a8b1bc;
+      --muted: #6d7681;
+
+      --grid: #23282e;
+      --axis: #333a42;
+      --hair: rgb(242 245 248 / 10%);
+
+      --up: #008300;
+      --down: #e66767;
+      --neutral: #6d7681;
+      --up-text: #0ca30c;
+      --down-text: #e66767;
+      --ema: #93a5f4;
+      --ema-wash: rgb(147 165 244 / 12%);
+
+      --focus: #3987e5;
+      --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --plane: #0b0d10;
+    --surface: #15181c;
+    --surface-2: #1b1f24;
+
+    --ink: #f2f5f8;
+    --ink-2: #a8b1bc;
+    --muted: #6d7681;
+
+    --grid: #23282e;
+    --axis: #333a42;
+    --hair: rgb(242 245 248 / 10%);
+
+    --up: #008300;
+    --down: #e66767;
+    --neutral: #6d7681;
+    --up-text: #0ca30c;
+    --down-text: #e66767;
+    --ema: #93a5f4;
+    --ema-wash: rgb(147 165 244 / 12%);
+
+    --focus: #3987e5;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  body {
+    background: var(--plane);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  /* One measured column for prose; .wide breaks out for tables. */
+  .col {
+    max-width: 68ch;
+  }
+
+  :where(a):focus-visible,
+  :where(button):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* --- masthead ----------------------------------------------------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--axis);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ema);
+  }
+
+  h1 {
+    font-size: clamp(38px, 6vw, 62px);
+    line-height: 1.04;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    text-wrap: balance;
+    max-width: 15ch;
+  }
+
+  .standfirst {
+    font-size: 19px;
+    line-height: 1.58;
+    color: var(--ink-2);
+    max-width: 62ch;
+  }
+
+  .standfirst strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* --- topline figures ---------------------------------------------- */
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--axis);
+    border: 1px solid var(--axis);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 44px;
+  }
+
+  .fig {
+    background: var(--surface);
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .fig b {
+    font-family: var(--mono);
+    font-size: 27px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .fig span {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .figures + .caption {
+    margin-top: 12px;
+  }
+
+  .caption {
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 74ch;
+  }
+
+  .caption code { font-size: 12.5px; }
+
+  /* --- sections ------------------------------------------------------ */
+
+  section {
+    padding-top: 72px;
+  }
+
+  h2 {
+    font-size: 29px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-wrap: balance;
+    margin-bottom: 8px;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+  }
+
+  .lede {
+    font-size: 17px;
+    color: var(--ink-2);
+    margin-bottom: 28px;
+  }
+
+  p { margin-bottom: 16px; }
+  p:last-child { margin-bottom: 0; }
+
+  strong { font-weight: 620; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.875em;
+    background: var(--surface-2);
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+    padding: 0.1em 0.34em;
+  }
+
+  /* --- the pipeline -------------------------------------------------- */
+
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin: 8px 0 20px;
+  }
+
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--grid);
+    border-radius: var(--radius);
+    padding: 18px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    position: relative;
+  }
+
+  .stage-file {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ema);
+    word-break: break-word;
+  }
+
+  .stage b {
+    font-size: 15.5px;
+    font-weight: 620;
+  }
+
+  .stage p {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    margin: 0;
+  }
+
+  .stage.stored {
+    background: var(--ema-wash);
+    border-color: color-mix(in srgb, var(--ema) 34%, transparent);
+  }
+
+  /* --- rule groups --------------------------------------------------- */
+
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 26px;
+  }
+
+  .chain b {
+    color: var(--ink);
+    font-weight: 500;
+    background: var(--surface);
+    border: 1px solid var(--axis);
+    border-radius: 999px;
+    padding: 4px 12px;
+  }
+
+  .chain i {
+    font-style: normal;
+    color: var(--ema);
+  }
+
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 34px 0 10px;
+  }
+
+  .group-head h3 {
+    margin: 0;
+    font-size: 20px;
+  }
+
+  .group-head .meta {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- catalogue table ----------------------------------------------- */
+
+  .scroller {
+    overflow-x: auto;
+    border: 1px solid var(--axis);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 800px;
+    font-size: 14px;
+  }
+
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--axis);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--grid);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+
+  .c-id {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .c-rule b {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .c-rule span {
+    display: block;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink-2);
+    max-width: 52ch;
+  }
+
+  .c-num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Hit rate: the number, plus the same number as length. */
+  .rate {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 118px;
+  }
+
+  .rate .bar {
+    flex: 1;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--grid);
+    overflow: hidden;
+  }
+
+  .rate .bar i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--ema);
+  }
+
+  .rate .pct {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-2);
+    width: 5ch;
+    text-align: right;
+  }
+
+  /* Default state: a shape as well as a word. */
+  .flag {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 3px 9px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .flag.on {
+    color: var(--ema);
+    background: var(--ema-wash);
+    border-color: color-mix(in srgb, var(--ema) 30%, transparent);
+  }
+
+  .flag.off {
+    color: var(--muted);
+    border-color: var(--axis);
+    border-style: dashed;
+  }
+
+  /* --- callouts ------------------------------------------------------ */
+
+  .note {
+    border-left: 2px solid var(--ema);
+    background: var(--surface);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 18px 22px;
+    margin: 26px 0;
+  }
+
+  .note h3 {
+    font-size: 15.5px;
+    margin-bottom: 5px;
+  }
+
+  .note p {
+    font-size: 15px;
+    color: var(--ink-2);
+    margin-bottom: 10px;
+  }
+
+  .note p:last-child { margin-bottom: 0; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+    margin-top: 24px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--grid);
+    border-radius: var(--radius);
+    padding: 20px 20px 18px;
+  }
+
+  .card h3 {
+    font-size: 15.5px;
+    margin-bottom: 6px;
+  }
+
+  .card p {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    margin: 0;
+  }
+
+  .flow {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.95;
+    background: var(--surface);
+    border: 1px solid var(--grid);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    margin: 24px 0;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--ink-2);
+  }
+
+  .flow b { color: var(--ink); font-weight: 500; }
+  .flow i { color: var(--ema); font-style: normal; }
+
+  ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 18px 0;
+  }
+
+  li {
+    padding-left: 22px;
+    position: relative;
+    color: var(--ink-2);
+  }
+
+  li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 0.66em;
+    width: 7px;
+    height: 1px;
+    background: var(--ema);
+  }
+
+  li strong { color: var(--ink); }
+
+  /* --- walk-forward table -------------------------------------------- */
+
+  .r-pos { color: var(--up-text); font-weight: 500; }
+  .r-neg { color: var(--down-text); font-weight: 500; }
+
+  footer {
+    margin-top: 84px;
+    padding-top: 26px;
+    border-top: 1px solid var(--axis);
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+  }
+
+  footer code { font-size: 12px; }
+
+  @media (max-width: 620px) {
+    .masthead { padding-top: 52px; }
+    section { padding-top: 56px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">Price Action Mark &middot; src/shared/marks/</div>
+    <h1>The Marking Layer</h1>
+    <p class="standfirst">
+      Thirty-one rules that read a daily tape the way Al Brooks describes it — the
+      special bars, the lines those bars form, and the entries those lines set up.
+      Rules propose candidates; <strong>the reader disposes</strong>, and only the
+      verdicts are ever written to disk.
+    </p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><b>31</b><span>rules, across three groups</span></div>
+    <div class="fig"><b>6,550</b><span>ES=F sessions, to 2026-08-27</span></div>
+    <div class="fig"><b>965</b><span>confirmed pivots</span></div>
+    <div class="fig"><b>0.56</b><span>marks per session, as shipped</span></div>
+    <div class="fig"><b>~45 ms</b><span>to run every rule, once</span></div>
+  </div>
+  <p class="caption">
+    Counts are the committed fixture in <code>data/marks-golden.json</code> — the
+    same numbers <code>npm&nbsp;run&nbsp;marks:check</code> holds the layer to.
+  </p>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>Everything is derived except the verdict</h2>
+      <p class="lede">
+        Detection is a pure function of <code>(dataset, ruleConfig)</code>. It runs
+        end to end on every load, because rule output goes stale against the
+        candles the moment a session arrives.
+      </p>
+    </div>
+
+    <div class="pipeline">
+      <div class="stage">
+        <div class="stage-file">marks/metrics.ts</div>
+        <b>Metrics</b>
+        <p>Per-bar columns every rule reads: body, tails, <code>closePos</code>, ATR, gap, roll flags.</p>
+      </div>
+      <div class="stage">
+        <div class="stage-file">marks/structure.ts</div>
+        <b>Structure</b>
+        <p>Pivots, legs, always-in state and the pullback count — built in one forward pass.</p>
+      </div>
+      <div class="stage">
+        <div class="stage-file">marks/registry.ts</div>
+        <b>Rules</b>
+        <p>One array. Push a <code>Rule</code> onto it and it appears in the panel, the menu, the CLI and the artifact.</p>
+      </div>
+      <div class="stage">
+        <div class="stage-file">chart/marks/draw.ts</div>
+        <b>Geometry</b>
+        <p>Marks become polylines in CSS pixels. The renderer strokes them; the hit test measures the same ones.</p>
+      </div>
+      <div class="stage stored">
+        <div class="stage-file">main/marks.ts</div>
+        <b>Verdicts &mdash; stored</b>
+        <p>Keep or drop, keyed by the mark's stable id. The only part of this row that touches disk.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <p>
+        Everything under <code>src/shared/marks/</code> is free of Node, the DOM and
+        Svelte, so the desktop app, the published HTML artifact and the CLI report
+        run byte-for-byte the same detection code. That is not tidiness — it is the
+        only thing that makes a rule testable at all.
+      </p>
+      <p>
+        Toggling a rule does not re-detect. The full pass is ~45&nbsp;ms; filtering
+        an already-computed result is <strong>0.26&nbsp;ms</strong>, so a checkbox
+        stays a checkbox rather than becoming 130&times; more expensive than it looks.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>Three groups, in the order they depend on each other</h2>
+      <p class="lede">
+        The grouping is not filing. Entry rules import their shapes from the rules
+        that define them — <code>breakoutIndices</code> from bars,
+        <code>findDoubles</code> and <code>findWedges</code> from lines.
+      </p>
+    </div>
+
+    <div class="chain">
+      <b>bars</b><i>&rarr; form</i><b>lines</b><i>&rarr; set up</i><b>entries</b>
+    </div>
+
+    <div class="col">
+      <p>
+        A pattern has one definition and rules that need it import it. An entry rule
+        with its own idea of "what is a double bottom" drifts from the shape rule the
+        first time a tolerance moves — and the chart then draws one thing and trades
+        another.
+      </p>
+    </div>
+
+    <!-- bars ---------------------------------------------------------- -->
+    <div class="group-head">
+      <h3>Bars &mdash; what a single session says</h3>
+      <div class="meta">15 rules &middot; 8,391 marks &middot; 10 on by default</div>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Threshold</th>
+            <th>Marks</th>
+            <th>Of sessions</th>
+            <th>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="c-rule"><b>Trend bar</b><span>Body at least 60% of the range.</span><span class="c-id">trend-bar</span></td>
+            <td class="c-id">body &ge; 0.60</td>
+            <td class="c-num">2,260</td>
+            <td><div class="rate"><span class="bar"><i style="width:100%"></i></span><span class="pct">34.5%</span></div></td>
+            <td><span class="flag off">off</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Big trend bar</b><span>A trend bar whose range is at least 1.5&times; ATR.</span><span class="c-id">big-bar</span></td>
+            <td class="c-id">1.5 ATR</td>
+            <td class="c-num">450</td>
+            <td><div class="rate"><span class="bar"><i style="width:20%"></i></span><span class="pct">6.9%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Doji</b><span>Body at most 25% of the range — a one-bar trading range.</span><span class="c-id">doji</span></td>
+            <td class="c-id">body &le; 0.25</td>
+            <td class="c-num">1,783</td>
+            <td><div class="rate"><span class="bar"><i style="width:79%"></i></span><span class="pct">27.2%</span></div></td>
+            <td><span class="flag off">off</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Inside bar</b><span>High no higher and low no lower than the session before.</span><span class="c-id">inside</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">777</td>
+            <td><div class="rate"><span class="bar"><i style="width:34%"></i></span><span class="pct">11.9%</span></div></td>
+            <td><span class="flag off">off</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Outside bar</b><span>Higher high and lower low than the session before.</span><span class="c-id">outside</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">771</td>
+            <td><div class="rate"><span class="bar"><i style="width:34%"></i></span><span class="pct">11.8%</span></div></td>
+            <td><span class="flag off">off</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>ii / iii</b><span>Two, or three, consecutive inside bars. Breakout mode.</span><span class="c-id">ii</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">40</td>
+            <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.6%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>ioi</b><span>Inside, outside, inside — a coiled breakout setup.</span><span class="c-id">ioi</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">26</td>
+            <td><div class="rate"><span class="bar"><i style="width:1%"></i></span><span class="pct">0.4%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Reversal bar</b><span>Takes out the previous extreme, then closes back through it in the top or bottom third.</span><span class="c-id">reversal-bar</span></td>
+            <td class="c-id">10-bar extreme</td>
+            <td class="c-num">340</td>
+            <td><div class="rate"><span class="bar"><i style="width:15%"></i></span><span class="pct">5.2%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Shaved bar</b><span>A trend bar with almost no tail at one end — no pullback inside the session.</span><span class="c-id">shaved</span></td>
+            <td class="c-id">tail &le; 0.05</td>
+            <td class="c-num">989</td>
+            <td><div class="rate"><span class="bar"><i style="width:44%"></i></span><span class="pct">15.1%</span></div></td>
+            <td><span class="flag off">off</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Pin bar</b><span>One tail at least 60% of the range with a small body. Direction is the tail's opposite.</span><span class="c-id">pin-bar</span></td>
+            <td class="c-id">tail 0.60, 1 ATR</td>
+            <td class="c-num">244</td>
+            <td><div class="rate"><span class="bar"><i style="width:11%"></i></span><span class="pct">3.7%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Climax</b><span>A bar of at least 2&times; ATR ending a run of three or more in one direction.</span><span class="c-id">climax</span></td>
+            <td class="c-id">2 ATR, run 3</td>
+            <td class="c-num">38</td>
+            <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.6%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Gap</b><span>Opens clear of the previous session's range. Contract rolls are excluded — that gap is carry.</span><span class="c-id">gap-bar</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">42</td>
+            <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.6%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Breakout</b><span>A trend bar closing beyond the previous 20 sessions' extreme.</span><span class="c-id">breakout</span></td>
+            <td class="c-id">20 bars, 1 ATR</td>
+            <td class="c-num">349</td>
+            <td><div class="rate"><span class="bar"><i style="width:15%"></i></span><span class="pct">5.3%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Follow-through</b><span>A second trend bar the same way, straight after a breakout. Its absence is the more useful signal.</span><span class="c-id">follow-through</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">45</td>
+            <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.7%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Two-bar reversal</b><span>Opposed trend bars of comparable size, the second undoing the first.</span><span class="c-id">two-bar-reversal</span></td>
+            <td class="c-id">match 0.60</td>
+            <td class="c-num">237</td>
+            <td><div class="rate"><span class="bar"><i style="width:10%"></i></span><span class="pct">3.6%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- lines --------------------------------------------------------- -->
+    <div class="group-head">
+      <h3>Lines &mdash; the shapes those bars build</h3>
+      <div class="meta">8 rules &middot; 980 marks &middot; all on by default</div>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Threshold</th>
+            <th>Marks</th>
+            <th>Of sessions</th>
+            <th>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="c-rule"><b>Bull channel</b><span>Three or more rising lows on one line, tolerated to 0.4 ATR, with at most one close through it.</span><span class="c-id">bull-channel</span></td>
+            <td class="c-id">3 touches</td>
+            <td class="c-num">99</td>
+            <td><div class="rate"><span class="bar"><i style="width:4%"></i></span><span class="pct">1.5%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Bear channel</b><span>The mirror: three or more falling highs on one line.</span><span class="c-id">bear-channel</span></td>
+            <td class="c-id">3 touches</td>
+            <td class="c-num">96</td>
+            <td><div class="rate"><span class="bar"><i style="width:4%"></i></span><span class="pct">1.5%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Micro channel</b><span>Five or more consecutive bars each with a higher high and higher low, or the mirror. The strongest kind, and the one that offers no pullback entry.</span><span class="c-id">micro-channel</span></td>
+            <td class="c-id">5 bars</td>
+            <td class="c-num">238</td>
+            <td><div class="rate"><span class="bar"><i style="width:10%"></i></span><span class="pct">3.6%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Spike and channel</b><span>Three or more trend bars covering 1.5 ATR, then a channel of at most 0.6&times; that slope. Marks where the trend stopped being one-way.</span><span class="c-id">spike-and-channel</span></td>
+            <td class="c-id">1.5 ATR run</td>
+            <td class="c-num">80</td>
+            <td><div class="rate"><span class="bar"><i style="width:3%"></i></span><span class="pct">1.2%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Double top</b><span>Two highs within 0.5 ATR, 4&ndash;40 sessions apart, with a 1.5 ATR trough between them.</span><span class="c-id">double-top</span></td>
+            <td class="c-id">0.5 ATR</td>
+            <td class="c-num">112</td>
+            <td><div class="rate"><span class="bar"><i style="width:5%"></i></span><span class="pct">1.7%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Double bottom</b><span>Two lows within 0.5 ATR, with a 1.5 ATR peak between them.</span><span class="c-id">double-bottom</span></td>
+            <td class="c-id">0.5 ATR</td>
+            <td class="c-num">79</td>
+            <td><div class="rate"><span class="bar"><i style="width:3%"></i></span><span class="pct">1.2%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Wedge</b><span>Three pushes one way, each at most 85% of the one before, with the boundaries converging.</span><span class="c-id">wedge</span></td>
+            <td class="c-id">shrink 0.85</td>
+            <td class="c-num">132</td>
+            <td><div class="rate"><span class="bar"><i style="width:6%"></i></span><span class="pct">2.0%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Triangle</b><span>Lower highs against higher lows: the two boundaries slope opposite ways and the range closes.</span><span class="c-id">triangle</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">144</td>
+            <td><div class="rate"><span class="bar"><i style="width:6%"></i></span><span class="pct">2.2%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <h3>A sliding window emits the same shape several times</h3>
+        <p>
+          Wedge and triangle scan five pivots at a time, so a genuinely coiling stretch
+          satisfies the predicate at four consecutive positions. Both keep a
+          claimed-range list and skip overlaps; channels do the same, longest run first.
+          Without it the count roughly doubles and the chart wears four copies of one triangle.
+        </p>
+      </div>
+      <div class="note">
+        <h3>A trendline break is measured on the close, not the extreme</h3>
+        <p>
+          A wick through a trendline is what trendlines are for. Counting those as
+          breaks rejects every real channel on the chart.
+        </p>
+      </div>
+    </div>
+
+    <!-- entries ------------------------------------------------------- -->
+    <div class="group-head">
+      <h3>Entries &mdash; what those shapes set up</h3>
+      <div class="meta">8 rules &middot; 1,655 marks &middot; 7 on by default</div>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Threshold</th>
+            <th>Marks</th>
+            <th>Of sessions</th>
+            <th>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="c-rule"><b>Pullback entry (H1&ndash;H4 / L1&ndash;L4)</b><span>Every counted attempt to resume the trend. Around 800 over the series, so it ships off; the second entry is the subset worth watching.</span><span class="c-id">pullback-entry</span></td>
+            <td class="c-id">cap 4</td>
+            <td class="c-num">808</td>
+            <td><div class="rate"><span class="bar"><i style="width:36%"></i></span><span class="pct">12.3%</span></div></td>
+            <td><span class="flag off">off</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Second entry (H2 / L2)</b><span>The second attempt to resume the trend, which Brooks treats as the highest-probability with-trend entry.</span><span class="c-id">second-entry</span></td>
+            <td class="c-id">&mdash;</td>
+            <td class="c-num">162</td>
+            <td><div class="rate"><span class="bar"><i style="width:7%"></i></span><span class="pct">2.5%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Double top short</b><span>Short the bar that turns the second peak. Target is the measured move: the pattern height projected down from the neckline.</span><span class="c-id">dt-short</span></td>
+            <td class="c-id">measured move</td>
+            <td class="c-num">112</td>
+            <td><div class="rate"><span class="bar"><i style="width:5%"></i></span><span class="pct">1.7%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Double bottom long</b><span>Long the bar that turns the second trough. Target is the pattern height projected up from the neckline.</span><span class="c-id">db-long</span></td>
+            <td class="c-id">measured move</td>
+            <td class="c-num">79</td>
+            <td><div class="rate"><span class="bar"><i style="width:3%"></i></span><span class="pct">1.2%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Wedge reversal</b><span>Trade against the third push of a wedge. Target is the start of the wedge, which is where Brooks expects it to unwind to.</span><span class="c-id">wedge-reversal</span></td>
+            <td class="c-id">wedge start</td>
+            <td class="c-num">66</td>
+            <td><div class="rate"><span class="bar"><i style="width:3%"></i></span><span class="pct">1.0%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Breakout pullback</b><span>The first bar to pull back against a breakout within five sessions, entered in the breakout's direction.</span><span class="c-id">bo-pullback</span></td>
+            <td class="c-id">5 sessions</td>
+            <td class="c-num">282</td>
+            <td><div class="rate"><span class="bar"><i style="width:12%"></i></span><span class="pct">4.3%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Failed breakout</b><span>A breakout that closes back inside the prior range within the window. Faded the other way.</span><span class="c-id">failed-bo</span></td>
+            <td class="c-id">close inside</td>
+            <td class="c-num">102</td>
+            <td><div class="rate"><span class="bar"><i style="width:4%"></i></span><span class="pct">1.6%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+          <tr>
+            <td class="c-rule"><b>Final flag</b><span>A tight flag late in a trend whose breakout closes back inside within two sessions. Faded.</span><span class="c-id">final-flag</span></td>
+            <td class="c-id">20+ bars in</td>
+            <td class="c-num">44</td>
+            <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.7%</span></div></td>
+            <td><span class="flag on">on</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <h3>Final flag cannot know it is final, and says so</h3>
+        <p>
+          Brooks names the pattern for what it turns out to be. The rule detects the
+          causal half — a tight flag 20+ bars into a trend whose breakout closes back
+          inside within two sessions — and leaves "was it the last one" to the outcome
+          column. It is the best of the non-measured-move entries at +0.46R.
+        </p>
+      </div>
+      <div class="note">
+        <h3>Two rules can contradict on the same bar</h3>
+        <p>
+          <code>failed-bo</code> and <code>bo-pullback</code> fired opposite directions
+          on 2026-07-30: one reads the breakout as real, the other as failed. That is
+          not a bug. The outcome column adjudicates; the tool shows both readings
+          rather than picking one.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>Density is the design constraint</h2>
+      <p class="lede">
+        A chart wearing every label is strictly less readable than one wearing none.
+      </p>
+      <p>
+        All 31 rules on produce <strong>11,026 marks over 6,550 sessions</strong> —
+        1.68 a bar, which is unreadable by construction. The shipped defaults are
+        budgeted to <strong>0.56 per session</strong>, and
+        <code>npm run marks -- --catalogue</code> prints the hit rate per rule so the
+        budget is checkable rather than felt.
+      </p>
+      <p>
+        A rule firing on 10%+ of bars ships <code>defaultOn: false</code>. Six do:
+        <code>trend-bar</code> at 34.5%, <code>doji</code> at 27.2%,
+        <code>shaved</code>, <code>inside</code>, <code>outside</code> and
+        <code>pullback-entry</code>.
+      </p>
+
+      <div class="note">
+        <h3>Tighten the rule before you hide it</h3>
+        <p>
+          <code>reversal-bar</code> went from 22% of sessions to 5.2% by requiring it
+          to actually reverse a 10-session extreme; <code>pin-bar</code> from 14.2% to
+          3.7% by requiring the bar to be worth an ATR. Both gained meaning rather than
+          losing coverage — hiding them would have kept the noise and only moved it.
+        </p>
+      </div>
+
+      <p>
+        Bar labels are a close-up feature. Three-character labels at 11px mono are
+        ~20px wide, so below <strong>24px a bar</strong> adjacent labels overlap into
+        garbage. They render at 1M only, and the readout says <em>"zoom in for bar
+        marks"</em> everywhere else rather than letting them silently vanish.
+        Geometry is not subject to that and draws at every zoom.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>Structure, and the guarantee under it</h2>
+      <p class="lede">
+        Every rule reads the same pivots, so the two dials that produce them move all
+        31 counts at once.
+      </p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h3>Pivot strength 3</h3>
+        <p>A pivot every 6.8 sessions, a median leg of 2.8 ATR over 5 bars, and always-in flipping 19&times; a year. Strength 2 whipsaws twice as often (17.1% of state runs last two bars or less, against 9.0%); strength 4's 7-bar legs step over swings worth marking.</p>
+      </div>
+      <div class="card">
+        <h3>Min swing 1 ATR</h3>
+        <p>Near-inert above strength 2, and kept for when strength is dialled down. Both were chosen by sweeping the grid in <code>npm run marks -- --tune</code>, not by taste.</p>
+      </div>
+      <div class="card">
+        <h3>965 pivots</h3>
+        <p>Recorded in the fixture separately from the counts, so moving a dial reports <em>"structure dials moved"</em> once rather than 31 failures with one cause.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <h3>Built in one forward pass, and proved rather than asserted</h3>
+        <p>
+          The alternation reduction is streaming, not a global fixed point: doing it
+          globally would let a swing in 2012 delete a pivot from 2011, and every
+          <code>trend</code> value before it would silently become a fact from the
+          future.
+        </p>
+        <p>
+          <code>--check</code> rebuilds the whole structure from the series with its
+          last 500 sessions removed and requires every earlier <code>trend</code> and
+          <code>pullback</code> value to be identical. <strong>0 of 6,050 drift.</strong>
+          The positive control matters as much as the test: 3,981 non-zero values are
+          compared, and a deliberate one-bar misalignment produces 456 differences.
+        </p>
+      </div>
+
+      <p>
+        One consequence worth knowing: <code>pivots</code>/<code>legs</code> and
+        <code>trend</code>/<code>pullback</code> can disagree about the recent past,
+        and that is correct. The first pair is the reading as of the last bar; the
+        second is the causal per-bar record of what was knowable at the time.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>Entries carry what actually happened</h2>
+      <p class="lede">
+        Each entry emits the three prices Brooks defines mechanically — a stop order
+        one tick beyond the signal bar, the protective stop one tick beyond its other
+        end, a target — and then a walk-forward result.
+      </p>
+      <p>Three decisions in that walk are deliberately scored against the trader:</p>
+      <ul>
+        <li><strong>A bar containing both stop and target is a loss.</strong> Daily OHLC cannot say which came first, and assuming the good one is how a backtest talks itself into an edge. <code>ambiguous</code> counts them so the number stays auditable.</li>
+        <li><strong>A bar that gapped through the entry fills at the open</strong>, not the order price.</li>
+        <li><strong>The entry order is live for exactly one bar.</strong> Leaving it working turns every failed setup into a different, later trade nobody took.</li>
+      </ul>
+    </div>
+
+    <div class="note col">
+      <h3>Measured over 3,000 sessions, the mechanical 2R target loses</h3>
+      <p>
+        <code>second-entry</code> fills 75/75 and wins 28%, which at 2R is
+        <span class="r-neg">&minus;0.085R</span> a trade; a 2R exit needs better than
+        33%. The rules that come out positive are the measured-move ones —
+        <code>dt-short</code> at <span class="r-pos">+1.65R</span> average,
+        <code>db-long</code> at <span class="r-pos">+1.10R</span> — because their
+        target is the pattern's own projection rather than a multiple.
+      </p>
+      <p>
+        <code>DEFAULT_TARGET_R</code> is left at 2 on purpose. Tuning it until the
+        table looked better would be curve-fitting a review tool. The number is a
+        finding about these setups on daily ES, and it is supposed to be visible.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>Rules propose, the reader disposes</h2>
+      <p class="lede">
+        Click a mark on the chart to keep it, or use Keep / Drop in the mark list. A
+        dropped mark disappears from every view — keeping it visible-but-faded would
+        mean dismissing a rule's noise never quietens the chart.
+      </p>
+      <p>
+        Verdicts persist to <code>%APPDATA%/price-action-mark/marks/&lt;symbol&gt;.json</code>,
+        keyed by the mark's stable id. Verdicts for marks that no longer regenerate are
+        <strong>kept, not dropped</strong>: thresholds move, and a mark that vanishes
+        today comes back when a tolerance is loosened. They cost a few bytes, and
+        dropping them would silently discard decisions the reader made.
+      </p>
+    </div>
+
+    <div class="flow col">mark up in the desktop app
+      <i>&darr;</i>  File &rarr; Export marks&hellip;
+<b>data/marks.json</b>                  tracked, like data/es_data.json
+      <i>&darr;</i>  npm run artifact
+<b>dist/price_action_mark.html</b>      one file, no host, marks included</div>
+
+    <div class="col">
+      <p>
+        <strong>Publishing verdicts is what puts an artifact into confirmed-only mode.</strong>
+        An artifact built with an empty <code>data/marks.json</code> shows every
+        candidate; one built with verdicts opens on exactly the marks its author kept,
+        while a viewer who switches back to all candidates keeps that choice locally.
+      </p>
+
+      <div class="note">
+        <h3>Both settings maps are sparse, and it matters twice</h3>
+        <p>
+          <code>settings.marks.rules</code> stores only the ids the reader moved off
+          the rule's own default. Persisting all 31 booleans would freeze today's
+          defaults into every settings file, so a later tightening would never reach
+          anyone who had already run the app.
+        </p>
+        <p>
+          <code>marks.show</code> is sparse for the same reason, and it bit twice: a
+          stored value has to mean "the viewer chose this", never "this was the default
+          when they first loaded" — otherwise a first-time viewer sees every candidate
+          instead of the author's marks, which is the one case the publish path exists for.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>How a detector gets tested</h2>
+      <p class="lede">
+        You cannot tune a wedge detector by squinting at a canvas: a rule that is
+        subtly too loose looks exactly like one that is working.
+      </p>
+      <ul>
+        <li><strong>Tune against the text oracle.</strong> <code>npm run marks</code> prints the same numbers the rules see, for any span — <code>--rules</code>, <code>--catalogue</code>, <code>--trades</code>, <code>--structure</code>, <code>--tune</code>.</li>
+        <li><strong>Pick the patterns by eye before writing the rule that finds them.</strong> It is the only way a detector is tested against something other than itself. The eight in <code>data/marks-golden.json</code> were read off the 2025 pivot list by hand; seven then matched the rule's own arithmetic exactly.</li>
+        <li><strong><code>npm run marks:check</code> is the regression guard.</strong> It holds the per-rule counts, those eight dates and the structure dials, and <code>--golden</code> rewrites it — deliberately a separate command, so drift has to be accepted on purpose.</li>
+        <li><strong>Counts are compared only when the dataset fingerprint matches</strong>, because <code>npm run data</code> legitimately changes them. The hand-picked dates are history and are checked either way.</li>
+      </ul>
+
+      <div class="note">
+        <h3>Verified to have teeth</h3>
+        <p>
+          Loosening <code>BIG_ATR</code> from 1.5 to 1.4 reports <em>"big-bar: 450
+          marks in the fixture, 578 now"</em>, and tightening the double-top tolerance
+          drops three of the eight hand-picked patterns. A guard nobody has watched
+          fail is a guard nobody knows works.
+        </p>
+      </div>
+
+      <p>
+        The check also asserts <strong>mark ids are unique, per rule</strong> — a rule
+        can break that without trying. Two breakouts on consecutive sessions find the
+        same first pullback, so <code>bo-pullback</code> once emitted two marks
+        carrying one id: two identical rows, one verdict covering both, and a keyed
+        <code>{#each}</code> that throws outright. Both rules now claim their signal
+        bar, and <code>detect()</code> dedupes as a backstop — but the check runs
+        per rule, since checking <code>detect()</code>'s output would only prove the
+        backstop works.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section>
+    <div class="col">
+      <h2>What comes next is drawing</h2>
+      <p class="lede">
+        The detection layer is done. What is left is marks the reader makes by hand —
+        and everything it needs is already in place, built that way on purpose.
+      </p>
+      <ul>
+        <li><code>Mark</code> already carries <code>source: 'manual'</code> and <code>MarkStore</code> already carries a <code>manual</code> array that is read on load and never written. Hand-drawn marks are not a storage-format change, and no file on disk needs migrating.</li>
+        <li><code>MarkPrimitive.hitTest()</code> already returns the id of whatever is under the cursor, which is the selection half of a drawing tool.</li>
+        <li><code>shapeOf</code> is pure and consumed by both the renderer and the hit test, so a drag handle placed against one is placed against the other by construction.</li>
+        <li>The five geometry kinds — <code>segment</code>, <code>channel</code>, <code>level</code>, <code>path</code>, <code>trade</code> — all draw already. A tool has to produce one, not teach the renderer a new shape.</li>
+      </ul>
+
+      <div class="note">
+        <h3>Two things not to do when building it</h3>
+        <p>
+          Do not add a second canvas over the chart — attach to the candle series so
+          drawings pan, zoom and hit-test in price/time for free. And do not persist
+          rule output alongside the manual marks: it is derived, and storing it is how
+          it goes stale against a refreshed dataset.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Price Action Mark &middot; the marking layer</span>
+    <span>ES=F daily, 6,550 sessions to 2026-08-27</span>
+    <span>Counts from <code>data/marks-golden.json</code></span>
+  </footer>
+
+</div>
+</body>
+</html>

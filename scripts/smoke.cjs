@@ -55,6 +55,7 @@ const looksLikePrice = (v) =>
   typeof v === 'string' && v.includes('.') && Number(v.split(',').join('')) > 0;
 
 const errors = [];
+let verdictRoundTrip = 'was not tested';
 
 /** Serialised into the page, so it may not close over anything out here. */
 function probe() {
@@ -71,6 +72,8 @@ function probe() {
     ema: text('.ema'),
     fonts: [...document.fonts].filter((f) => f.status === 'loaded').length,
     bridged: typeof window.desktop === 'object' && window.desktop !== null,
+    marks: document.querySelectorAll('details.panel')[0]?.querySelector('[class*="count"]')?.textContent?.trim() ?? null,
+    notice: document.querySelector('[class*="notice"]')?.textContent?.trim() ?? null,
   };
 }
 
@@ -101,6 +104,13 @@ async function windowForApp() {
   while (Date.now() < deadline) {
     const [win] = BrowserWindow.getAllWindows();
     if (win) {
+      // main shows its own window on ready-to-show, which on a developer's
+      // desktop means the smoke run steals focus and covers whatever they were
+      // reading. Transparent rather than hidden: the renderer still lays out,
+      // paints and runs every effect, so nothing the smoke asserts changes,
+      // and unlike an off-screen position this cannot land on a second monitor.
+      win.setOpacity(0);
+      win.setSkipTaskbar(true);
       watch(win.webContents);
       if (win.webContents.isLoading()) {
         await new Promise((r) => win.webContents.once('did-finish-load', r));
@@ -125,6 +135,24 @@ app.whenReady().then(async () => {
   }
 
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+  // A verdict has to survive a write and a re-read through the real IPC path,
+  // which is the only part of persistence that a rendered page cannot show.
+  // Written under a reserved id so it can never collide with a real mark, and
+  // removed again so a smoke run does not leave state on the machine.
+  if (desktopMode) {
+    verdictRoundTrip = await win.webContents.executeJavaScript(`(async () => {
+      const id = 'smoke:verdict-round-trip';
+      const before = await window.desktop.getMarks('ES=F');
+      await window.desktop.saveMarks({ ...before, verdicts: { ...before.verdicts, [id]: 'confirmed' } });
+      const after = await window.desktop.getMarks('ES=F');
+      const ok = after.verdicts[id] === 'confirmed';
+      await window.desktop.saveMarks(before);
+      const cleaned = await window.desktop.getMarks('ES=F');
+      if (!ok) return 'did not come back';
+      return cleaned.verdicts[id] === undefined ? 'survived' : 'could not be removed again';
+    })()`);
+  }
+
   const r = await win.webContents.executeJavaScript(`(${probe.toString()})()`);
 
   const checks = [
@@ -140,6 +168,11 @@ app.whenReady().then(async () => {
     // Target-specific: the bridge must exist in one and be absent in the other.
     [r.bridged === desktopMode, desktopMode ? 'window.desktop is missing' : 'the artifact should have no bridge'],
     [!desktopMode || /Electron \d/.test(r.footer ?? ''), 'the footer never received app info over IPC'],
+    [/\d+ marks? from \d+ rules?/.test(r.marks ?? ''), `the mark panel reads ${JSON.stringify(r.marks)}`],
+    // Errors the app reports to the reader rather than to the console — a
+    // failed IPC call surfaces here and nowhere else.
+    [r.notice === null, `the page is showing a notice: ${JSON.stringify(r.notice)}`],
+    [!desktopMode || verdictRoundTrip === 'survived', `a saved verdict ${verdictRoundTrip}`],
   ];
 
   const failures = checks.filter(([ok]) => !ok).map(([, why]) => why);
@@ -147,7 +180,9 @@ app.whenReady().then(async () => {
   process.stdout.write(
     `smoke ${desktopMode ? 'desktop app' : path.basename(target)}: ` +
       `${r.canvases} canvas, last ${r.last}, ${r.rows} table rows, ` +
-      `theme ${r.theme}, ${r.fonts} font faces, bridge ${r.bridged}, origin ${r.origin ?? "?"}, ema ${r.ema}\n`,
+      `theme ${r.theme}, ${r.fonts} font faces, bridge ${r.bridged}, origin ${r.origin ?? "?"}, ema ${r.ema},\n` +
+      `  marks: ${r.marks ?? "?"}` +
+      (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),
   );
 
   if (failures.length > 0) {

@@ -5,6 +5,7 @@ import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from
 import { toggleVerticalMaximize } from './window.ts';
 import { CH, type Command } from '../shared/ipc.ts';
 import type { RangeId, Settings } from '../shared/types.ts';
+import { RULES } from '../shared/marks/registry.ts';
 
 const RANGES: RangeId[] = ['1M', '3M', '6M', '1Y', '5Y', 'MAX'];
 const isMac = process.platform === 'darwin';
@@ -39,6 +40,10 @@ export function buildMenu(settings: Settings): void {
           label: 'Export JSON…',
           accelerator: 'CmdOrCtrl+Shift+E',
           click: () => send({ kind: 'export', value: 'json' }),
+        },
+        {
+          label: 'Export marks…',
+          click: () => send({ kind: 'export', value: 'marks' }),
         },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' },
@@ -78,6 +83,27 @@ export function buildMenu(settings: Settings): void {
           type: 'checkbox',
           checked: settings.showEma,
           click: () => send({ kind: 'toggle', value: 'ema' }),
+        },
+        {
+          label: 'Marks',
+          submenu: [
+            {
+              label: 'Show marks',
+              type: 'checkbox',
+              checked: settings.marks.enabled,
+              click: () => send({ kind: 'mark', value: '*' }),
+            },
+            { type: 'separator' },
+            // Built from the registry, so a new rule appears here without
+            // this file being touched.
+            ...RULES.map((rule) => ({
+              label: rule.label,
+              type: 'checkbox' as const,
+              enabled: settings.marks.enabled,
+              checked: settings.marks.rules[rule.id] ?? rule.defaultOn,
+              click: () => send({ kind: 'mark', value: rule.id }),
+            })),
+          ],
         },
         { type: 'separator' },
         { label: 'Focus chart', accelerator: 'CmdOrCtrl+K', click: () => send({ kind: 'focus-chart' }) },

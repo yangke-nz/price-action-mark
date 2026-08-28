@@ -9,7 +9,9 @@
 
   let container: HTMLDivElement;
   // Deliberately not $state: the effects below must not re-run merely because
-  // the chart instance was assigned.
+  // the chart instance was assigned. The cost of that choice is that they
+  // cannot apply anything before it exists, which is why the creation effect
+  // seeds every piece of state rather than leaving it to them.
   let chart: CandleChart | undefined;
   let applied: Dataset | undefined;
 
@@ -24,14 +26,25 @@
     const instance = new CandleChart(container, dataset, {
       onHover: (index) => { app.hoverIndex = index; },
       onViewport: (viewport) => { app.viewport = viewport; },
+      // Keep is the action you take constantly while marking up; Drop is rarer
+      // and stays in the list. The library's click event carries no modifier
+      // keys, so there is no second gesture to give it anyway.
+      onMarkClick: (id) => app.setVerdict(id, 'confirmed'),
     });
     chart = instance;
     applied = dataset;
 
+    // Seed the initial state HERE, not from the standalone effects below.
+    // `chart` is not reactive, so an effect that runs before this one has
+    // assigned it does nothing and has no reason to run again — the value it
+    // subscribed to never changes afterwards. Every piece of chart state that
+    // the effects maintain therefore has to be applied once, here, where the
+    // instance is known to exist.
     const settings = untrack(() => app.settings);
     instance.setEmaVisible(settings.showEma);
     instance.setRollsVisible(settings.showRolls);
     instance.showLastDays(daysFor(settings.range));
+    instance.setMarks(untrack(() => app.marks));
 
     // Web fonts land after the first paint, and the axis gutters are measured
     // in pixels, so the chart has to re-measure once they do.
@@ -53,9 +66,27 @@
     chart.showLastDays(daysFor(untrack(() => app.settings.range)));
   });
 
-  $effect(() => { chart?.setEmaVisible(app.settings.showEma); });
-  $effect(() => { chart?.setRollsVisible(app.settings.showRolls); });
-  $effect(() => { chart?.showLastDays(daysFor(app.settings.range)); });
+  // Each of these reads its reactive value into a local BEFORE touching the
+  // chart. `chart?.method(app.thing)` looks equivalent and is not: optional
+  // chaining skips argument evaluation, so on any run where `chart` is not yet
+  // assigned the effect never reads `app.thing`, never subscribes to it, and
+  // never runs again. The chart then silently keeps its initial state forever.
+  $effect(() => {
+    const marks = app.marks;
+    chart?.setMarks(marks);
+  });
+  $effect(() => {
+    const showEma = app.settings.showEma;
+    chart?.setEmaVisible(showEma);
+  });
+  $effect(() => {
+    const showRolls = app.settings.showRolls;
+    chart?.setRollsVisible(showRolls);
+  });
+  $effect(() => {
+    const days = daysFor(app.settings.range);
+    chart?.showLastDays(days);
+  });
 
   // Reading resolvedTheme is what subscribes this effect; the chart then
   // re-reads the CSS custom properties itself.

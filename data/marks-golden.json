@@ -1,0 +1,87 @@
+{
+  "dataset": {
+    "symbol": "ES=F",
+    "bars": 6550,
+    "last": "2026-08-27"
+  },
+  "structure": {
+    "strength": 3,
+    "minSwingAtr": 1,
+    "pivots": 965
+  },
+  "counts": {
+    "trend-bar": 2260,
+    "big-bar": 450,
+    "doji": 1783,
+    "inside": 777,
+    "outside": 771,
+    "ii": 40,
+    "ioi": 26,
+    "reversal-bar": 340,
+    "shaved": 989,
+    "pin-bar": 244,
+    "climax": 38,
+    "gap-bar": 42,
+    "breakout": 349,
+    "follow-through": 45,
+    "two-bar-reversal": 237,
+    "bull-channel": 99,
+    "bear-channel": 96,
+    "micro-channel": 238,
+    "spike-and-channel": 80,
+    "double-top": 112,
+    "double-bottom": 79,
+    "wedge": 132,
+    "triangle": 144,
+    "pullback-entry": 808,
+    "second-entry": 162,
+    "dt-short": 112,
+    "db-long": 79,
+    "wedge-reversal": 66,
+    "bo-pullback": 282,
+    "failed-bo": 102,
+    "final-flag": 44
+  },
+  "expect": [
+    {
+      "rule": "double-top",
+      "at": "2025-01-31",
+      "why": "peaks 14.50 apart, neckline 5948.00"
+    },
+    {
+      "rule": "double-top",
+      "at": "2025-08-28",
+      "why": "peaks 14.25 apart, neckline 6362.75"
+    },
+    {
+      "rule": "double-bottom",
+      "at": "2025-02-03",
+      "why": "troughs 12.50 apart"
+    },
+    {
+      "rule": "double-bottom",
+      "at": "2025-08-01",
+      "why": "troughs 1.50 apart"
+    },
+    {
+      "rule": "wedge",
+      "at": "2025-08-28",
+      "why": "three pushes, +40 then +14"
+    },
+    {
+      "rule": "bull-channel",
+      "at": "2025-07-16",
+      "why": "rising lows from April"
+    },
+    {
+      "rule": "bear-channel",
+      "at": "2025-04-10",
+      "why": "falling highs from February"
+    },
+    {
+      "rule": "triangle",
+      "at": "2025-02-03",
+      "why": "the Jan-Feb coil"
+    }
+  ]
+}

@@ -1,15 +1,18 @@
 # Price Action Mark
 
-Price action charting for daily bars — draw and mark up the tape, then publish
-it. Ships with E-Mini S&P 500 futures (CME `ES`) from a free, keyless source;
-the data layer is symbol-generic.
+Price action charting for daily bars — mark up the tape, then publish it. The
+chart reads itself with **29 rules drawn from Al Brooks's price action method**
+(special bars, the lines they form, the entries they set up); you keep the marks
+you agree with, and the confirmed set travels inside a single self-contained
+HTML file. Ships with E-Mini S&P 500 futures (CME `ES`) from a free, keyless
+source; the data layer is symbol-generic.
 
 One Svelte 5 codebase, **two build targets**:
 
 | Target | Command | Output |
 | --- | --- | --- |
 | Electron desktop app | `npm run build` | `out/` (packaged with `npm run dist`) |
-| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (659 KB, self-contained) |
+| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (701 KB, self-contained) |
 
 Both render the same components against the same dataset, the same design
 tokens and the same chart controller. They differ in exactly one file —
@@ -80,6 +83,8 @@ npm run smoke:app      # headless render check of the desktop app
 | `artifact` | Vite bundle + [inline-artifact.ts](scripts/inline-artifact.ts) |
 | `data` | Yahoo → `data/es_data.json` (`-- --symbol MES=F`) |
 | `csv` | Yahoo → CSV, any symbol (`-- --symbol ESZ26.CME --out z26.csv`) |
+| `marks` | the marking layer's text oracle — see [Marking](#marking) |
+| `marks:check` | invariants + the regression fixture; exits non-zero on drift |
 | `typecheck` | `tsc` over main/preload/scripts, `svelte-check` over the renderer |
 | `smoke` / `smoke:app` | load the built output in real Chromium and assert it drew |
 
@@ -89,17 +94,29 @@ npm run smoke:app      # headless render check of the desktop app
 electron.vite.config.ts     target 1 — main + preload + renderer
 vite.artifact.config.ts     target 2 — renderer only, everything inlined
 scripts/inline-artifact.ts  target 2, second half — fold into one .html + guards
+scripts/mark-report.ts      the marking layer's text oracle
 
 src/shared/                 imported by main, renderer AND the CLI scripts
   yahoo.ts                    fetch + normalise; the only network code
-  rolls.ts                    third-Friday quarterly expiry arithmetic
+  rolls.ts                    expiry arithmetic + contractStarts()
+  indicators.ts               ema(), atr(), trueRange()
+  instrument.ts               per-symbol tick size
   types.ts  ipc.ts            the dataset shape and the whole IPC contract
   format.ts  csv.ts           one set of formatters for axes, readout and CLI
+  marks/                      the marking layer — pure, no Node, no DOM
+    metrics.ts                  per-bar columns every rule is written in
+    structure.ts                pivots, legs, always-in state, H/L counts
+    fit.ts                      fitLine + touch/break measurement
+    types.ts  rule.ts           the Mark union; the Ctx/Rule contract
+    registry.ts                 RULES — the one array; push to extend
+    trade.ts                    entry/stop/target + the walk-forward
+    rules/                      bars.ts, lines.ts, entries.ts
 
 src/main/                   Electron main
   index.ts                    window, CSP, IPC handlers, save dialogs
   dataset.ts                  network → cache → bundled, in that order
   settings.ts  menu.ts        atomic JSON settings; native menu
+  marks.ts                    verdicts, one atomic JSON per symbol
   window.ts                   vertical maximize (no Electron API for it)
 
 src/preload/index.ts        the entire privileged surface, sandboxed CJS
@@ -109,7 +126,9 @@ src/renderer/
   lib/source/                 the seam: electron.ts | artifact.ts | types.ts
   lib/state/app.svelte.ts     one rune-based store for the window
   lib/chart/candles.ts        every imperative call into lightweight-charts
-  lib/components/             Masthead, Controls, Readout, ChartPanel, …
+  lib/chart/marks/            ONE primitive for all geometry, not one per mark
+  lib/components/             Masthead, Controls, Readout, ChartPanel,
+                              MarkPanel, MarkList, …
   styles/                     tokens.css (palette), fonts.css, app.css
 ```
 
@@ -129,9 +148,11 @@ Three things that cost real time to discover:
 - **`ES=F` is an unadjusted stitched front-month series, not back-adjusted.** It
   has genuine discontinuities at quarterly expiries — measured: `2024-12-23`
   +2.77%, `2024-03-18` +1.65%, `2023-12-18` +1.62%. A return computed across a
-  roll is carry, not a tradable move. The chart marks these;
-  [rolls.ts](src/shared/rolls.ts) computes them from the third Friday of
-  Mar/Jun/Sep/Dec, stepping forward over holidays to the next real session.
+  roll is carry, not a tradable move. [rolls.ts](src/shared/rolls.ts) computes
+  the expiries from the third Friday of Mar/Jun/Sep/Dec, stepping forward over
+  holidays to the next real session — and `contractStarts()` turns those into
+  the bars the chart actually marks, one session later, where the new front
+  month opens and the carry lands.
 - **Dirty bars.** Holidays arrive as `close: null`, some sessions carry
   `volume: 0`, and Yahoo occasionally duplicates the live bar. 43 of them in the
   current pull. `toRows()` filters nulls and de-duplicates by date.
@@ -219,6 +240,112 @@ it.
 
 No aggregation and no downsampling: all 6,550 sessions are loaded the whole
 time and the range buttons only move the viewport.
+
+## Marking
+
+The point of the product: **31 rules that read the tape the way Al Brooks
+describes it**, in three groups.
+[docs/marking-layer.html](docs/marking-layer.html) is the same material as a
+single page, with the full rule catalogue — every threshold, mark count and hit
+rate — in one table.
+
+| Group | Rules | What they mark |
+| --- | --- | --- |
+| `bars` | 15 | Trend bars, doji, `ii`/`iii`/`ioi`, reversal and pin bars, shaved bars, climaxes, gaps, breakouts, follow-through, two-bar reversals |
+| `lines` | 8 | Bull and bear channels, micro channels, spike-and-channel, double tops and bottoms, wedges, triangles |
+| `entries` | 8 | H1–H4 / L1–L4 pullbacks, the second entry, double-top/bottom trades, wedge reversals, breakout pullbacks, failed breakouts, final flags |
+
+Everything under [src/shared/marks/](src/shared/marks/) is pure and free of
+Node, the DOM and Svelte, so the app, the published artifact and the CLI run
+byte-for-byte the same detection code. That is not tidiness — it is what makes
+the rules testable at all.
+
+### Rules are recomputed, verdicts are stored
+
+Detection is a pure function of `(dataset, ruleConfig)`. Running all 31 over
+6,550 bars takes ~45 ms, once per dataset; toggling a rule filters the result
+in **0.26 ms**. Nothing about rule output is ever written to disk — it would go
+stale against the candles the moment a session arrived.
+
+Two things persist, in `%APPDATA%/price-action-mark/marks/<symbol>.json`: the
+reader's **keep / drop verdict** on each candidate, keyed by the mark's stable
+id, and (reserved, not yet written) hand-drawn marks.
+
+### Candidates, and the publish path
+
+Rules propose; you dispose. **Click a mark on the chart to keep it**, or use the
+Keep / Drop buttons in the mark list. A dropped mark disappears from every view
+— keeping it visible-but-faded would mean dismissing a rule's noise never
+quietens the chart.
+
+**Publishing verdicts is what puts an artifact into confirmed-only mode.** An
+artifact built with an empty `data/marks.json` shows every candidate; one built
+with verdicts opens on exactly the marks its author kept, while a viewer who
+switches back to all candidates keeps that choice locally.
+
+```
+mark up in the desktop app
+      ↓   File → Export marks…
+data/marks.json                     tracked, like data/es_data.json
+      ↓   npm run artifact
+dist/price_action_mark.html         one file, no host, marks included
+```
+
+### Density is the design constraint
+
+`trend-bar` fires on 34.5% of all sessions and `doji` on 27.2%; a chart wearing
+every label is strictly less readable than one wearing none. The shipped
+defaults are budgeted to **0.56 marks per session**, and
+`npm run marks -- --catalogue` prints the hit rate per rule so the budget is
+checkable rather than felt.
+
+When a rule looks too eager, **tighten the rule before hiding it**.
+`reversal-bar` went from 22% of sessions to 5.2% by requiring it to actually
+reverse a 10-session extreme; `pin-bar` from 14.2% to 3.7% by requiring the bar
+to be worth an ATR. Both gained meaning rather than losing coverage.
+
+Bar labels are a close-up feature. Three-character labels at 11px are ~20px
+wide, so below **24px per bar** the labels on adjacent bars overlap into
+garbage — they render at 1M and the readout says *"zoom in for bar marks"*
+everywhere else. Geometry is not subject to that and draws at every zoom.
+
+### How a detector gets tested
+
+You cannot tune a wedge detector by squinting at a canvas: a rule that is
+subtly too loose looks exactly like one that is working.
+
+- **`npm run marks`** prints the same numbers the rules see, for any span —
+  `--rules`, `--catalogue`, `--trades`, `--structure`, `--tune`.
+- **Patterns are picked by eye before the rule that finds them is written.** The
+  eight in `data/marks-golden.json` were read off the 2025 pivot list by hand;
+  seven then matched the rule's own arithmetic exactly.
+- **`npm run marks:check`** holds per-rule counts and those dates, and fails on
+  drift. Counts are compared only when the dataset fingerprint matches, since
+  `npm run data` legitimately changes them.
+- **The no-lookahead guarantee is tested, not asserted.** The check rebuilds the
+  whole structure from the series with its last 500 sessions removed and
+  requires every earlier `trend` and `pullback` value to be byte-identical.
+
+### Entries carry what actually happened
+
+Each entry emits the three prices Brooks defines mechanically — a stop order one
+tick beyond the signal bar, the protective stop one tick beyond its other end —
+and a walk-forward result. Three decisions in that walk are deliberately
+scored against the trader:
+
+- a bar containing **both** stop and target is a loss, because daily OHLC cannot
+  say which came first and assuming the good one is how a backtest talks itself
+  into an edge (`ambiguous` counts them so the number stays auditable);
+- a bar that gapped through the entry fills at the **open**, not the order price;
+- the entry order is live for exactly **one bar** — leaving it working turns
+  every failed setup into a different, later trade nobody took.
+
+Measured over 3,000 sessions, the mechanical 2R target **loses** on the pullback
+entries: `second-entry` fills 75/75 and wins 28%, where 2R needs better than
+33%. The positive rules are the ones whose target is the pattern's own measured
+move — `dt-short` at +1.65R average, `db-long` at +1.10R. That number is left
+alone on purpose. Moving the default target until the table looked better would
+be curve-fitting a review tool.
 
 ## Colour
 
@@ -367,7 +494,30 @@ well-formed last price, a dated readout, populated table rows, a resolved
 theme, a well-formed EMA 20 value, ≥2 loaded font faces and zero console errors. Desktop mode imports the
 real `out/main/index.js`, so the preload bridge and every IPC handler are on
 the same path they take in production — the run asserts `window.desktop` exists
-there and does *not* exist in the artifact.
+there and does *not* exist in the artifact. It also asserts the mark panel is
+populated, and — desktop only — that a verdict written over the real IPC path
+comes back on a re-read and can be removed again.
+
+`npm run marks:check` is the marking layer's own guard, and it checks things a
+rendered page cannot show:
+
+- the roll fallback holds at all 104 contract starts, and the ten sessions where
+  the feed prints a close outside its own high/low are listed rather than hidden;
+- pivots strictly alternate, pullback counts never exceed their cap, and no bar
+  reads a pivot that has not confirmed yet;
+- **no lookahead** — the structure is rebuilt from the series with its last 500
+  sessions removed and every earlier `trend` and `pullback` value must be
+  identical (0 of 6,050 drift);
+- **no duplicate mark ids**, checked per rule, since an id keys both a verdict
+  and a keyed `{#each}` that throws on a collision;
+- per-rule mark counts and eight hand-picked pattern dates match
+  `data/marks-golden.json`. Counts are compared only when the dataset
+  fingerprint matches, because `npm run data` legitimately changes them.
+
+Anything visual beyond that gets a one-off Electron probe under
+`scripts/_name.cjs`, run once and deleted. Make its window invisible with
+`win.setOpacity(0)` rather than an off-screen position — the latter lands on a
+second monitor, and opacity 0 still captures at full fidelity.
 
 ## Licences
 

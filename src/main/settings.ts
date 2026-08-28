@@ -4,7 +4,7 @@
 import { app } from 'electron';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { RangeId, Settings, ThemeChoice } from '../shared/types.ts';
+import type { MarkSettings, RangeId, Settings, ThemeChoice } from '../shared/types.ts';
 
 const RANGES: RangeId[] = ['1M', '3M', '6M', '1Y', '5Y', 'MAX'];
 const THEMES: ThemeChoice[] = ['system', 'light', 'dark'];
@@ -14,8 +14,26 @@ export const DEFAULTS: Settings = {
   range: '6M',
   showRolls: true,
   showEma: true,
+  marks: { enabled: true, show: 'all', rules: {} },
   window: { width: 1320, height: 900, maximized: false },
 };
+
+/** Only booleans, and only for ids that look like rule ids. An entry naming a
+ *  rule this build does not have is dropped rather than carried: a settings
+ *  file written by a future version must degrade, never accumulate. */
+function coerceMarks(raw: unknown): MarkSettings {
+  const v = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const src = (typeof v['rules'] === 'object' && v['rules'] !== null ? v['rules'] : {}) as Record<string, unknown>;
+  const rules: Record<string, boolean> = {};
+  for (const [id, on] of Object.entries(src)) {
+    if (typeof on === 'boolean' && /^[a-z0-9-]{1,40}$/.test(id)) rules[id] = on;
+  }
+  return {
+    enabled: v['enabled'] !== false,
+    show: v['show'] === 'confirmed' ? 'confirmed' : 'all',
+    rules,
+  };
+}
 
 let cache: Settings | null = null;
 
@@ -42,6 +60,7 @@ function coerce(raw: unknown): Settings {
   if (typeof w['y'] === 'number' && Number.isFinite(w['y'])) win.y = Math.round(w['y'] as number);
 
   return {
+    marks: coerceMarks(v['marks']),
     theme: THEMES.includes(v['theme'] as ThemeChoice) ? (v['theme'] as ThemeChoice) : DEFAULTS.theme,
     range: RANGES.includes(v['range'] as RangeId) ? (v['range'] as RangeId) : DEFAULTS.range,
     showRolls: v['showRolls'] !== false,

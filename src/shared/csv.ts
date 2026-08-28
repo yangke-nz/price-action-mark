@@ -1,4 +1,5 @@
 import type { Dataset } from './types.ts';
+import { contractStarts } from './rolls.ts';
 import type { Row } from './yahoo.ts';
 
 const HEADER = 'date,open,high,low,close,volume';
@@ -12,9 +13,13 @@ export function rowsToCsv(rows: Row[]): string {
 }
 
 /** The desktop export adds a `roll` flag, because the one thing a spreadsheet
- *  cannot recover from this file is which returns cross a contract change. */
+ *  cannot recover from this file is which returns cross a contract change.
+ *
+ *  The flag sits on the first session of the NEW contract, not on the expiry
+ *  in `ds.rolls`. That is the row whose change against the row above it is
+ *  carry — the expiry's own change is an ordinary same-contract move. */
 export function datasetToCsv(ds: Dataset): string {
-  const rolls = new Set(ds.rolls);
+  const rolls = new Set(contractStarts(ds.d, ds.rolls));
   const out = [HEADER + ',roll'];
   for (let i = 0; i < ds.d.length; i++) {
     out.push(

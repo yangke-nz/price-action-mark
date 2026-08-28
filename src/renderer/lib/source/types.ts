@@ -12,6 +12,7 @@
  */
 import type { AppInfo, Command, SaveResult } from '../../../shared/ipc.ts';
 import type { Dataset, DatasetResult, Settings } from '../../../shared/types.ts';
+import type { MarkStore } from '../../../shared/marks/types.ts';
 
 export interface Capabilities {
   /** Can pull fresh bars from the network. */
@@ -23,6 +24,12 @@ export interface Capabilities {
   /** There is a real OS window to resize. */
   fitWindow: boolean;
 }
+
+// Note there is no `markSets` capability. Both targets persist verdicts — the
+// desktop to a per-symbol file, the artifact to localStorage over the set
+// inlined at build time — and the only thing that differs is writing them out
+// for publishing, which `export` already covers. A second flag meaning the same
+// thing as an existing one is worse than no flag at all.
 
 export interface Source {
   readonly kind: 'electron' | 'artifact';
@@ -36,6 +43,11 @@ export interface Source {
 
   exportCsv(dataset: Dataset): Promise<SaveResult>;
   exportJson(dataset: Dataset): Promise<SaveResult>;
+  /** The publish path: the saved file becomes `data/marks.json`. */
+  exportMarks(store: MarkStore): Promise<SaveResult>;
+
+  getMarks(symbol: string): Promise<MarkStore>;
+  saveMarks(store: MarkStore): Promise<MarkStore>;
 
   appInfo(): Promise<AppInfo | null>;
   /** Vertical maximize; resolves to the state the window was left in. */
@@ -50,5 +62,6 @@ export const DEFAULT_SETTINGS: Settings = {
   range: '6M',
   showRolls: true,
   showEma: true,
+  marks: { enabled: true, show: 'all', rules: {} },
   window: { width: 1320, height: 900, maximized: false },
 };

@@ -28,6 +28,8 @@
     "artifact": "vite build --config vite.artifact.config.ts && node scripts/inline-artifact.ts",
     "data": "node scripts/fetch-data.ts",
     "csv": "node scripts/export-csv.ts",
+    "marks": "node scripts/mark-report.ts",
+    "marks:check": "node scripts/mark-report.ts --check",
     "smoke": "electron scripts/smoke.cjs dist/preview.html",
     "smoke:app": "electron scripts/smoke.cjs --app",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",

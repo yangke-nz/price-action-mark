@@ -6,10 +6,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CH, type AppInfo, type SaveResult } from '../shared/ipc.ts';
 import type { Dataset, Settings } from '../shared/types.ts';
+import type { MarkStore } from '../shared/marks/types.ts';
+import { coerceStore } from '../shared/marks/types.ts';
 import { datasetToCsv, suggestedFilename } from '../shared/csv.ts';
 import { isDataset } from '../shared/yahoo.ts';
 import * as datasetStore from './dataset.ts';
 import * as settingsStore from './settings.ts';
+import * as markStore from './marks.ts';
 import { buildMenu } from './menu.ts';
 import { toggleVerticalMaximize } from './window.ts';
 
@@ -89,6 +92,23 @@ function persistBounds(win: BrowserWindow): void {
   });
 }
 
+/**
+ * The publish path. A marked-up chart that travels as one self-contained file
+ * is what the artifact target exists for, and this is the hand-off: save the
+ * verdicts, drop them in `data/marks.json`, run `npm run artifact`.
+ */
+async function saveMarksDialog(store: MarkStore): Promise<SaveResult> {
+  if (!mainWindow) return { status: 'canceled' };
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export marks for publishing',
+    defaultPath: 'marks.json',
+    filters: [{ name: 'JSON', extensions: ['json'] }, { name: 'All files', extensions: ['*'] }],
+  });
+  if (canceled || !filePath) return { status: 'canceled' };
+  await writeFile(filePath, JSON.stringify(store, null, 2), 'utf8');
+  return { status: 'saved', path: filePath };
+}
+
 async function saveDialog(dataset: Dataset, ext: 'csv' | 'json'): Promise<SaveResult> {
   if (!mainWindow) return { status: 'canceled' };
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -126,6 +146,13 @@ function registerIpc(): void {
     isDataset(ds) ? saveDialog(ds, 'csv') : ({ status: 'canceled' } satisfies SaveResult));
   ipcMain.handle(CH.exportJson, (_event, ds: unknown) =>
     isDataset(ds) ? saveDialog(ds, 'json') : ({ status: 'canceled' } satisfies SaveResult));
+
+  ipcMain.handle(CH.marksGet, (_event, symbol: unknown) =>
+    markStore.load(typeof symbol === 'string' && symbol ? symbol : 'series'));
+  ipcMain.handle(CH.marksSave, (_event, store: unknown) =>
+    markStore.save(coerceStore(store, 'series'), new Date().toISOString()));
+  ipcMain.handle(CH.exportMarks, (_event, store: unknown) =>
+    saveMarksDialog(coerceStore(store, 'series')));
 
   ipcMain.handle(CH.fitHeight, () => (mainWindow ? toggleVerticalMaximize(mainWindow) : false));
 

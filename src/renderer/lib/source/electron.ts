@@ -28,6 +28,10 @@ export const source: Source = {
 
   exportCsv: (dataset) => bridge().exportCsv(dataset),
   exportJson: (dataset) => bridge().exportJson(dataset),
+  exportMarks: (store) => bridge().exportMarks(store),
+
+  getMarks: (symbol) => bridge().getMarks(symbol),
+  saveMarks: (store) => bridge().saveMarks(store),
 
   appInfo: () => bridge().appInfo(),
   fitHeight: () => bridge().fitHeight(),

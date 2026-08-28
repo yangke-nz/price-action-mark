@@ -2,13 +2,17 @@
  *  The preload exposes exactly `DesktopApi` on `window.desktop`; nothing else
  *  crosses the bridge, and the renderer has no Node access at all. */
 import type { Dataset, DatasetResult, Settings } from './types.ts';
+import type { MarkStore } from './marks/types.ts';
 
 export const CH = {
   datasetGet: 'dataset:get',
   datasetRefresh: 'dataset:refresh',
   settingsGet: 'settings:get',
   settingsPatch: 'settings:patch',
+  marksGet: 'marks:get',
+  marksSave: 'marks:save',
   exportCsv: 'export:csv',
+  exportMarks: 'export:marks',
   exportJson: 'export:json',
   appInfo: 'app:info',
   fitHeight: 'window:fit-height',
@@ -23,7 +27,9 @@ export type Command =
   | { kind: 'theme'; value: Settings['theme'] }
   | { kind: 'range'; value: Settings['range'] }
   | { kind: 'toggle'; value: 'rolls' | 'ema' }
-  | { kind: 'export'; value: 'csv' | 'json' }
+  /** A rule id, or '*' for the whole marking layer. */
+  | { kind: 'mark'; value: string }
+  | { kind: 'export'; value: 'csv' | 'json' | 'marks' }
   | { kind: 'focus-chart' };
 
 export type SaveResult = { status: 'saved'; path: string } | { status: 'canceled' };
@@ -47,6 +53,11 @@ export interface DesktopApi {
   patchSettings(patch: Partial<Settings>): Promise<Settings>;
   exportCsv(dataset: Dataset): Promise<SaveResult>;
   exportJson(dataset: Dataset): Promise<SaveResult>;
+  /** The publish path: this file becomes `data/marks.json`. */
+  exportMarks(store: MarkStore): Promise<SaveResult>;
+
+  getMarks(symbol: string): Promise<MarkStore>;
+  saveMarks(store: MarkStore): Promise<MarkStore>;
   appInfo(): Promise<AppInfo>;
 
   /** Vertical maximize — full work-area height, same width and x. Toggles;

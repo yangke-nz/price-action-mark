@@ -17,6 +17,11 @@
  *  - Markers do not thin themselves. All 104 roll arrows render at MAX zoom
  *    and become a picket fence, so they are dropped below ~18px of separation
  *    and the readout says why.
+ *  - There is ONE marker source and ONE canvas primitive, not one per mark.
+ *    Bar labels join the roll arrows in the single marker list so they go
+ *    through the same thinning pass, and every line, channel and zone is drawn
+ *    by a single MarkPrimitive. Attaching a primitive per mark would mean
+ *    hundreds of pane views recomputing on every pan frame.
  */
 import {
   CandlestickSeries,
@@ -39,11 +44,26 @@ import type { Dataset } from '../../../shared/types.ts';
 import { axisPrice } from '../../../shared/format.ts';
 import { readTokens } from './tokens.ts';
 import { EMA_PERIOD, ema } from '../../../shared/indicators.ts';
+import { contractStarts } from '../../../shared/rolls.ts';
+import { tickFor } from '../../../shared/instrument.ts';
+import type { BarMark, Mark } from '../../../shared/marks/types.ts';
+import { MarkPrimitive } from './marks/primitive.ts';
+import { styleFor } from './marks/palette.ts';
 
 /** Quarterly rolls sit about 63 trading days apart. Below this many pixels of
  *  separation the arrows stop reading as annotations and become a fence. */
 const MARKER_MIN_PX = 18;
 const SESSIONS_PER_QUARTER = 63;
+/**
+ * Bar labels sit on individual sessions rather than a quarter apart, so they
+ * need their own floor. Measured rather than guessed: the longest labels are
+ * three characters ('BIG', '2BR', 'ioi') and the chart draws at 11px in the
+ * mono face, so a label is about 20px wide before any breathing room. Below
+ * roughly this much space per bar, labels on ADJACENT bars overlap each other
+ * — which the eye reads as garbage rather than as density. Marks stacked on
+ * one bar are fine; the library offsets those vertically.
+ */
+const BAR_MARK_MIN_PX = 24;
 
 export interface Viewport {
   /** Inclusive bar indices currently on screen. */
@@ -51,11 +71,16 @@ export interface Viewport {
   to: number;
   /** True while the roll markers are suppressed for density. */
   rollsHidden: boolean;
+  /** True while per-bar mark labels are suppressed for density. */
+  barMarksHidden: boolean;
 }
 
 export interface CandleChartOptions {
   onHover(index: number | null): void;
   onViewport(viewport: Viewport): void;
+  /** A mark was clicked on the canvas. Fires for geometry and for bar labels
+   *  alike: the primitive's hit test and the marker ids both report a mark id. */
+  onMarkClick(id: string): void;
 }
 
 /** Only the sessions the average is actually defined for. Sending the warm-up
@@ -84,6 +109,16 @@ export class CandleChart {
   #emaPoints: LineData<Time>[] = [];
   #showRolls = true;
   #rollsHidden = false;
+  /** The instrument's minimum increment, which is what the price axis should
+   *  round to. Tracked because `setData` can bring a different symbol. */
+  #tick: number;
+  readonly #primitive = new MarkPrimitive();
+  #barMarks: readonly BarMark[] = [];
+  #barMarkers: SeriesMarker<Time>[] = [];
+  #barMarksHidden = false;
+  /** Every id currently on the chart, so a click can be attributed to a mark
+   *  rather than to whatever else the library reports as hovered. */
+  #markIds: ReadonlySet<string> = new Set();
   #settleTimer: ReturnType<typeof setTimeout> | null = null;
   #disposed = false;
 
@@ -91,6 +126,7 @@ export class CandleChart {
     this.#container = container;
     this.#opts = opts;
     this.#data = data;
+    this.#tick = tickFor(data.symbol);
 
     const t = readTokens();
     this.#chart = createChart(container, {
@@ -128,16 +164,28 @@ export class CandleChart {
       wickDownColor: t.down,
       priceLineVisible: false,
       lastValueVisible: false,
-      priceFormat: { type: 'custom', minMove: 0.25, formatter: axisPrice },
+      priceFormat: { type: 'custom', minMove: this.#tick, formatter: axisPrice },
     });
 
     this.#markers = createSeriesMarkers(this.#candles, []);
+    this.#candles.attachPrimitive(this.#primitive);
     this.setData(data);
 
     this.#chart.subscribeCrosshairMove((param) => {
       const time = param.time as string | undefined;
       const hit = time === undefined ? undefined : this.#indexOf.get(time);
       this.#opts.onHover(hit ?? null);
+    });
+
+    // Clicking a drawn mark is the fastest way to keep it while reading a
+    // chart. `hoveredObjectId` is deprecated in favour of `hoveredInfo`, so
+    // read the new field and fall back — and check membership rather than
+    // trusting the id, since markers and primitives share this channel and a
+    // future one might put something else on it.
+    this.#chart.subscribeClick((param) => {
+      const info = param as { hoveredInfo?: { objectId?: unknown; objectKind?: string; sourceKind?: string }; hoveredObjectId?: unknown };
+      const id = info.hoveredInfo?.objectId ?? info.hoveredObjectId;
+      if (typeof id === 'string' && this.#markIds.has(id)) this.#opts.onMarkClick(id);
     });
 
     // Pan and zoom fire continuously; the table and the marker pass are only
@@ -149,6 +197,16 @@ export class CandleChart {
     this.#data = data;
     const n = data.d.length;
 
+    // A refresh normally brings the same instrument, but the data layer is
+    // symbol-generic and nothing here should assume otherwise.
+    const tick = tickFor(data.symbol);
+    if (tick !== this.#tick) {
+      this.#tick = tick;
+      const priceFormat = { type: 'custom' as const, minMove: tick, formatter: axisPrice };
+      this.#candles.applyOptions({ priceFormat });
+      this.#ema?.applyOptions({ priceFormat });
+    }
+
     const bars: CandlestickData<Time>[] = new Array(n);
     this.#indexOf = new Map();
     for (let i = 0; i < n; i++) {
@@ -158,7 +216,10 @@ export class CandleChart {
     }
     this.#candles.setData(bars);
 
-    this.#rollMarkers = data.rolls
+    // On the contract START, not on `data.rolls`, which holds the expiries.
+    // The arrow exists to say "the change into this bar is carry", and that is
+    // true of the session after the expiry, never of the expiry itself.
+    this.#rollMarkers = contractStarts(data.d, data.rolls)
       .filter((i) => i >= 0 && i < n)
       .map((i) => ({
         time: data.d[i] as Time,
@@ -168,6 +229,10 @@ export class CandleChart {
         size: 0.6,
         id: `roll-${data.d[i]}`,
       }));
+
+    // The primitive anchors marks on dates and the chart is the only thing
+    // that knows which bar a date is.
+    this.#primitive.setIndex(this.#indexOf);
 
     this.#emaPoints = emaPoints(data);
     if (this.#ema) this.#ema.setData(this.#emaPoints);
@@ -188,7 +253,7 @@ export class CandleChart {
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,  // the readout already names the value
-      priceFormat: { type: 'custom', minMove: 0.25, formatter: axisPrice },
+      priceFormat: { type: 'custom', minMove: this.#tick, formatter: axisPrice },
     });
     this.#ema.setData(this.#emaPoints);
   }
@@ -198,20 +263,64 @@ export class CandleChart {
     this.#refreshMarkers();
   }
 
+  /**
+   * Everything that is a marker, in one list and one thinning pass.
+   *
+   * Two floors, because the two kinds sit at different densities: roll arrows
+   * are a quarter apart and go when that gap closes below 18px, bar labels are
+   * one per session and go when a single bar narrows past 8px. Merging them
+   * into a second marker plugin instead would let bar labels bypass this
+   * entirely and reproduce the picket fence the roll arrows already taught us
+   * about.
+   */
   #refreshMarkers(): void {
-    if (!this.#showRolls) {
-      this.#rollsHidden = false;
-      this.#markers.setMarkers([]);
-      return;
-    }
     const range = this.#chart.timeScale().getVisibleLogicalRange();
     const width = this.#container.clientWidth;
-    const spacing =
+    const pxPerBar =
       range && width
-        ? (width / Math.max(1, range.to - range.from)) * SESSIONS_PER_QUARTER
+        ? width / Math.max(1, range.to - range.from)
         : Number.POSITIVE_INFINITY;
-    this.#rollsHidden = spacing < MARKER_MIN_PX;
-    this.#markers.setMarkers(this.#rollsHidden ? [] : this.#rollMarkers);
+
+    this.#rollsHidden = this.#showRolls && pxPerBar * SESSIONS_PER_QUARTER < MARKER_MIN_PX;
+    this.#barMarksHidden = this.#barMarkers.length > 0 && pxPerBar < BAR_MARK_MIN_PX;
+
+    const out: SeriesMarker<Time>[] = [];
+    if (this.#showRolls && !this.#rollsHidden) out.push(...this.#rollMarkers);
+    if (!this.#barMarksHidden) out.push(...this.#barMarkers);
+    // The plugin wants them in time order, and merging two sorted lists does
+    // not produce one.
+    out.sort((a, b) => String(a.time).localeCompare(String(b.time)));
+    this.#markers.setMarkers(out);
+  }
+
+  /**
+   * Adopt a set of marks. Bar labels become markers and everything with
+   * geometry goes to the primitive; nothing else in the app needs to know
+   * which is which.
+   */
+  setMarks(marks: readonly Mark[]): void {
+    this.#markIds = new Set(marks.map((m) => m.id));
+    this.#barMarks = marks.filter((m): m is BarMark => m.kind === 'bar');
+    this.#buildBarMarkers();
+    this.#primitive.setMarks(marks);
+    this.#refreshMarkers();
+  }
+
+  /** Colour lives on the marker data, not on options, so this runs again on
+   *  every theme change — the same reason `#rollMarkers` is rebuilt there. */
+  #buildBarMarkers(): void {
+    const t = readTokens();
+    this.#barMarkers = this.#barMarks
+      .filter((m) => this.#indexOf.has(m.at))
+      .map((m) => ({
+        time: m.at as Time,
+        position: m.placement === 'above' ? ('aboveBar' as const) : ('belowBar' as const),
+        shape: 'circle' as const,
+        size: 0.3,
+        text: m.label,
+        color: styleFor(m.tone, t).color,
+        id: m.id,
+      }));
   }
 
   #settle(): void {
@@ -226,11 +335,12 @@ export class CandleChart {
   viewport(): Viewport {
     const n = this.#data.d.length;
     const range: LogicalRange | null = this.#chart.timeScale().getVisibleLogicalRange();
-    if (!range) return { from: 0, to: n - 1, rollsHidden: this.#rollsHidden };
+    const hidden = { rollsHidden: this.#rollsHidden, barMarksHidden: this.#barMarksHidden };
+    if (!range) return { from: 0, to: n - 1, ...hidden };
     return {
       from: Math.max(0, Math.ceil(range.from)),
       to: Math.min(n - 1, Math.floor(range.to)),
-      rollsHidden: this.#rollsHidden,
+      ...hidden,
     };
   }
 
@@ -288,6 +398,9 @@ export class CandleChart {
     });
     this.#ema?.applyOptions({ color: t.ema });
     this.#rollMarkers = this.#rollMarkers.map((m) => ({ ...m, color: t.muted }));
+    // Mark geometry re-reads the tokens itself on the next draw; only the
+    // marker colours, which live on the data, have to be reissued here.
+    this.#buildBarMarkers();
     this.#refreshMarkers();
   }
 

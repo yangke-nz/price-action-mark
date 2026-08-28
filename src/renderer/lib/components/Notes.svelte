@@ -9,11 +9,11 @@
   <div class="note">
     <h3>Reading the roll</h3>
     <p>
-      The markers sit on quarterly expiries, where the stitched series jumps to the next
-      contract. The gap there is <b>carry, not a move</b> &mdash; December 2024 shows
-      <b>+2.77%</b> overnight that nobody traded. The 20-session average runs straight
-      through those gaps and <b>absorbs the carry</b>, so treat a cross within a few
-      sessions of a marker with suspicion.
+      The markers sit on the first session of each new contract, where the stitched series
+      jumps away from the one that just expired. That jump is <b>carry, not a move</b>
+      &mdash; 23 December 2024 opened <b>2.77%</b> above the previous settlement and nobody
+      traded it. The 20-session average runs straight through and <b>absorbs the carry</b>,
+      so treat a cross within a few sessions of a marker with suspicion.
     </p>
   </div>
 

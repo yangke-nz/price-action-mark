@@ -7,6 +7,8 @@
   import Readout from '$lib/components/Readout.svelte';
   import ChartPanel from '$lib/components/ChartPanel.svelte';
   import Legend from '$lib/components/Legend.svelte';
+  import MarkPanel from '$lib/components/MarkPanel.svelte';
+  import MarkList from '$lib/components/MarkList.svelte';
   import Notes from '$lib/components/Notes.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
@@ -53,6 +55,7 @@
         case 'theme':       app.setTheme(command.value); break;
         case 'range':       app.setRange(command.value); break;
         case 'toggle':      command.value === 'rolls' ? app.toggleRolls() : app.toggleEma(); break;
+        case 'mark':        command.value === '*' ? app.toggleMarks() : app.toggleRule(command.value); break;
         case 'export':      void app.exportAs(command.value); break;
         case 'focus-chart': panel?.focus(); break;
       }
@@ -75,6 +78,8 @@
     <Legend />
   </section>
 
+  <MarkPanel {app} />
+  <MarkList {app} />
   <Notes {app} />
   <DataTable {app} />
   <SiteFooter {app} />

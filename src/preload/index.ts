@@ -7,6 +7,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { CH, type Command, type DesktopApi } from '../shared/ipc.ts';
 import type { Dataset, DatasetResult, Settings } from '../shared/types.ts';
+import type { MarkStore } from '../shared/marks/types.ts';
 
 const api: DesktopApi = {
   getDataset: () => ipcRenderer.invoke(CH.datasetGet) as Promise<DatasetResult>,
@@ -17,6 +18,10 @@ const api: DesktopApi = {
 
   exportCsv: (dataset: Dataset) => ipcRenderer.invoke(CH.exportCsv, dataset),
   exportJson: (dataset: Dataset) => ipcRenderer.invoke(CH.exportJson, dataset),
+  exportMarks: (store: MarkStore) => ipcRenderer.invoke(CH.exportMarks, store),
+
+  getMarks: (symbol: string) => ipcRenderer.invoke(CH.marksGet, symbol) as Promise<MarkStore>,
+  saveMarks: (store: MarkStore) => ipcRenderer.invoke(CH.marksSave, store) as Promise<MarkStore>,
 
   appInfo: () => ipcRenderer.invoke(CH.appInfo),
   fitHeight: () => ipcRenderer.invoke(CH.fitHeight) as Promise<boolean>,

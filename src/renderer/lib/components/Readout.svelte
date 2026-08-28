@@ -14,6 +14,9 @@
     const parts = [`Daily bars · ${integer(app.visibleCount)} in view`];
     if (app.tableTruncated) parts.push(`table capped at ${integer(TABLE_CAP)}`);
     if (app.viewport.rollsHidden) parts.push('rolls too dense to mark');
+    // Bar labels vanish below 8px a bar, which from the chart alone is
+    // indistinguishable from "this stretch has no marks".
+    if (app.viewport.barMarksHidden) parts.push('zoom in for bar marks');
     return parts.join(' · ');
   });
 </script>
