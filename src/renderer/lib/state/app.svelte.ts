@@ -105,7 +105,7 @@ export class AppState {
   hoverIndex = $state<number | null>(null);
   /** Crosshair driven by the arrow keys; takes precedence while it is set. */
   keyIndex = $state<number | null>(null);
-  viewport = $state<Viewport>({ from: 0, to: 0, rollsHidden: false, barMarksHidden: false });
+  viewport = $state<Viewport>({ from: 0, to: 0, rollsHidden: false, barMarksHidden: false, barNumbersHidden: false });
 
   /** OS preference, tracked so `theme: 'system'` resolves without a reload. */
   systemDark = $state(false);

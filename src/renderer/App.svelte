@@ -83,7 +83,7 @@
       {:else}
         <div class="placeholder">{app.status === 'loading' ? 'Loading sessions…' : 'No data available.'}</div>
       {/if}
-      <Legend />
+      <Legend intraday={app.intraday} />
     </section>
 
     <aside class="side">

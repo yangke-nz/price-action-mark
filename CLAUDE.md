@@ -238,7 +238,8 @@ scripts/mark-report.ts         the text oracle for the marking rules
 src/shared/                    imported by main, renderer AND the CLI scripts
   yahoo.ts                       fetch + normalise; the only network code
   interval.ts                    bar size: keys, ranges, feed limits
-  session.ts                     RTH/ETH window; the only timezone code
+  session.ts                     RTH/ETH window + trading-day bar numbers;
+                                   the only timezone code
   rolls.ts                       expiry arithmetic + contractStarts()
   indicators.ts                  ema(), atr(), trueRange(); pure series maths
   marks/metrics.ts               per-bar columns every marking rule reads
@@ -272,6 +273,7 @@ src/renderer/
   lib/source/                    the seam — see "The one idea"
   lib/state/app.svelte.ts        one rune-based store for the window
   lib/chart/candles.ts           every imperative call into lightweight-charts
+  lib/chart/numbers.ts           Brooks bar numbers; a primitive of its own
   lib/chart/marks/               one primitive for all geometry, not one per mark
     primitive.ts                   ISeriesPrimitive; autoscaleInfo() -> null
     draw.ts                        marks -> polylines -> canvas; hit test shares them
@@ -835,6 +837,41 @@ changed is one decision.
 - **`--interval 5m` writes a DIFFERENT file** (`data/es_5m.json`), and the CSV
   export renames its first column `time`: a spreadsheet reading a column called
   `date` will parse `2026-08-28T13:45:00Z` as a date and drop the time.
+
+### Bar numbers
+
+One line of the intraday chart's furniture, and three decisions in it.
+
+- **Numbering is per TRADING DAY, and `tradingDayOf()` is not `dayOf()`.** The
+  UTC date is right for RTH — 09:30 to 16:15 New York is one UTC day — and
+  wrong for ETH, where it splits every Globex session at 00:00 UTC, 8pm in New
+  York, restarting the count mid-evening. `tradingDayOf` shifts the instant by
+  the cached New York offset, reads it with the UTC getters (which IS reading
+  New York's wall clock), and rolls to the next day from 18:00, the exchange's
+  own convention. Measured: RTH gives 42 sessions of **exactly 81 bars**, ETH
+  44 sessions with a 275-bar median. It lives in
+  [session.ts](src/shared/session.ts) because that is the only file allowed to
+  know about exchange-local time.
+- **Every third bar carries its number and the session's FIRST bar carries the
+  date instead.** They never contend: bar 1 is not a multiple of three. A daily
+  series gets no labels at all — `sessionBars()` correctly makes every daily bar
+  number 1 of its own session, which would print "1" under all 6,550 of them.
+- **A SECOND primitive, not another kind inside `MarkPrimitive`.** These labels
+  carry no verdict, no tone and no hit test; folding them in would put "where is
+  bar 12" and "which pattern is this" in one code path. Series markers were
+  never an option — a marker reserves vertical space and MOVES THE PRICE SCALE,
+  which is already written down as the reason a selected bar mark gets a band
+  instead of a bigger marker. `autoscaleInfo()` returns null here too.
+- **It draws in MEDIA coordinates.** `useMediaCoordinateSpace` hands over CSS
+  pixels; text in bitmap space means scaling the font by the device pixel ratio
+  by hand and getting the baseline wrong on a fractional-scaling display.
+- **Numbers and dates have SEPARATE density tests, and only the numbers are
+  announced.** A label needs `chars * 6px + 7` of clear space at 10px mono, and
+  the gap between labels is 3 bars for numbers but a whole session for dates —
+  so at 3D (3.6px a bar) the numbers go and the three date labels stay, which is
+  exactly what the reader needs. The readout folds both suppressions into ONE
+  clause (`zoom in for bar marks and numbers`): two "zoom in for…" phrases in
+  that line is noise, and the gesture that fixes them is the same.
 
 ### RTH / ETH
 

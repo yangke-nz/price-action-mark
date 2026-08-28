@@ -50,11 +50,13 @@ import type { Dataset } from '../../../shared/types.ts';
 import { axisPrice } from '../../../shared/format.ts';
 import { readTokens } from './tokens.ts';
 import { EMA_PERIOD, ema } from '../../../shared/indicators.ts';
+import { sessionBars } from '../../../shared/session.ts';
 import { contractStarts } from '../../../shared/rolls.ts';
 import { tickFor } from '../../../shared/instrument.ts';
 import { epochOf, specOf } from '../../../shared/interval.ts';
 import type { BarMark, Mark } from '../../../shared/marks/types.ts';
 import { MarkPrimitive } from './marks/primitive.ts';
+import { BarNumberPrimitive, NUMBER_STEP, dateLines, type BarLabel, type LabelDensity } from './numbers.ts';
 import { styleFor } from './marks/palette.ts';
 
 /** Below this many pixels of separation the roll arrows stop reading as
@@ -85,6 +87,44 @@ export interface Viewport {
   rollsHidden: boolean;
   /** True while per-bar mark labels are suppressed for density. */
   barMarksHidden: boolean;
+  /** True while the session bar numbers are suppressed for density. Intraday
+   *  only — a daily bar is a whole session and carries no number. */
+  barNumbersHidden: boolean;
+}
+
+/**
+ * The bar numbers and session dates for one dataset.
+ *
+ * Brooks numbers the bars of a session and refers to them by number, so every
+ * third bar carries its count and the session's FIRST bar carries the date
+ * instead — bar 1 is never a multiple of three, so the two never contend for
+ * the same bar.
+ *
+ * Empty on a daily series: a daily bar is a whole session, and numbering it
+ * would print "1" under all 6,550 of them.
+ */
+function barLabels(data: Dataset): { numbers: BarLabel[]; dates: BarLabel[]; shortestSession: number } {
+  const empty = { numbers: [], dates: [], shortestSession: 1 };
+  if (!specOf(data).intraday) return empty;
+
+  const { number, starts } = sessionBars(data);
+  const numbers: BarLabel[] = [];
+  for (let i = 0; i < number.length; i++) {
+    const n = number[i]!;
+    if (n % NUMBER_STEP === 0) numbers.push({ i, low: data.l[i]!, lines: [String(n)] });
+  }
+  const dates: BarLabel[] = starts.map(({ i, day }) => ({ i, low: data.l[i]!, lines: dateLines(day) }));
+
+  // The SHORTEST session, not the average: the density test has to hold for
+  // the closest pair of dates on the chart, and a 60-day window always has a
+  // holiday half-session in it somewhere.
+  let shortest = Number.POSITIVE_INFINITY;
+  for (let k = 1; k < starts.length; k++) shortest = Math.min(shortest, starts[k]!.i - starts[k - 1]!.i);
+  return {
+    numbers,
+    dates,
+    shortestSession: Number.isFinite(shortest) ? shortest : number.length,
+  };
 }
 
 export interface CandleChartOptions {
@@ -140,6 +180,8 @@ export class CandleChart {
    *  round to. Tracked because `setData` can bring a different symbol. */
   #tick: number;
   readonly #primitive = new MarkPrimitive();
+  readonly #numbers = new BarNumberPrimitive();
+  #numbersHidden = false;
   #barMarks: readonly BarMark[] = [];
   #barMarkers: SeriesMarker<Time>[] = [];
   #barMarksHidden = false;
@@ -182,11 +224,14 @@ export class CandleChart {
       handleScale: { axisPressedMouseMove: { time: true, price: false } },
     });
 
-    // Hollow up-candles: a transparent body with a coloured border. That shape
-    // is the channel that carries direction when the hue cannot -- it survives
-    // red-green colour blindness, greyscale and print.
+    // FILLED up-candles, on request. They were hollow — a transparent body
+    // with a coloured border — because the shape is a second channel carrying
+    // direction where hue cannot, and it survives greyscale and print. Filled
+    // still separates under both colour-blindness simulations, because the
+    // palette was picked so LIGHTNESS carries it (dE 7.8 light / 8.6 dark, see
+    // tokens.css); what is gone is the redundancy, not the distinction.
     this.#candles = this.#chart.addSeries(CandlestickSeries, {
-      upColor: 'rgba(0,0,0,0)',
+      upColor: t.up,
       downColor: t.down,
       borderVisible: true,
       borderUpColor: t.up,
@@ -200,6 +245,11 @@ export class CandleChart {
 
     this.#markers = createSeriesMarkers(this.#candles, []);
     this.#candles.attachPrimitive(this.#primitive);
+    // A second primitive rather than another kind inside MarkPrimitive: these
+    // labels are not marks. They carry no verdict, no tone and no hit test, and
+    // folding them into the mark geometry would put "where is bar 12" and
+    // "which pattern is this" in the same code path.
+    this.#candles.attachPrimitive(this.#numbers);
     this.setData(data);
 
     this.#chart.subscribeCrosshairMove((param) => {
@@ -286,6 +336,9 @@ export class CandleChart {
     // knows which bar a key is.
     this.#primitive.setIndex(this.#indexOf);
 
+    const labels = barLabels(data);
+    this.#numbers.setLabels(labels.numbers, labels.dates, labels.shortestSession);
+
     this.#emaPoints = emaPoints(data, this.#timeOf);
     if (this.#ema) this.#ema.setData(this.#emaPoints);
     this.#refreshMarkers();
@@ -300,7 +353,9 @@ export class CandleChart {
     }
     this.#ema = this.#chart.addSeries(LineSeries, {
       color: readTokens().ema,
-      lineWidth: 2,
+      // One pixel. A 2px average competes with the candles it is drawn over;
+      // at this weight it reads as a guide line, which is what it is.
+      lineWidth: 1,
       priceScaleId: 'right',          // share the candles' scale, never autoscale alone
       priceLineVisible: false,
       lastValueVisible: false,
@@ -340,6 +395,12 @@ export class CandleChart {
       && this.#rollMarkers.length > 0
       && pxPerBar * this.#rollGapBars < MARKER_MIN_PX;
     this.#barMarksHidden = this.#barMarkers.length > 0 && pxPerBar < BAR_MARK_MIN_PX;
+    // The primitive owns the font, so it owns the arithmetic; this only asks.
+    // Dates are reported separately from numbers and deliberately not surfaced:
+    // one date every 81 bars survives any zoom a reader uses, and a second
+    // "zoom in for..." clause in the readout is noise.
+    const density: LabelDensity = this.#numbers.density(this.#chart.timeScale().options().barSpacing);
+    this.#numbersHidden = density.numbers;
 
     const out: SeriesMarker<Time>[] = [];
     if (this.#showRolls && !this.#rollsHidden) out.push(...this.#rollMarkers);
@@ -432,7 +493,11 @@ export class CandleChart {
   viewport(): Viewport {
     const n = this.#data.d.length;
     const range: LogicalRange | null = this.#chart.timeScale().getVisibleLogicalRange();
-    const hidden = { rollsHidden: this.#rollsHidden, barMarksHidden: this.#barMarksHidden };
+    const hidden = {
+      rollsHidden: this.#rollsHidden,
+      barMarksHidden: this.#barMarksHidden,
+      barNumbersHidden: this.#numbersHidden,
+    };
     if (!range) return { from: 0, to: n - 1, ...hidden };
     return {
       from: Math.max(0, Math.ceil(range.from)),
@@ -492,6 +557,7 @@ export class CandleChart {
       },
     });
     this.#candles.applyOptions({
+      upColor: t.up,
       downColor: t.down,
       borderUpColor: t.up,
       borderDownColor: t.down,

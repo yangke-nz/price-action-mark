@@ -18,9 +18,15 @@
     ];
     if (app.tableTruncated) parts.push(`table capped at ${integer(TABLE_CAP)}`);
     if (app.viewport.rollsHidden) parts.push('rolls too dense to mark');
-    // Bar labels vanish below 8px a bar, which from the chart alone is
-    // indistinguishable from "this stretch has no marks".
-    if (app.viewport.barMarksHidden) parts.push('zoom in for bar marks');
+    // Bar labels vanish below 24px a bar and the session numbers below ~2px,
+    // which from the chart alone is indistinguishable from "this stretch has
+    // no marks". ONE clause for both: two "zoom in for..." phrases in a line
+    // this dense is noise, and the gesture that fixes them is the same.
+    const marks = app.viewport.barMarksHidden;
+    const numbers = app.viewport.barNumbersHidden;
+    if (marks && numbers) parts.push('zoom in for bar marks and numbers');
+    else if (marks) parts.push('zoom in for bar marks');
+    else if (numbers) parts.push('zoom in for bar numbers');
     return parts.join(' · ');
   });
 </script>

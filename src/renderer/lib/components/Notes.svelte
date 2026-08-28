@@ -21,9 +21,12 @@
     <h3>Don't read the hue alone</h3>
     <p>
       Green up / red down is the trading convention and the classic red&ndash;green
-      colour-blindness failure. Measured under simulated protanopia the pair closes to
-      <b>&Delta;E 7.8</b> in light mode and 8.6 in dark, so direction is carried by shape as
-      well: <b>hollow bodies rise, filled bodies fall</b>.
+      colour-blindness failure, so the steps were picked by measurement: under simulated
+      protanopia and deuteranopia the pair still separates by <b>&Delta;E 7.8</b> in light
+      mode and 8.6 in dark, because a dark green against a lighter red lets
+      <b>lightness</b> carry what hue cannot. Both bodies are filled, so that step is now
+      the whole of it &mdash; the bright pairing most charts use closes to &Delta;E 4.1 and
+      would be indistinguishable here.
     </p>
   </div>
 

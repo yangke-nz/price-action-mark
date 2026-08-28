@@ -161,3 +161,67 @@ export function applySession(ds: Dataset, session: Session): Dataset {
     rolls: rollIndices(d),
   };
 }
+
+/**
+ * Globex opens at 18:00 New York, and those bars belong to the NEXT trading
+ * day — the exchange's own convention, and Brooks's: the overnight before a
+ * session is part of that session's story, not the previous one's.
+ */
+const GLOBEX_OPEN_MIN = 18 * 60;
+
+/**
+ * The trading day a bar belongs to, as a `YYYY-MM-DD` date in New York.
+ *
+ * NOT `dayOf(key)`. That is the UTC date, which for an RTH bar is the same
+ * thing — 09:30 to 16:15 New York is 13:30 to 20:15 UTC, one UTC day — but on
+ * an ETH chart it splits every Globex session at 00:00 UTC, which is 8pm in New
+ * York and the middle of the evening. Bar numbering would restart there.
+ *
+ * A daily key has no time part and is its own trading day.
+ */
+export function tradingDayOf(key: string, cache = new Map<string, number>()): string {
+  if (key.length <= 10) return dayOf(key);
+  const shifted = Date.parse(key) + nyOffsetMinutes(key, cache) * 60_000;
+  const local = new Date(shifted);
+  const minutes = local.getUTCHours() * 60 + local.getUTCMinutes();
+  // Reading a shifted instant with the UTC getters IS reading New York's wall
+  // clock, which is the whole trick — no second timezone conversion.
+  const day = minutes >= GLOBEX_OPEN_MIN ? new Date(shifted + 86_400_000) : local;
+  return day.toISOString().slice(0, 10);
+}
+
+export interface SessionBars {
+  /** 1-based position of each bar within its own trading day. */
+  readonly number: Int32Array;
+  /** The first bar of each trading day, with that day's date. */
+  readonly starts: readonly { readonly i: number; readonly day: string }[];
+}
+
+/**
+ * Number every bar within its trading day, Brooks-style: bar 1 is the session's
+ * first bar, and the count restarts every session.
+ *
+ * One pass, one offset cache, and the day strings are shared rather than
+ * rebuilt per bar — `tradingDayOf` is only asked when the day can have changed.
+ * A daily series gives every bar the number 1 and makes every bar a start,
+ * which is not a special case but the truth: a daily bar IS a session.
+ */
+export function sessionBars(ds: Dataset): SessionBars {
+  const n = ds.d.length;
+  const number = new Int32Array(n);
+  const starts: { i: number; day: string }[] = [];
+  const cache = new Map<string, number>();
+
+  let day = '';
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const at = tradingDayOf(ds.d[i]!, cache);
+    if (at !== day) {
+      day = at;
+      count = 0;
+      starts.push({ i, day: at });
+    }
+    number[i] = ++count;
+  }
+  return { number, starts };
+}

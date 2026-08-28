@@ -16,7 +16,7 @@ One Svelte 5 codebase, **two build targets**:
 | Target | Command | Output |
 | --- | --- | --- |
 | Electron desktop app | `npm run build` | `out/` (packaged with `npm run dist`) |
-| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (746 KB, self-contained) |
+| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (751 KB, self-contained) |
 
 Both render the same components against the same dataset, the same design
 tokens and the same chart controller. They differ in exactly one file —
@@ -104,7 +104,7 @@ scripts/mark-report.ts      the marking layer's text oracle
 src/shared/                 imported by main, renderer AND the CLI scripts
   yahoo.ts                    fetch + normalise; the only network code
   interval.ts                 bar size: keys, ranges, feed limits
-  session.ts                  RTH/ETH window; the only timezone code
+  session.ts                  RTH/ETH window + trading-day bar numbers
   rolls.ts                    expiry arithmetic + contractStarts()
   indicators.ts               ema(), atr(), trueRange()
   instrument.ts               per-symbol tick size
@@ -134,6 +134,7 @@ src/renderer/
   lib/source/                 the seam: electron.ts | artifact.ts | types.ts
   lib/state/app.svelte.ts     one rune-based store for the window
   lib/chart/candles.ts        every imperative call into lightweight-charts
+  lib/chart/numbers.ts        Brooks bar numbers, as their own primitive
   lib/chart/marks/            ONE primitive for all geometry, not one per mark
   lib/components/             Masthead, Controls, Readout, ChartPanel,
                               MarkPanel, RulesSheet, MarkingPane
@@ -828,6 +829,39 @@ pane now below the rules card, an unbounded rules card pushed the reading tab
 to 1,211px, and reaching the pane now leaves the chart **249 of 430px** visible
 instead of none.
 
+## Bar numbers
+
+Brooks refers to bars by their number in the session — "bar 12", "the bar 30
+reversal" — so the intraday chart counts them. Every third bar carries its
+number under its low, and each session's **first** bar carries the date instead,
+two lines, as on a printed Brooks chart. The two never collide: bar 1 is not a
+multiple of three.
+
+The count is per **trading day**, which is not the UTC date. For RTH they are
+the same thing — 09:30 to 16:15 New York is one UTC day — but on an ETH chart
+the UTC date splits every Globex session at 00:00 UTC, 8pm in New York, and the
+numbering would restart in the middle of the evening.
+[`tradingDayOf()`](src/shared/session.ts) shifts the instant by the cached New
+York offset, reads it back with the UTC getters — which *is* reading New York's
+wall clock — and rolls to the next day from 18:00, the exchange's own
+convention. Measured on a 60-day pull: RTH gives 42 sessions of **exactly 81
+bars**; ETH gives 44 with a 275-bar median.
+
+Drawing them is [a primitive of their own](src/renderer/lib/chart/numbers.ts),
+not a new kind of mark and not series markers. A marker reserves vertical space
+and would move the price scale on every zoom — the same reason a selected mark
+gets a band rather than a bigger marker — and these labels have no verdict, no
+tone and no hit test, so sharing the mark path would only couple them. Like the
+mark primitive, `autoscaleInfo()` returns null: nothing here can disturb the
+candles.
+
+Numbers and dates thin themselves **separately**, because their spacing is
+different: a label wants `chars × 6px + 7` of clear room at 10px mono, and the
+gap between labels is three bars for numbers but a whole session for dates. At
+3D on a 5-minute chart — 3.6px a bar — the numbers go and the three date labels
+stay, which is the useful half. The readout says so in one clause, *zoom in for
+bar marks and numbers*, rather than two.
+
 ## Colour
 
 The app **opens dark** (`DEFAULT_SETTINGS.theme = 'dark'` in both
@@ -854,9 +888,13 @@ hue cannot: ΔE 7.8 (light) and 8.6 (dark) under simulated protanopia and
 deuteranopia. The obvious bright pairing `#0ca30c`/`#d03b3b` fails outright at
 ΔE 4.1.
 
-Light mode sits just under the ΔE 8 target, so hue is never the only channel:
-**hollow bodies rise, filled bodies fall**, which also survives greyscale and
-print.
+Light mode sits just under the ΔE 8 target. Up-candles were **hollow** for that
+reason — a transparent body with a coloured border, a second channel that
+survives greyscale and print — and both bodies are now **filled**, on request,
+to match the reference chart the app is read beside. The distinction still
+holds on the lightness step above; what is gone is the redundancy, and the
+[Notes](src/renderer/lib/components/Notes.svelte) card and the chart legend both
+say so rather than claiming a shape channel that is no longer there.
 
 Marks need 3:1 contrast against the surface but text needs 4.5:1, which is why
 delta values use separate `--up-text`/`--down-text` tokens on darker steps —
