@@ -117,6 +117,44 @@ export class AppState {
     });
   });
 
+  /**
+   * The mark the reader clicked in the list, highlighted on the chart.
+   *
+   * Transient view state, deliberately NOT persisted and deliberately not a
+   * verdict: it says "show me where this one is", which is a different act
+   * from standing behind it. Clicking a mark on the canvas still means Keep.
+   */
+  selectedMarkId = $state<string | null>(null);
+
+  /**
+   * The selection resolved against what is actually on the chart.
+   *
+   * Read this rather than the id. A selection only SHOWS while its mark is
+   * still drawn, so dropping the mark, switching its rule off, or turning
+   * marking off entirely clears the highlight BY CONSTRUCTION — no cleanup
+   * effect that has to remember every way a mark can leave the chart.
+   *
+   * The id itself is deliberately kept, not cleared: switch the rule back on
+   * and the reader's place comes back with it. Same argument as keeping
+   * verdicts for marks that no longer regenerate — a toggle should not throw
+   * away a decision the reader made.
+   */
+  selectedMark = $derived.by((): Mark | null => {
+    const id = this.selectedMarkId;
+    if (id === null) return null;
+    return this.marks.find((mk) => mk.id === id) ?? null;
+  });
+
+  /** Clicking the selected mark again clears it, so the highlight is never a
+   *  state the reader has to hunt for a way out of. */
+  selectMark(id: string): void {
+    this.selectedMarkId = this.selectedMarkId === id ? null : id;
+  }
+
+  clearMarkSelection(): void {
+    this.selectedMarkId = null;
+  }
+
   confirmedCount = $derived.by((): number =>
     Object.values(this.markStore.verdicts).filter((v) => v === 'confirmed').length);
   dismissedCount = $derived.by((): number =>

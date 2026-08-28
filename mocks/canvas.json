@@ -1,0 +1,70 @@
+{
+  "artboards": [
+    {
+      "file": "Current.dc.html",
+      "title": "Today — the problem",
+      "x": 0,
+      "y": 0,
+      "w": 660,
+      "h": 1232
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "Option A — Tabbed inspector",
+      "x": 770,
+      "y": 0,
+      "w": 660,
+      "h": 1232
+    },
+    {
+      "file": "OptionB.dc.html",
+      "title": "Option B — Swap and collapse",
+      "x": 1540,
+      "y": 0,
+      "w": 660,
+      "h": 1232
+    },
+    {
+      "file": "OptionD.dc.html",
+      "title": "Option D — Split panes",
+      "x": 2310,
+      "y": 0,
+      "w": 660,
+      "h": 1232
+    },
+    {
+      "file": "OptionC.dc.html",
+      "title": "Option C — Rules in the toolbar",
+      "x": 0,
+      "y": 1422,
+      "w": 1240,
+      "h": 1232
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -232,
+      "w": 1348,
+      "text": "Marks in view — four ways out of the basement\n\nThe side column stacks Marking (31 rule rows) above Marks in view. Measured at a 1700x1000 viewport: the column shows 964 px, its content is 2,257 px, and the marks card starts at 2,217 px — so the surface you use on every single mark opens off-screen.\n\nCompare the four on one number: how much marks table you get without scrolling. Every option keeps the same data, the same verdicts and the same click-to-highlight — only the container changes."
+    },
+    {
+      "id": "pick",
+      "x": 1458,
+      "y": -232,
+      "w": 550,
+      "text": "Leaning to Option A.\n\nIt is the only one that gives the list the whole column without moving rules out of the panel, and the pinned strip keeps Show marks / All-vs-Confirmed reachable from both tabs — those three are what the publish flow needs.\n\nOption C is the better end state if you are willing to build a popover; B is the 20-minute version."
+    },
+    {
+      "id": "compact-note",
+      "x": 1350,
+      "y": 1422,
+      "w": 500,
+      "text": "The compact rule row (name + count, no blurb, two columns) used in C and D is worth having on its own — it takes the rules card from 2,199 px to about 640 px. Dropped blurbs need somewhere to go: title attribute, or a details row on hover."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

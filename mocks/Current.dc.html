@@ -1,0 +1,338 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+  <style>
+    :root {
+      --plane: #0b0d10; --surface: #15181c; --surface-2: #1b1f24;
+      --ink: #f2f5f8; --ink-2: #a8b1bc; --muted: #6d7681;
+      --grid: #23282e; --axis: #333a42; --hair: rgb(242 245 248 / 10%);
+      --up: #008300; --down: #e66767; --up-text: #0ca30c; --down-text: #e66767;
+      --ema: #93a5f4; --focus: #3987e5;
+      --sans: "Archivo", "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--plane); color: var(--ink); font-family: var(--sans);
+           -webkit-font-smoothing: antialiased; }
+    a { color: var(--focus); } a:hover { color: var(--ink); }
+
+    .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
+            overflow: hidden; display: flex; flex-direction: column; }
+    .sum { display: flex; align-items: baseline; gap: 12px; padding: 11px 16px; flex: none;
+           font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+           text-transform: uppercase; color: var(--muted); }
+    .sum .t { color: var(--ink-2); }
+    .sum .c { margin-left: auto; letter-spacing: 0.04em; text-transform: none; }
+
+    .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; flex: none;
+           padding: 12px 16px; border-top: 1px solid var(--grid); }
+    .master { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink); }
+    .seg { display: flex; gap: 2px; padding: 3px; background: var(--surface-2);
+           border: 1px solid var(--hair); border-radius: 8px; }
+    .seg span { padding: 4px 10px; border-radius: 5px; font-family: var(--mono);
+                font-size: 11px; color: var(--ink-2); }
+    .seg span.on { background: var(--surface); color: var(--ink); font-weight: 600; }
+    .tally { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+    .rules { display: grid; gap: 2px 20px; padding: 0 16px 14px; }
+    .rule { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline;
+            gap: 3px 8px; padding: 5px 0; font-size: 12.5px; color: var(--ink-2); }
+    .rule.dim { opacity: 0.45; }
+    .rule .name { font-weight: 500; }
+    .rule .n { justify-self: end; font-family: var(--mono); font-size: 11px;
+               font-variant-numeric: tabular-nums; color: var(--muted); }
+    .rule .blurb { grid-column: 2 / -1; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+    input[type=checkbox] { width: 14px; height: 14px; margin: 0; accent-color: var(--focus); }
+
+    .rules.tight { gap: 0 22px; grid-template-columns: 1fr 1fr; padding-bottom: 10px; }
+    .rules.tight .rule { grid-template-columns: auto 1fr auto; padding: 3px 0; font-size: 12px; gap: 8px; }
+    .rules.tight .blurb { display: none; }
+    .ghead { grid-column: 1 / -1; font-family: var(--mono); font-size: 9.5px; font-weight: 600;
+             letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); padding: 11px 0 3px; }
+
+    .hint { margin: 0; padding: 9px 16px; border-top: 1px solid var(--grid); flex: none;
+            font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--muted); }
+    .tbl { flex: 1 1 auto; overflow: hidden; position: relative; }
+    table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    th { text-align: left; padding: 8px 6px; background: var(--surface-2);
+         border-bottom: 1px solid var(--grid); font-family: var(--mono); font-size: 10px;
+         font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: var(--muted);
+         white-space: nowrap; }
+    td { padding: 7px 6px; border-bottom: 1px solid var(--grid); color: var(--ink-2);
+         vertical-align: top; }
+    td.d { font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums;
+           white-space: nowrap; color: var(--ink); }
+    .lag { display: block; font-size: 10.5px; color: var(--muted); }
+    td.lab { font-family: var(--mono); font-weight: 600; white-space: nowrap; color: var(--ink-2); }
+    td.lab.bull { color: var(--up-text); }
+    td.lab.bear { color: var(--down-text); }
+    td.rl { font-family: var(--mono); font-size: 11px; color: var(--muted);
+            overflow-wrap: break-word; }
+    td.note { font-size: 11.5px; line-height: 1.45; }
+    td.vd { white-space: nowrap; }
+    .vd i { display: inline-block; padding: 3px 6px; border: 1px solid var(--hair);
+            border-radius: 5px; background: var(--surface); color: var(--muted);
+            font-family: var(--mono); font-size: 11px; font-style: normal; letter-spacing: 0.05em; }
+    .vd i + i { margin-left: 4px; }
+    tr.picked td { background: var(--surface-2); }
+    tr.picked td.d { box-shadow: inset 3px 0 0 var(--focus); }
+    tr.picked td.lab { text-decoration: underline; text-decoration-thickness: 2px; }
+
+    /* the roomier table a column gets once the rules are not sharing it */
+    .roomy th, .roomy td { padding-left: 12px; padding-right: 12px; }
+    .roomy td.rl { white-space: nowrap; }
+    .roomy td.note { min-width: 20ch; }
+
+    .tabs { display: flex; gap: 2px; padding: 0 10px; flex: none; background: var(--surface-2);
+            border-top: 1px solid var(--grid); border-bottom: 1px solid var(--grid); }
+    .tab { display: flex; align-items: center; gap: 7px; padding: 9px 12px 8px;
+           border-bottom: 2px solid transparent; font-family: var(--mono); font-size: 11px;
+           letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .tab.on { color: var(--ink); border-bottom-color: var(--focus); font-weight: 600; }
+    .tab b { font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+
+    .frameLabel { display: flex; align-items: baseline; gap: 11px; margin: 0 0 15px; flex: none; }
+    .frameLabel h2 { margin: 0; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em;
+                     color: var(--ink); }
+    .frameLabel .kicker { font-family: var(--mono); font-size: 10px; font-weight: 600;
+                          letter-spacing: 0.14em; text-transform: uppercase; color: var(--focus);
+                          white-space: nowrap; }
+    .frameLabel .kicker.warn { color: var(--down-text); }
+    .foot { display: grid; gap: 8px; margin-top: 17px; flex: none; }
+    .foot > div { display: grid; grid-template-columns: 74px 1fr; gap: 11px; font-size: 11.5px;
+                  line-height: 1.5; color: var(--ink-2); }
+    .foot b { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em;
+              text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+    .foot .cost b { color: var(--down-text); }
+
+    .colwrap { position: relative; flex: none; }
+    .sb { position: absolute; right: -10px; width: 5px; border-radius: 3px; background: var(--axis); }
+    .fade { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 96px; border-radius: 0 0 10px 10px;
+            background: linear-gradient(to bottom, rgb(21 24 28 / 0), rgb(11 13 16 / 0.94) 70%); }
+    .cutnote { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center;
+               font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; color: var(--down-text); }
+  </style>
+</helmet>
+<div style="width: 660px; height: 1232px; background: var(--plane); padding: 26px 32px 22px;
+            display: flex; flex-direction: column; overflow: hidden;">
+  <div class="frameLabel">
+    <span class="kicker warn">Today</span>
+    <h2>The rules card buries the list</h2>
+  </div>
+  <div class="colwrap" style="width: 578px; height: 964px;">
+    <div class="card" style="height: 100%;">
+      <div class="sum"><span class="t">Marking</span><span class="c">3,638 marks from 25 rules</span></div>
+        <div class="top">
+          <label class="master"><input type="checkbox" checked> Show marks</label>
+          <div class="seg"><span class="on">All candidates</span><span>Confirmed only</span></div>
+          <span class="tally">0 kept · 0 dropped</span>
+        </div>
+        <div class="rules">
+          <label class="rule dim">
+            <input type="checkbox">
+            <span class="name">Trend bar</span>
+            <span class="n">2,260</span>
+          <span class="blurb">Body at least 60% of the range. Fires on about a third of all sessions, so it ships off.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Big trend bar</span>
+            <span class="n">450</span>
+          <span class="blurb">A trend bar whose range is at least 1.5 x ATR.</span>
+          </label>
+          <label class="rule dim">
+            <input type="checkbox">
+            <span class="name">Doji</span>
+            <span class="n">1,783</span>
+          <span class="blurb">Body at most 25% of the range — a one-bar trading range. Common enough to ship off.</span>
+          </label>
+          <label class="rule dim">
+            <input type="checkbox">
+            <span class="name">Inside bar</span>
+            <span class="n">777</span>
+          <span class="blurb">High no higher and low no lower than the session before. One session in eight, so it ships off.</span>
+          </label>
+          <label class="rule dim">
+            <input type="checkbox">
+            <span class="name">Outside bar</span>
+            <span class="n">771</span>
+          <span class="blurb">Higher high and lower low than the session before. One session in eight, so it ships off.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">ii / iii</span>
+            <span class="n">40</span>
+          <span class="blurb">Two, or three, consecutive inside bars. Breakout mode.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">ioi</span>
+            <span class="n">26</span>
+          <span class="blurb">Inside, outside, inside — a coiled breakout setup.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Reversal bar</span>
+            <span class="n">340</span>
+          <span class="blurb">Takes out the previous extreme, then closes back through it in the top or bottom third.</span>
+          </label>
+          <label class="rule dim">
+            <input type="checkbox">
+            <span class="name">Shaved bar</span>
+            <span class="n">989</span>
+          <span class="blurb">A trend bar with almost no tail at one end — no pullback inside the session.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Pin bar</span>
+            <span class="n">244</span>
+          <span class="blurb">One tail at least 60% of the range with a small body. Direction is the tail's opposite.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Climax</span>
+            <span class="n">38</span>
+          <span class="blurb">A bar of at least 2 x ATR ending a run of 3 or more in one direction.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Gap</span>
+            <span class="n">42</span>
+          <span class="blurb">Opens clear of the previous session’s range. Contract rolls are excluded — that gap is carry.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Breakout</span>
+            <span class="n">349</span>
+          <span class="blurb">A trend bar closing beyond the previous 20 sessions' extreme.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Follow-through</span>
+            <span class="n">45</span>
+          <span class="blurb">A second trend bar the same way, straight after a breakout. Its absence is the more useful signal.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Two-bar reversal</span>
+            <span class="n">237</span>
+          <span class="blurb">Opposed trend bars of comparable size, the second undoing the first.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Bull channel</span>
+            <span class="n">99</span>
+          <span class="blurb">A trendline through rising lows with a parallel above it, 3+ touches within 0.4 ATR.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Bear channel</span>
+            <span class="n">96</span>
+          <span class="blurb">A trendline through falling highs with a parallel below it, 3+ touches within 0.4 ATR.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Micro channel</span>
+            <span class="n">238</span>
+          <span class="blurb">5+ consecutive bars each with a higher high and higher low, or the mirror. The strongest kind, and the one that offers no pullback entry.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Spike and channel</span>
+            <span class="n">80</span>
+          <span class="blurb">3+ trend bars covering 1.5 ATR, then a channel of at most 0.6x that slope. Marks where the trend stopped being one-way.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Double top</span>
+            <span class="n">112</span>
+          <span class="blurb">Two highs within 0.5 ATR, 4-40 sessions apart, with a 1.5 ATR trough between them.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Double bottom</span>
+            <span class="n">79</span>
+          <span class="blurb">Two lows within 0.5 ATR, 4-40 sessions apart, with a 1.5 ATR peak between them.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Wedge</span>
+            <span class="n">132</span>
+          <span class="blurb">Three pushes one way, each at most 85% of the one before, with the boundaries converging.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Triangle</span>
+            <span class="n">144</span>
+          <span class="blurb">Lower highs against higher lows: the two boundaries slope opposite ways and the range closes.</span>
+          </label>
+          <label class="rule dim">
+            <input type="checkbox">
+            <span class="name">Pullback entry (H1-H4 / L1-L4)</span>
+            <span class="n">808</span>
+          <span class="blurb">Every counted attempt to resume the trend. Around 1,600 over the series, so it ships off; second-entry is the subset worth watching.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Second entry (H2 / L2)</span>
+            <span class="n">162</span>
+          <span class="blurb">The second attempt to resume the trend, which Brooks treats as the highest-probability with-trend entry.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Double top short</span>
+            <span class="n">112</span>
+          <span class="blurb">Short the bar that turns the second peak. Target is the measured move: the pattern height projected down from the neckline.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Double bottom long</span>
+            <span class="n">79</span>
+          <span class="blurb">Long the bar that turns the second trough. Target is the measured move: the pattern height projected up from the neckline.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Wedge reversal</span>
+            <span class="n">66</span>
+          <span class="blurb">Trade against the third push of a wedge. Target is the start of the wedge, which is where Brooks expects it to unwind to.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Breakout pullback</span>
+            <span class="n">282</span>
+          <span class="blurb">The first bar to pull back against a breakout within 5 sessions, entered in the breakout's direction.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Failed breakout</span>
+            <span class="n">102</span>
+          <span class="blurb">A breakout that closes back inside the prior range within 2 sessions. Faded the other way.</span>
+          </label>
+          <label class="rule">
+            <input type="checkbox" checked>
+            <span class="name">Final flag</span>
+            <span class="n">44</span>
+          <span class="blurb">A tight 3-10 bar flag late in a trend whose breakout closes back inside within 2 sessions. Faded. "Final" is retrospective — the rule only sees a failed late-trend flag.</span>
+          </label>
+        </div>
+    </div>
+    <div class="sb" style="top: 0; height: 402px;"></div>
+    <div class="fade"></div>
+    <div class="cutnote">↓ Marks in view starts 2,217 px down · 1,253 px of scrolling from here</div>
+  </div>
+  <div class="foot">
+    <div><b>Problem</b><span>The rules card is 2,199 px tall in a column that shows 964 px. Marks in view is the card after it, so it opens off-screen and stays there.</span></div>
+    <div><b>Frequency</b><span>Rules are set once and left. Marks in view is where every Keep, Drop and click-to-highlight happens — the position is exactly backwards.</span></div>
+    <div class="cost"><b>Table</b><span>0 px of the marks table is reachable without scrolling past 31 rule rows.</span></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

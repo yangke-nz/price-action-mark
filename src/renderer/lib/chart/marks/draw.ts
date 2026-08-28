@@ -13,7 +13,15 @@
  * evaluated against `logicalToCoordinate`.
  */
 import type { GeometryMark } from '../../../../shared/marks/types.ts';
-import { FILL_ALPHA, MARK_ALPHA, type MarkStyle } from './palette.ts';
+import {
+  FILL_ALPHA,
+  MARK_ALPHA,
+  SELECTED_BAND_ALPHA,
+  SELECTED_HALO_ALPHA,
+  SELECTED_HALO_WIDTH,
+  SELECTED_WIDTH,
+  type MarkStyle,
+} from './palette.ts';
 
 export interface Pt {
   readonly x: number;
@@ -119,12 +127,27 @@ export function shapeOf(mark: GeometryMark, space: Space): Shape | null {
   }
 }
 
+/** Trace one polyline. Shared so the halo pass and the line pass cannot
+ *  disagree about the path they are stroking. */
+function trace(ctx: CanvasRenderingContext2D, poly: readonly Pt[], hx: number, hy: number): void {
+  ctx.beginPath();
+  ctx.moveTo(poly[0]!.x * hx, poly[0]!.y * hy);
+  for (let k = 1; k < poly.length; k++) ctx.lineTo(poly[k]!.x * hx, poly[k]!.y * hy);
+}
+
 /**
  * Stroke and fill one shape.
  *
  * Coordinates arrive in CSS pixels and are scaled here, because a 1.5px line
  * drawn in media space on a 2x display lands between device pixels and reads
  * as a smudge next to the candles, which the library draws in bitmap space.
+ *
+ * `selected` is the mark the reader clicked in the list. It is drawn in the
+ * same colour and gains a halo, extra width and full opacity on its LINES only
+ * — see the note in palette.ts for why emphasis is weight rather than hue, and
+ * why the fill is left alone. The halo is stroked WITHOUT the dash pattern: a
+ * dashed halo behind a dashed line reads as two misaligned dashed lines rather
+ * than as one emphasised one.
  */
 export function paint(
   ctx: CanvasRenderingContext2D,
@@ -132,34 +155,67 @@ export function paint(
   style: MarkStyle,
   hx: number,
   hy: number,
-  width = 1.5,
+  selected = false,
 ): void {
   ctx.save();
   ctx.strokeStyle = style.color;
   ctx.fillStyle = style.color;
-  ctx.lineWidth = width * hy;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
+  // Not raised for the selection: see the note in palette.ts — a channel's
+  // band grows with the zoom, so emphasising it swamps the candles.
   ctx.globalAlpha = FILL_ALPHA;
   for (const poly of shape.fills) {
     if (poly.length < 3) continue;
-    ctx.beginPath();
-    ctx.moveTo(poly[0]!.x * hx, poly[0]!.y * hy);
-    for (let k = 1; k < poly.length; k++) ctx.lineTo(poly[k]!.x * hx, poly[k]!.y * hy);
+    trace(ctx, poly, hx, hy);
     ctx.closePath();
     ctx.fill();
   }
 
-  ctx.globalAlpha = MARK_ALPHA;
+  if (selected) {
+    ctx.globalAlpha = SELECTED_HALO_ALPHA;
+    ctx.lineWidth = SELECTED_HALO_WIDTH * hy;
+    ctx.setLineDash([]);
+    for (const poly of shape.lines) {
+      if (poly.length < 2) continue;
+      trace(ctx, poly, hx, hy);
+      ctx.stroke();
+    }
+  }
+
+  ctx.globalAlpha = selected ? 1 : MARK_ALPHA;
+  ctx.lineWidth = (selected ? SELECTED_WIDTH : 1.5) * hy;
   ctx.setLineDash(style.dash.map((v) => v * hx));
   for (const poly of shape.lines) {
     if (poly.length < 2) continue;
-    ctx.beginPath();
-    ctx.moveTo(poly[0]!.x * hx, poly[0]!.y * hy);
-    for (let k = 1; k < poly.length; k++) ctx.lineTo(poly[k]!.x * hx, poly[k]!.y * hy);
+    trace(ctx, poly, hx, hy);
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+/**
+ * The vertical band at the selected mark's anchor session.
+ *
+ * Deliberately NOT part of `Shape`: the hit test measures against shapes, and
+ * a full-height band would make a whole column of the chart report a hit on
+ * that one mark. It is decoration for the selection only, so it is painted
+ * separately and nothing measures against it.
+ */
+export function paintAnchorBand(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  halfWidth: number,
+  height: number,
+  style: MarkStyle,
+  hx: number,
+  hy: number,
+): void {
+  ctx.save();
+  ctx.globalAlpha = SELECTED_BAND_ALPHA;
+  ctx.fillStyle = style.color;
+  ctx.fillRect((x - halfWidth) * hx, 0, halfWidth * 2 * hx, height * hy);
   ctx.restore();
 }
 

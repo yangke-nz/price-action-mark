@@ -45,6 +45,7 @@
     instance.setRollsVisible(settings.showRolls);
     instance.showLastDays(daysFor(settings.range));
     instance.setMarks(untrack(() => app.marks));
+    instance.setSelected(untrack(() => app.selectedMark?.id ?? null));
 
     // Web fonts land after the first paint, and the axis gutters are measured
     // in pixels, so the chart has to re-measure once they do.
@@ -75,6 +76,13 @@
     const marks = app.marks;
     chart?.setMarks(marks);
   });
+  // Reads the RESOLVED selection, not the raw id: `app.selectedMark` is null
+  // once the mark stops being drawn, so a dropped or filtered-out mark clears
+  // its own highlight without this effect knowing the ways that can happen.
+  $effect(() => {
+    const id = app.selectedMark?.id ?? null;
+    chart?.setSelected(id);
+  });
   $effect(() => {
     const showEma = app.settings.showEma;
     chart?.setEmaVisible(showEma);
@@ -95,6 +103,7 @@
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       app.clearKeyboard();
+      app.clearMarkSelection();
       chart?.clearCrosshair();
       return;
     }
@@ -142,9 +151,11 @@
 <p class="sr-only" aria-live="polite">{spoken}</p>
 
 <style>
+  /* --chart-h is set on .wrap in App.svelte, which owns the two-column
+     breakpoint; the fallback keeps this component standalone. */
   .chart {
     width: 100%;
-    height: clamp(320px, 46vh, 560px);
+    height: var(--chart-h, clamp(320px, 46vh, 560px));
   }
 
   .chart:focus-visible {

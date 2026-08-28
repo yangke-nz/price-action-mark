@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+  <style>
+    :root {
+      --plane: #0b0d10; --surface: #15181c; --surface-2: #1b1f24;
+      --ink: #f2f5f8; --ink-2: #a8b1bc; --muted: #6d7681;
+      --grid: #23282e; --axis: #333a42; --hair: rgb(242 245 248 / 10%);
+      --up: #008300; --down: #e66767; --up-text: #0ca30c; --down-text: #e66767;
+      --ema: #93a5f4; --focus: #3987e5;
+      --sans: "Archivo", "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--plane); color: var(--ink); font-family: var(--sans);
+           -webkit-font-smoothing: antialiased; }
+    a { color: var(--focus); } a:hover { color: var(--ink); }
+
+    .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
+            overflow: hidden; display: flex; flex-direction: column; }
+    .sum { display: flex; align-items: baseline; gap: 12px; padding: 11px 16px; flex: none;
+           font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+           text-transform: uppercase; color: var(--muted); }
+    .sum .t { color: var(--ink-2); }
+    .sum .c { margin-left: auto; letter-spacing: 0.04em; text-transform: none; }
+
+    .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; flex: none;
+           padding: 12px 16px; border-top: 1px solid var(--grid); }
+    .master { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink); }
+    .seg { display: flex; gap: 2px; padding: 3px; background: var(--surface-2);
+           border: 1px solid var(--hair); border-radius: 8px; }
+    .seg span { padding: 4px 10px; border-radius: 5px; font-family: var(--mono);
+                font-size: 11px; color: var(--ink-2); }
+    .seg span.on { background: var(--surface); color: var(--ink); font-weight: 600; }
+    .tally { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+    .rules { display: grid; gap: 2px 20px; padding: 0 16px 14px; }
+    .rule { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline;
+            gap: 3px 8px; padding: 5px 0; font-size: 12.5px; color: var(--ink-2); }
+    .rule.dim { opacity: 0.45; }
+    .rule .name { font-weight: 500; }
+    .rule .n { justify-self: end; font-family: var(--mono); font-size: 11px;
+               font-variant-numeric: tabular-nums; color: var(--muted); }
+    .rule .blurb { grid-column: 2 / -1; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+    input[type=checkbox] { width: 14px; height: 14px; margin: 0; accent-color: var(--focus); }
+
+    .rules.tight { gap: 0 22px; grid-template-columns: 1fr 1fr; padding-bottom: 10px; }
+    .rules.tight .rule { grid-template-columns: auto 1fr auto; padding: 3px 0; font-size: 12px; gap: 8px; }
+    .rules.tight .blurb { display: none; }
+    .ghead { grid-column: 1 / -1; font-family: var(--mono); font-size: 9.5px; font-weight: 600;
+             letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); padding: 11px 0 3px; }
+
+    .hint { margin: 0; padding: 9px 16px; border-top: 1px solid var(--grid); flex: none;
+            font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--muted); }
+    .tbl { flex: 1 1 auto; overflow: hidden; position: relative; }
+    table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    th { text-align: left; padding: 8px 6px; background: var(--surface-2);
+         border-bottom: 1px solid var(--grid); font-family: var(--mono); font-size: 10px;
+         font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: var(--muted);
+         white-space: nowrap; }
+    td { padding: 7px 6px; border-bottom: 1px solid var(--grid); color: var(--ink-2);
+         vertical-align: top; }
+    td.d { font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums;
+           white-space: nowrap; color: var(--ink); }
+    .lag { display: block; font-size: 10.5px; color: var(--muted); }
+    td.lab { font-family: var(--mono); font-weight: 600; white-space: nowrap; color: var(--ink-2); }
+    td.lab.bull { color: var(--up-text); }
+    td.lab.bear { color: var(--down-text); }
+    td.rl { font-family: var(--mono); font-size: 11px; color: var(--muted);
+            overflow-wrap: break-word; }
+    td.note { font-size: 11.5px; line-height: 1.45; }
+    td.vd { white-space: nowrap; }
+    .vd i { display: inline-block; padding: 3px 6px; border: 1px solid var(--hair);
+            border-radius: 5px; background: var(--surface); color: var(--muted);
+            font-family: var(--mono); font-size: 11px; font-style: normal; letter-spacing: 0.05em; }
+    .vd i + i { margin-left: 4px; }
+    tr.picked td { background: var(--surface-2); }
+    tr.picked td.d { box-shadow: inset 3px 0 0 var(--focus); }
+    tr.picked td.lab { text-decoration: underline; text-decoration-thickness: 2px; }
+
+    /* the roomier table a column gets once the rules are not sharing it */
+    .roomy th, .roomy td { padding-left: 12px; padding-right: 12px; }
+    .roomy td.rl { white-space: nowrap; }
+    .roomy td.note { min-width: 20ch; }
+
+    .tabs { display: flex; gap: 2px; padding: 0 10px; flex: none; background: var(--surface-2);
+            border-top: 1px solid var(--grid); border-bottom: 1px solid var(--grid); }
+    .tab { display: flex; align-items: center; gap: 7px; padding: 9px 12px 8px;
+           border-bottom: 2px solid transparent; font-family: var(--mono); font-size: 11px;
+           letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .tab.on { color: var(--ink); border-bottom-color: var(--focus); font-weight: 600; }
+    .tab b { font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+
+    .frameLabel { display: flex; align-items: baseline; gap: 11px; margin: 0 0 15px; flex: none; }
+    .frameLabel h2 { margin: 0; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em;
+                     color: var(--ink); }
+    .frameLabel .kicker { font-family: var(--mono); font-size: 10px; font-weight: 600;
+                          letter-spacing: 0.14em; text-transform: uppercase; color: var(--focus);
+                          white-space: nowrap; }
+    .frameLabel .kicker.warn { color: var(--down-text); }
+    .foot { display: grid; gap: 8px; margin-top: 17px; flex: none; }
+    .foot > div { display: grid; grid-template-columns: 74px 1fr; gap: 11px; font-size: 11.5px;
+                  line-height: 1.5; color: var(--ink-2); }
+    .foot b { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em;
+              text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+    .foot .cost b { color: var(--down-text); }
+
+    .colwrap { position: relative; flex: none; }
+    .sb { position: absolute; right: -10px; width: 5px; border-radius: 3px; background: var(--axis); }
+    .fade { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 96px; border-radius: 0 0 10px 10px;
+            background: linear-gradient(to bottom, rgb(21 24 28 / 0), rgb(11 13 16 / 0.94) 70%); }
+    .cutnote { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center;
+               font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; color: var(--down-text); }
+  </style>
+</helmet>
+<div style="width: 660px; height: 1232px; background: var(--plane); padding: 26px 32px 22px;
+            display: flex; flex-direction: column; overflow: hidden;">
+  <div class="frameLabel">
+    <span class="kicker">Option A</span>
+    <h2>One card, two tabs</h2>
+  </div>
+  <div class="colwrap" style="width: 578px; height: 964px;">
+    <div class="card" style="height: 100%;">
+      <div class="sum"><span class="t">Marking</span><span class="c">3,638 marks from 25 rules</span></div>
+        <div class="top">
+          <label class="master"><input type="checkbox" checked> Show marks</label>
+          <div class="seg"><span class="on">All candidates</span><span>Confirmed only</span></div>
+          <span class="tally">0 kept · 0 dropped</span>
+        </div>
+      <div class="tabs">
+        <div class="tab on">Marks in view <b>69</b></div>
+        <div class="tab">Rules <b>25/31</b></div>
+      </div>
+        <p class="hint">Click a mark to highlight it on the chart.</p>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr><th>Session</th><th>Mark</th><th>Rule</th><th>Detail</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr class="picked">
+                <td class="d">24 Aug 2026<span class="lag">confirmed 27 Aug 2026</span></td>
+                <td class="lab bull">channel after spike</td>
+                <td class="rl">spike-and-channel</td>
+                <td class="note">3-bar spike of 302 (2.8 ATR), then a channel 6% as steep</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">24 Aug 2026<span class="lag">confirmed 27 Aug 2026</span></td>
+                <td class="lab bull">bull channel</td>
+                <td class="rl">bull-channel</td>
+                <td class="note">4 touches over 18 sessions</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">20 Aug 2026</td>
+                <td class="lab bear">micro channel down</td>
+                <td class="rl">micro-channel</td>
+                <td class="note">5 bars, no overlap</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">6 Aug 2026</td>
+                <td class="lab bull">BO▲</td>
+                <td class="rl">bo-pullback</td>
+                <td class="note">first pullback, 2 bars after the breakout · entry 7771.00, stop 7724.00, target 7865.00 · stop in 7 bars, -1.00R</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">5 Aug 2026</td>
+                <td class="lab bear">R▼</td>
+                <td class="rl">reversal-bar</td>
+                <td class="note"></td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">5 Aug 2026</td>
+                <td class="lab bull">micro channel up</td>
+                <td class="rl">micro-channel</td>
+                <td class="note">5 bars, no overlap</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">4 Aug 2026</td>
+                <td class="lab bull">BO</td>
+                <td class="rl">breakout</td>
+                <td class="note">clears the 20-session high</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">4 Aug 2026</td>
+                <td class="lab bull">BIG</td>
+                <td class="rl">big-bar</td>
+                <td class="note">1.5 x ATR</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">3 Aug 2026</td>
+                <td class="lab bull">gap</td>
+                <td class="rl">gap-bar</td>
+                <td class="note"></td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">30 Jul 2026</td>
+                <td class="lab bull">2BR</td>
+                <td class="rl">two-bar-reversal</td>
+                <td class="note"></td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">30 Jul 2026</td>
+                <td class="lab">ioi</td>
+                <td class="rl">ioi</td>
+                <td class="note"></td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">30 Jul 2026</td>
+                <td class="lab bull">FBO▲</td>
+                <td class="rl">failed-bo</td>
+                <td class="note">closed back under 7411.75 1 bars after breaking it · entry 7498.25, stop 7330.75, target 7833.25 · target in 9 bars, +2.00R</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">30 Jul 2026</td>
+                <td class="lab bear">BO▼</td>
+                <td class="rl">bo-pullback</td>
+                <td class="note">first pullback, 1 bars after the breakout · entry 7330.75, stop 7498.25, target 6995.75 · never filled</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+              <tr>
+                <td class="d">30 Jul 2026</td>
+                <td class="lab bull">BIG</td>
+                <td class="rl">big-bar</td>
+                <td class="note">1.7 x ATR</td>
+                <td class="vd"><i>Keep</i><i>Drop</i></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div><b>Why</b><span>The three controls you touch constantly — Show marks, All / Confirmed, the kept-dropped tally — stay pinned above the tabs. Below them, one surface at a time, and marks is the one that opens.</span></div>
+    <div><b>Table</b><span>~790 px of table, immediately, with no scrolling to reach it.</span></div>
+    <div class="cost"><b>Cost</b><span>You cannot watch a rule’s count while scanning the list — a tab switch away, not a scroll.</span></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

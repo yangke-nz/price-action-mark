@@ -65,6 +65,7 @@ const SESSIONS_PER_QUARTER = 63;
  */
 const BAR_MARK_MIN_PX = 24;
 
+
 export interface Viewport {
   /** Inclusive bar indices currently on screen. */
   from: number;
@@ -116,9 +117,13 @@ export class CandleChart {
   #barMarks: readonly BarMark[] = [];
   #barMarkers: SeriesMarker<Time>[] = [];
   #barMarksHidden = false;
-  /** Every id currently on the chart, so a click can be attributed to a mark
-   *  rather than to whatever else the library reports as hovered. */
-  #markIds: ReadonlySet<string> = new Set();
+  /** Every mark currently on the chart, by id. Keyed rather than a Set of ids
+   *  because a click has to be attributed to a mark rather than to whatever
+   *  else the library reports as hovered, AND `setSelected` has to resolve an
+   *  id to the mark whose session and tone the anchor band needs. */
+  #marksById: ReadonlyMap<string, Mark> = new Map();
+  /** The mark the reader picked out of the list. View state, never persisted. */
+  #selectedMarkId: string | null = null;
   #settleTimer: ReturnType<typeof setTimeout> | null = null;
   #disposed = false;
 
@@ -185,7 +190,7 @@ export class CandleChart {
     this.#chart.subscribeClick((param) => {
       const info = param as { hoveredInfo?: { objectId?: unknown; objectKind?: string; sourceKind?: string }; hoveredObjectId?: unknown };
       const id = info.hoveredInfo?.objectId ?? info.hoveredObjectId;
-      if (typeof id === 'string' && this.#markIds.has(id)) this.#opts.onMarkClick(id);
+      if (typeof id === 'string' && this.#marksById.has(id)) this.#opts.onMarkClick(id);
     });
 
     // Pan and zoom fire continuously; the table and the marker pass are only
@@ -299,11 +304,33 @@ export class CandleChart {
    * which is which.
    */
   setMarks(marks: readonly Mark[]): void {
-    this.#markIds = new Set(marks.map((m) => m.id));
+    this.#marksById = new Map(marks.map((m) => [m.id, m]));
     this.#barMarks = marks.filter((m): m is BarMark => m.kind === 'bar');
     this.#buildBarMarkers();
     this.#primitive.setMarks(marks);
+    // Re-resolve the selection against the new list. `setSelected` short-
+    // circuits on an unchanged id, so without this a mark set arriving after
+    // a selection would leave the primitive holding the OLD mark object — or
+    // holding one that is no longer on the chart at all.
+    const kept = this.#selectedMarkId;
+    this.#selectedMarkId = null;
+    this.setSelected(kept !== null && this.#marksById.has(kept) ? kept : null);
     this.#refreshMarkers();
+  }
+
+  /**
+   * Highlight one mark, or none.
+   *
+   * The whole selection lives in the primitive — geometry emphasis and the
+   * anchor band both — so this resolves the id to a mark and hands it over.
+   * Markers are deliberately untouched: they are the one part of the chart
+   * that can move the price scale, and see `#buildBarMarkers` for what that
+   * cost when the selected label was grown instead.
+   */
+  setSelected(id: string | null): void {
+    if (id === this.#selectedMarkId) return;
+    this.#selectedMarkId = id;
+    this.#primitive.setSelected(id === null ? null : this.#marksById.get(id) ?? null);
   }
 
   /** Colour lives on the marker data, not on options, so this runs again on
@@ -316,6 +343,11 @@ export class CandleChart {
         time: m.at as Time,
         position: m.placement === 'above' ? ('aboveBar' as const) : ('belowBar' as const),
         shape: 'circle' as const,
+        // Constant. Growing the selected one was tried and an `aboveBar`
+        // marker reserves vertical space, so selecting a mark near the visible
+        // high RE-SCALED the pane and shifted every candle. The selection is
+        // shown by the primitive's anchor band instead, which cannot: see
+        // SELECTED_BAND_ALPHA in marks/palette.ts.
         size: 0.3,
         text: m.label,
         color: styleFor(m.tone, t).color,

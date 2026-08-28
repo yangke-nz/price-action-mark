@@ -392,6 +392,59 @@ delete that directory first.
 - **Rule output is recomputed, never stored.** `detect()` runs every rule once
   per dataset (34 ms over 6,550 bars) and toggling a rule filters the result
   (0.26 ms). Re-detecting per toggle would make a checkbox 130x more expensive.
+- **The wide layout is TWO PANES in a fixed-height column, not one scroller.**
+  Above 1200px the chart and the marking cards sit side by side, and the column
+  gives the rules card a bounded slice off the top and the mark list everything
+  left. It was one scroller first, which put the mark list 2,217px down a 964px
+  column: the surface used on every mark opened off-screen. Three things are
+  load-bearing and each was measured wrong first:
+  - **`::details-content` is the flex item, not `.body`.** Chromium wraps a
+    `<details>`'s content in that pseudo-element, so a `display: flex`
+    `<details>` has two children: the summary and it. Leave it out of the chain
+    and a bounded card CLIPS instead of scrolling — a 320px card held a
+    `.scroll` reporting 498px of content and `maxScroll: 0`, with the last
+    rules unreachable. Both cards style it, and both keep a `max-height`
+    fallback (`--rules-scroll-max`, `--marklist-max-h`) so a browser without
+    the pseudo-element still scrolls rather than clipping.
+  - **The column's height comes from `--chart-h`, not from `100vh`.** The
+    column starts 201px down the page, so a viewport-tall one hangs 165px below
+    the fold — and a reader marking up never scrolls the page. `calc(var(--chart-h)
+    + 108px)` fits by construction, because `--chart-h` is already tuned to the
+    fold, and it leaves the two columns level (measured 768 against 766).
+  - **No `position: sticky` on the column.** It existed to keep a 2,257px
+    column in view while it scrolled. A sticky column cannot be fold-height at
+    rest and viewport-height when stuck, and with panes there is nothing to
+    stick.
+  A card's own density is a CONTAINER query on the card, never App's media
+  query repeated: MarkPanel drops its blurbs to `title` and goes to two columns
+  under 700px, MarkList tightens its five columns under 780px and 660px. The
+  same card is full-width when stacked and a narrow pane when not, and it is
+  the card's width that decides.
+- **Clicking a mark in the LIST highlights it on the chart; clicking one on
+  the CANVAS still toggles Keep.** Two gestures, two meanings — "show me where
+  this is" is not "I stand behind this". Selection is one id in `AppState`,
+  never persisted, and read through `selectedMark`, which resolves it against
+  `marks` so a dropped or filtered-out mark stops highlighting without a
+  cleanup effect. The id is kept, not cleared, so switching a rule back on
+  returns the reader's place.
+- **Emphasis for a selected mark is WEIGHT, never a colour, and never the
+  fill.** Tone owns hue. Raising the band's fill alpha to 0.32 was tried and a
+  selected channel at 1M — one channel spanning all 24 visible bars — became a
+  green slab over the candles, which is the failure `FILL_ALPHA` was tuned to
+  avoid. Emphasis goes on the rails: halo, width, full opacity.
+- **A selected mark also gets a one-session vertical band, drawn by the
+  PRIMITIVE.** It is the only thing that works for the marks emphasis cannot
+  reach: a bar mark is a series marker whose only channel is size, and growing
+  it MOVED THE PRICE SCALE (an `aboveBar` marker reserves vertical space, so
+  selecting a mark near the visible high re-scaled the pane and shifted every
+  candle); a `trade` whose trade never filled has `through === at`, so its box
+  and both lines collapse to zero width and there is nothing to thicken —
+  `second-entry` highlighted 0 pixels before the band. The primitive's
+  `autoscaleInfo()` is null, so a band cannot disturb the scale however tall
+  it is. It is NOT part of `Shape`: the hit test measures against shapes, and a
+  full-height band would make a whole column of the chart report that mark.
+  Measured across all 20 rules in view: 3,285-9,851 changed pixels each, all on
+  the primitive's canvas, with the price axis untouched.
 - **Clicking a mark on the chart toggles Keep.** `subscribeClick` reports
   `hoveredInfo.objectId` (`hoveredObjectId` is deprecated), and `CandleChart`
   checks it against the ids it was given rather than trusting it — markers and
