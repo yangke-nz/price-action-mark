@@ -46,6 +46,7 @@
     instance.showLastDays(daysFor(settings.range));
     instance.setMarks(untrack(() => app.marks));
     instance.setSelected(untrack(() => app.selectedMark?.id ?? null));
+    instance.setFocusBar(untrack(() => app.selectedBarDate));
 
     // Web fonts land after the first paint, and the axis gutters are measured
     // in pixels, so the chart has to re-measure once they do.
@@ -83,6 +84,13 @@
     const id = app.selectedMark?.id ?? null;
     chart?.setSelected(id);
   });
+  // The line the reader clicked in the bar reading. Reads the resolved DATE,
+  // not the index: a refresh clears the selection, but the date is also what
+  // the primitive anchors on, so nothing has to translate it at draw time.
+  $effect(() => {
+    const at = app.selectedBarDate;
+    chart?.setFocusBar(at);
+  });
   $effect(() => {
     const showEma = app.settings.showEma;
     chart?.setEmaVisible(showEma);
@@ -104,6 +112,7 @@
     if (event.key === 'Escape') {
       app.clearKeyboard();
       app.clearMarkSelection();
+      app.clearBarSelection();
       chart?.clearCrosshair();
       return;
     }
@@ -125,10 +134,16 @@
       ? `, ${Math.abs(app.focusEmaGap.pct).toFixed(2)} percent ` +
         `${app.focusEmaGap.abs >= 0 ? 'above' : 'below'} the ${app.emaPeriod}-session average`
       : '';
+    // The reading is spoken HERE rather than from the readout, which is an
+    // atomic live region and would re-read every figure alongside it. This
+    // region already exists to describe the focused bar in prose, and a
+    // sentence about what the bar did belongs in a sentence.
+    const reading = app.focusReading ? ` ${app.focusReading.text}.` : '';
     return `${day(bar.date)}: open ${price(bar.open)}, high ${price(bar.high)}, ` +
       `low ${price(bar.low)}, close ${price(bar.close)}, ` +
       `${move.abs >= 0 ? 'up' : 'down'} ${Math.abs(move.pct).toFixed(2)} percent${gap}` +
-      `${bar.isRoll ? '. Contract roll: this change is carry, not a traded move.' : '.'}`;
+      `${bar.isRoll ? '. Contract roll: this change is carry, not a traded move.' : '.'}` +
+      reading;
   });
 </script>
 

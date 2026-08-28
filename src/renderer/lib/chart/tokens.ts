@@ -9,6 +9,10 @@ export interface ChartTokens {
   grid: string;
   axis: string;
   muted: string;
+  /** The selection colour the rest of the UI focuses with. The bar-reading
+   *  band uses it so that "this is the line you clicked" cannot be mistaken
+   *  for a statement about direction, which --up / --down already own. */
+  focus: string;
   ink: string;
   ink2: string;
   surface: string;
@@ -25,6 +29,7 @@ export function readTokens(root: HTMLElement = document.documentElement): ChartT
     grid: g('--grid'),
     axis: g('--axis'),
     muted: g('--muted'),
+    focus: g('--focus'),
     ink: g('--ink'),
     ink2: g('--ink-2'),
     surface: g('--surface'),

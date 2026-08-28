@@ -16,6 +16,8 @@
  *   npm run marks -- --rolls                       only contract-change bars
  *   npm run marks -- --structure                   add pivot / trend / pullback
  *   npm run marks -- --tune                        sweep strength x min-swing
+ *   npm run marks -- --read                        the bar-by-bar reading, in words
+ *   npm run marks -- --read --rolls                only the contract changes
  *   npm run marks -- --rules                       what every rule detected
  *   npm run marks -- --rules --rule ii,ioi --last 400
  *   npm run marks -- --catalogue                   hit rate per rule, whole series
@@ -32,6 +34,7 @@ import { metrics } from '../src/shared/marks/metrics.ts';
 import { structure, type Structure } from '../src/shared/marks/structure.ts';
 import { buildCtx } from '../src/shared/marks/rule.ts';
 import { RULES, defaultEnabled, detect } from '../src/shared/marks/registry.ts';
+import { phraseOf, readAt, readingIndex, readings } from '../src/shared/marks/reading.ts';
 import { walkForward, type TradePlan } from '../src/shared/marks/trade.ts';
 import type { Dataset } from '../src/shared/types.ts';
 
@@ -239,6 +242,44 @@ async function check(): Promise<number> {
           break;
         }
         seen.set(mark.id, mark.rule);
+      }
+      if (fails.length > 0) break;
+    }
+  }
+
+  // ---- reading ---------------------------------------------------------
+
+  // The reading is prose, so the things that can go wrong with it are not
+  // arithmetic: a missing line, an empty one, a stray newline that would break
+  // a single-line row into two, or a pattern clause naming something the close
+  // could not have known. All four are silent on a chart.
+  {
+    const ctx = buildCtx(data, structOpts);
+    const marks = detect(ctx);
+    const lines = readings(ctx, marks, 0, n - 1);
+    if (lines.length !== n) {
+      fails.push(`${lines.length} readings for ${n} bars — every session must get a line`);
+    }
+    const byDate = new Map(marks.map((mk) => [mk.at + '|' + mk.rule, mk]));
+    for (let k = 0; k < lines.length; k++) {
+      const line = lines[k]!;
+      if (line.at !== data.d[k]) {
+        fails.push(`reading ${k} names ${line.at}, series has ${data.d[k]}`);
+        break;
+      }
+      if (line.bar === '' || line.text === '') { fails.push(`empty reading at ${line.at}`); break; }
+      if (/[\r\n]/.test(line.text)) { fails.push(`reading at ${line.at} spans lines`); break; }
+      // A pattern in the reading must be a rule that fired on that bar AND was
+      // knowable at its close. This is the foresight check.
+      for (const phrase of line.patterns) {
+        const rule = RULES.find((r) => phraseOf(r) === phrase);
+        if (!rule) { fails.push(`reading at ${line.at} names "${phrase}", which is no rule`); break; }
+        const mk = byDate.get(line.at + '|' + rule.id);
+        if (!mk) { fails.push(`reading at ${line.at} names ${rule.id}, which did not fire there`); break; }
+        if (mk.knownAt !== mk.at) {
+          fails.push(`reading at ${line.at} names ${rule.id}, knowable only at ${mk.knownAt}`);
+          break;
+        }
       }
       if (fails.length > 0) break;
     }
@@ -489,6 +530,46 @@ function rules(rows: number[]): void {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
+/**
+ * The bar-by-bar reading — the text oracle for the words, not the numbers.
+ *
+ * The panel in the app renders exactly these strings, so a reading that reads
+ * badly, repeats itself, or contradicts the columns is visible here without
+ * opening the chart. Oldest first, unlike the panel: read left to right, which
+ * is the direction the sentences were written to be read in.
+ *
+ * The marks are UNFILTERED on purpose, matching the app. `--rule` does not
+ * apply: a bar says what it says whatever the reader has switched on.
+ */
+function read(rows: number[]): void {
+  const ctx = buildCtx(data, structOpts);
+  // Per ROW, not `readings(from, to)` over the endpoints. `--rolls` filters
+  // `rows` down to the contract changes, and reading the span between the first
+  // and the last printed 125 sessions where three were asked for — the filter
+  // was silently discarded because only `rows[0]` and the last survived.
+  const index = readingIndex(ctx, detect(ctx));
+  const lines = rows.map((i) => readAt(ctx, index, i));
+  const out = [
+    `${lines.length} sessions   ${lines[0]?.at} -> ${lines[lines.length - 1]?.at}`,
+    `structure at strength ${ctx.s.strength} / ${ctx.s.minSwingAtr} ATR; a swing pivot ` +
+    `confirmed ${ctx.s.strength} sessions after the bar it names`,
+    '',
+  ];
+  for (const line of lines) out.push(`${line.at}  ${line.text}`);
+
+  // The two numbers worth watching while tuning the wording: a reading with no
+  // clause but the body is thin, and one running past a terminal width has
+  // stopped being a line.
+  const longest = lines.reduce((w, l) => Math.max(w, l.text.length), 0);
+  const bare = lines.filter((l) => l.patterns.length === 0 && !l.bar.includes(',')).length;
+  out.push(
+    '',
+    `${pad(String(longest), 5)}   longest reading, in characters`,
+    `${pad(String(bare), 5)}   readings carrying nothing but the bar's own body`,
+  );
+  process.stdout.write(out.join('\n') + '\n');
+}
+
 // ---- trades -------------------------------------------------------------
 
 /**
@@ -684,6 +765,7 @@ for (let i = lo; i <= hi; i++) {
 }
 if (rows.length === 0) die('no sessions match');
 
+if (has('read')) { read(rows); process.exit(0); }
 if (has('rules')) { rules(rows); process.exit(0); }
 if (has('trades')) { trades(rows); process.exit(0); }
 

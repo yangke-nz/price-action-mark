@@ -19,17 +19,17 @@ import { barMark, comparable, usable } from '../rule.ts';
 /** Body at or above this share of the range is a trend bar. */
 export const TREND_BODY = 0.6;
 /** Body at or below this is a doji — a one-bar trading range. */
-const DOJI_BODY = 0.25;
+export const DOJI_BODY = 0.25;
 /** Range in ATRs that makes a trend bar "big". */
-const BIG_ATR = 1.5;
+export const BIG_ATR = 1.5;
 /** Range in ATRs that makes a bar at the end of a run climactic. */
 const CLIMAX_ATR = 2;
 /** Same-direction bars needed before a large one reads as exhaustion. */
 const CLIMAX_RUN = 3;
 /** A tail at or below this share of the range is shaved. */
-const SHAVED_TAIL = 0.05;
+export const SHAVED_TAIL = 0.05;
 /** One tail this large, with a small body, is a pin. */
-const PIN_TAIL = 0.6;
+export const PIN_TAIL = 0.6;
 /** ...on a bar at least this many ATRs wide. A tail on a quiet session is not
  *  a rejection, and without this the rule fires on one bar in seven. */
 const PIN_MIN_ATR = 1;

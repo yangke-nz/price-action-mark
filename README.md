@@ -4,7 +4,8 @@ Price action charting for daily bars — mark up the tape, then publish it. The
 chart reads itself with **29 rules drawn from Al Brooks's price action method**
 (special bars, the lines they form, the entries they set up); you keep the marks
 you agree with, and the confirmed set travels inside a single self-contained
-HTML file. Ships with E-Mini S&P 500 futures (CME `ES`) from a free, keyless
+HTML file. It also **reads the tape in words** — one line of Brooks prose per
+session in view, clickable back to the bar it describes. Ships with E-Mini S&P 500 futures (CME `ES`) from a free, keyless
 source; the data layer is symbol-generic.
 
 One Svelte 5 codebase, **two build targets**:
@@ -84,6 +85,7 @@ npm run smoke:app      # headless render check of the desktop app
 | `data` | Yahoo → `data/es_data.json` (`-- --symbol MES=F`) |
 | `csv` | Yahoo → CSV, any symbol (`-- --symbol ESZ26.CME --out z26.csv`) |
 | `marks` | the marking layer's text oracle — see [Marking](#marking) |
+| `marks -- --read` | the bar-by-bar reading in words — see [Reading the bars](#reading-the-bars) |
 | `marks:check` | invariants + the regression fixture; exits non-zero on drift |
 | `typecheck` | `tsc` over main/preload/scripts, `svelte-check` over the renderer |
 | `smoke` / `smoke:app` | load the built output in real Chromium and assert it drew |
@@ -106,6 +108,7 @@ src/shared/                 imported by main, renderer AND the CLI scripts
   marks/                      the marking layer — pure, no Node, no DOM
     metrics.ts                  per-bar columns every rule is written in
     structure.ts                pivots, legs, always-in state, H/L counts
+    reading.ts                  one line of Brooks prose per bar
     fit.ts                      fitLine + touch/break measurement
     types.ts  rule.ts           the Mark union; the Ctx/Rule contract
     registry.ts                 RULES — the one array; push to extend
@@ -128,7 +131,7 @@ src/renderer/
   lib/chart/candles.ts        every imperative call into lightweight-charts
   lib/chart/marks/            ONE primitive for all geometry, not one per mark
   lib/components/             Masthead, Controls, Readout, ChartPanel,
-                              MarkPanel, MarkList, …
+                              MarkPanel, MarkingPane (MarkList | ReadingList), …
   styles/                     tokens.css (palette), fonts.css, app.css
 ```
 
@@ -190,6 +193,111 @@ a red notice — a stale cache that looks live is the one failure mode a price
 chart cannot show you. `npm run smoke:app` asserts this end to end: wipe
 userData, launch, and the footer has to read *"Pulled live from Yahoo"* rather
 than the bundled snapshot it opened on.
+
+## The window
+
+One `App.svelte` lays out both targets. Above 1200px the chart and the marking
+cards sit side by side; below it they stack in the same order they always did.
+
+```
+1200px+     [ chart card            ] [ rules pane  ]
+            [                       ] [ marks pane  ]
+under       [ chart card ]
+1200px      [ rules card ]
+            [ marks card ]
+```
+
+**1200px is where the chart still gets 705px** after the marking column's 420px
+floor and the gutters. Narrower than that and the candles are what suffers,
+which defeats the point of the second column.
+
+The marking column is fluid — `clamp(420px, 34vw, 820px)` — and the page cap
+goes to 2400px, because the rule rows carry a name, a count and a blurb and the
+mark table carries five columns, and both were being squeezed on exactly the
+screens this layout is for:
+
+| Viewport | Chart | Marking column |
+| --- | --- | --- |
+| 1200 | 705 | 420 |
+| 1500 | 915 | 510 |
+| 1700 | 1047 | 578 |
+| 1920 | 1192 | 653 |
+| 2200 | 1377 | 748 |
+| 2560 | 1520 | 820 |
+
+### Two panes, because one scroller buried the list
+
+The column held two stacked cards and scrolled as a single piece. Measured at
+1700×1000: the column showed **964px**, its content was **2,257px**, and *Marks
+in view* — the surface used on every keep, drop and highlight — started at
+**2,217px**. It opened off-screen and stayed there, while the rule toggles you
+set once and leave sat on top of it.
+
+Four layouts were drawn before one was built: a tabbed inspector, this
+swap-and-collapse, moving the rules into a toolbar popover, and these two panes.
+The panes won on a plain trade: both surfaces stay visible with no mode to
+switch, and the cost — two nested scrollbars, and blurbs that have to move to a
+`title` — is smaller than the cost of hiding either one.
+
+The rules card takes a bounded slice off the top and scrolls inside it; the
+marking pane takes everything left and scrolls inside that. Neither can push the
+other out, and the column itself does not scroll:
+
+| Viewport | Column | Chart card | Rules pane | Marks pane |
+| --- | --- | --- | --- | --- |
+| 1250×900 | 668 | 669 | 254 (733 to scroll) | 396 (4,116 to scroll) |
+| 1700×1000 | 768 | 766 | 292 (294 to scroll) | 458 (4,302 to scroll) |
+| 1920×1080 | 848 | 846 | 322 (263 to scroll) | 508 (3,898 to scroll) |
+
+Three details are load-bearing, and each was measured wrong first.
+
+**`::details-content` is the flex item, not the card's body.** Chromium wraps a
+`<details>`'s content in that pseudo-element, so a `display: flex` `<details>`
+has two children: the summary and it. Leave it out of the chain and a bounded
+card **clips instead of scrolling** — a 320px card held a scroll region
+reporting 498px of content and `maxScroll: 0`, with the last rules unreachable.
+Only the rules card needs it now — it is the one `<details>` left in the column,
+since the marking pane became a `<section>` with a tablist and a plain flex
+chain — and both keep a `max-height` fallback so a browser without the
+pseudo-element still scrolls rather than clipping.
+
+**The column's height comes from the chart card, by stretching to it.**
+`calc(100vh - 36px)` looks right and is not: the column starts 201px down the
+page, so a viewport-tall column hangs 165px below the fold, and a reader marking
+up never scrolls the page — those rows would be permanently cut. `--chart-h` is
+already tuned to fit the fold, so deriving from the chart card holds by
+construction.
+
+It derived by *arithmetic* first — `calc(var(--chart-h) + 108px)`, where 108 was
+a measured readout and legend — and that broke the day the readout grew a line
+for the bar reading: 42px to 81px, and the two columns 16px out. A grid row that
+stretches is exact whatever sits above the candles, so the constant is gone
+rather than re-measured, and the rules card's slice became a plain `38%` for the
+same reason.
+
+**There is no `position: sticky`.** It existed to keep a 2,257px column in view
+while it scrolled. There is no such column now, and a sticky one cannot be
+fold-height at rest and viewport-height when stuck.
+
+### A card's density is a container query, not a second breakpoint
+
+The same box is full-width when stacked and a narrow pane when not, and it is
+the **box's** width that decides what fits — so each measures itself rather than
+re-reading the page breakpoint, which is how two files drift apart.
+
+`MarkPanel` drops its blurbs to the row's `title` and goes to two columns under
+a 700px card, with `bars` / `lines` / `entries` headings earning their place
+once a row is only a name and a count. That takes the 31 rules from **2,199px**
+of card to **498px** of content at two columns, or 895px at one.
+
+The marking pane declares the container both its views read. The reading rows
+drop their date rail under a 430px pane; the mark table tightens its five
+columns under 780px and again under 660px, which takes the table's minimum
+width from **766px to 535px**. That floor is
+irreducible without shrinking the three things a reader aims at — the date, the
+mark label, and the Keep/Drop pair are ~412px of it — so below roughly a 1700px
+viewport the table still scrolls sideways inside its own container: 57px short
+at 1500, 147px at 1200. Above it, it fits.
 
 ## The chart
 
@@ -263,9 +371,9 @@ the rules testable at all.
 ### Rules are recomputed, verdicts are stored
 
 Detection is a pure function of `(dataset, ruleConfig)`. Running all 31 over
-6,550 bars takes ~45 ms, once per dataset; toggling a rule filters the result
-in **0.26 ms**. Nothing about rule output is ever written to disk — it would go
-stale against the candles the moment a session arrived.
+6,550 bars takes **50 ms cold, 20 ms warm**, once per dataset; toggling a rule
+filters the result in **0.22 ms**. Nothing about rule output is ever written to
+disk — it would go stale against the candles the moment a session arrived.
 
 Two things persist, in `%APPDATA%/price-action-mark/marks/<symbol>.json`: the
 reader's **keep / drop verdict** on each candidate, keyed by the mark's stable
@@ -290,6 +398,50 @@ data/marks.json                     tracked, like data/es_data.json
       ↓   npm run artifact
 dist/price_action_mark.html         one file, no host, marks included
 ```
+
+### Pointing at one mark
+
+Clicking a mark's label in *Marks in view* highlights it on the chart; clicking
+a mark on the **canvas** still toggles Keep. Two gestures, two meanings — "show
+me where this is" is not "I stand behind this". The selection is one id, never
+persisted, and it is read through a derived value that resolves it against the
+marks currently drawn, so dropping a mark or switching its rule off clears the
+highlight by construction rather than by a cleanup effect that has to know every
+way a mark can leave the chart. The id itself is kept, so switching the rule
+back on returns the reader's place.
+
+Emphasis is **weight, never hue** — tone already owns colour. The selected mark
+keeps its own colour and gains a halo, extra width and full opacity, and it is
+drawn last so it is not sitting under three ordinary ones.
+
+Two things the first attempt got wrong, both found by counting changed pixels
+rather than by looking:
+
+- **Raising the fill alpha** to 0.32 turned a selected channel at 1M — one
+  channel spanning all 24 visible bars — into a slab over the candles: the exact
+  failure `FILL_ALPHA` was tuned to avoid. Emphasis goes on the rails, which
+  are a few pixels wide whatever the mark's span, never on an area that grows
+  with the zoom.
+- **Growing the selected bar mark's series marker** moved the price scale. An
+  `aboveBar` marker reserves vertical space, so selecting a mark near the
+  visible high re-scaled the pane and shifted every candle — 93,932 changed
+  pixels across three canvases, the price axis among them. That is the same
+  thing `autoscaleInfo() → null` exists to prevent.
+
+Both are fixed by the same move. A selected mark also gets a faint
+one-session vertical band, drawn by the **primitive**, whose `autoscaleInfo()`
+is already null and so cannot disturb the scale however tall the band is. It is
+the only thing that reaches the marks emphasis cannot: a bar mark is a marker
+whose only channel is size, and a `trade` whose trade never filled has
+`through === at`, so its box and both its lines collapse to zero width — 
+`second-entry` highlighted **0 pixels** before the band existed. The band is
+deliberately not part of the mark's `Shape`: the hit test measures against
+shapes, and a full-height band would make a whole column of the chart report
+that one mark.
+
+Re-measured across all 20 rules with marks in a 6M viewport: 3,285–9,851 changed
+pixels each, all on the primitive's canvas, with the price axis untouched
+everywhere.
 
 ### Density is the design constraint
 
@@ -346,6 +498,147 @@ entries: `second-entry` fills 75/75 and wins 28%, where 2R needs better than
 move — `dt-short` at +1.65R average, `db-long` at +1.10R. That number is left
 alone on purpose. Moving the default target until the table looked better would
 be curve-fitting a review tool.
+
+## Reading the bars
+
+The marking layer answers *what patterns are on this chart*. **Bar reading**
+answers the other question a Brooks reader asks, walking left to right: *what
+did this bar say?*
+
+It shows up in two places. The **readout** above the candles carries the reading
+of whatever session the crosshair is on — the answer to the question nine times
+out of ten, without a glance away from the chart. The **marking pane's second
+tab** lists every session in the viewport, newest first, and clicking a line
+highlights that bar.
+
+```
+28 Aug 2026  small doji, 0.5x ATR — always-in long
+27 Aug 2026  small doji, 0.5x ATR, inside the session before — trading range
+20 Aug 2026  bear trend bar, closing on its low, 1.1x ATR — trading range — micro channel
+30 Jul 2026  big bull trend bar, shaved bottom, 1.7x ATR, inside the session before
+             — trading range — breakout pullback, failed breakout, ioi, two-bar reversal
+23 Dec 2024  bull bar, closing on its high, 1.2x ATR, first session of a new
+             contract, so the change into it is carry — always-in long, H3
+```
+
+Every session gets a line, including the ~5,000 that carry no mark at all,
+because *"an ordinary bull bar in a trading range"* is a reading too and a gap in
+the list would read as a gap in the market. `npm run marks -- --read` prints the
+same strings the panel renders — the words get the same text oracle the numbers
+have always had.
+
+### It names no pattern it did not import
+
+A reading is assembled from four clauses: the bar itself, its extremes, how it
+sits against the session before, and where it sits in the structure. The
+adjectives are tests over the metric columns, and the thresholds are **imported**
+from [rules/bars.ts](src/shared/marks/rules/bars.ts) — `BIG_ATR`, `DOJI_BODY`,
+`SHAVED_TAIL`, `PIN_TAIL`, `isTrendBar` — never restated.
+
+The composite patterns are not re-derived at all. `readings()` is handed the
+marks `detect()` already produced and names them by their own rule labels, so
+there is exactly one definition of "breakout" in the product. A second one would
+drift the day `BREAKOUT_LOOKBACK` moved, and the chart would then draw one thing
+and read another.
+
+Two rules ship a `phrase` because their label is not a phrase: *"Pullback entry
+(H1-H4 / L1-L4)"* names a toggle honestly and reads as a definition mid-sentence.
+The other 29 lower-case cleanly and say nothing extra.
+
+### A mark joins a reading only if it was knowable at that close
+
+A double top is not readable on the day of its second peak — it needs bars to its
+right — so naming it there claims foresight the trade did not have. Only marks
+with `knownAt === at` reach the pattern clause; anything confirmation-lagged
+stays the mark list's business, which prints the lag next to it.
+
+`npm run marks -- --check` asserts it over all 6,550 sessions rather than
+trusting it: every phrase in a reading has to be a rule that actually fired on
+that bar **and** was knowable at its close, every session has to get exactly one
+line, and no line may contain a newline. It also holds the two numbers that say
+whether the wording is still working — the longest reading is **176 characters**
+and **8 of 6,550** carry nothing but the bar's own body.
+
+Redundancy is dropped by clause, never by rule. Eight rules say what an earlier
+clause has already said, and without that set a line reads *"bull trend bar,
+shaved top — trend bar, big trend bar, shaved bar"*. What survives is exactly the
+composite set: reversal bar, ii/ioi, climax, breakout, follow-through, two-bar
+reversal.
+
+The reading is built from the **unfiltered** marks. A rule toggle changes what is
+drawn; it does not change what a bar did, and a reading that lost its "breakout"
+clause because the reader hid the arrows would be a lie about the session.
+
+### Two views of one pane
+
+The reading is a tab beside *Marks in view*, not a card of its own. The wide
+layout divides the marking column between exactly two panes at measured heights,
+and a reading needs width a third of a column cannot spare; two views cost one
+click and no layout.
+
+The row format is where the width is won. The obvious narrow-column answer is to
+stack the date above the sentence, and measured at the pane's 647px that puts
+every row on two lines — median 51px, **eight visible**. Keeping the date as a
+7ch **rail** with the sentence hanging beside it leaves 89 of 128 readings on one
+line: median 34px, **eleven visible**. The rail is both the thing the eye runs
+down and the cheaper layout, which is not the trade it looks like. The year
+prints only where it changes, as a sub-label, so the rail never widens to repeat
+a fact that changes once a year.
+
+Two costs, stated plainly. The pane no longer collapses — two views need a real
+`role="tablist"`, and tabs inside a `<summary>` would put buttons inside a
+button. And *Marks in view* stays the tab that opens, because the readout line
+already puts a reading in front of the reader on every load, so the new surface
+loses nothing by not claiming the slot the marking loop has always had.
+
+### Clicking a line is a third gesture
+
+The chart now has three: clicking a mark on the canvas means *Keep*, clicking a
+mark in the list means *show me where this is*, and clicking a reading means
+*show me this bar*. Each has its own state and its own colour.
+
+The bar highlight is a one-session vertical band drawn by the same primitive as
+the mark band — whose `autoscaleInfo()` returns null, which is why a full-height
+band cannot disturb the price scale — but in `--focus` rather than a tone. The
+mark band borrows its mark's hue because a mark has a direction to state; a
+session does not, and a green band would say *this bar is bullish* when the
+reader only asked where the line was. Both bands can show at once and stay
+tellable apart.
+
+`selectedBarIndex` is deliberately not a reuse of the keyboard crosshair. The
+keyboard outranks the pointer, so driving the highlight through it would freeze
+the readout and stop the chart's own hover from updating it. The readout's
+precedence is keyboard → pointer → clicked line → last session: click a line and
+the readout follows it, move the pointer back over the candles and it comes
+straight back.
+
+### Measured, with both controls
+
+Counting changed pixels on a chart needs two controls here, and without either
+one the numbers lie:
+
+- **Poll for the repaint.** A probe window at `setOpacity(0)` is occluded, so
+  the chart's frame arrives erratically: a fixed 800 ms wait measured 7,848
+  changed pixels on one run and **0** on the next, for identical code.
+- **Spend the first interaction on something that already works.** The first
+  click of any run moves canvases 0, 2 and 4 — the pane, the price axis and the
+  time axis — whatever it is. Clicking the shipped mark list instead reproduces
+  `0:2605 1:12860 2:2427 4:951` exactly, so that signature is the app settling
+  after boot, not the feature under test.
+
+With both in place: selecting a reading changes **5,814 pixels on the
+primitive's canvas and zero on the price axis**, so the band cannot move the
+scale; `Escape` on the chart clears both selections.
+
+The same probe caught two layout faults the feature introduced. The readout grew
+from 42px to 81px for its new line, which put the two columns **16px out** —
+because the column's height was `calc(var(--chart-h) + 108px)`, where 108 was a
+measured readout and legend. A grid row that stretches is exact whatever sits
+above the candles, so the constant is gone rather than re-measured. And with the
+pane now below the rules card, an unbounded rules card pushed the reading tab
+**2,059px** down a 935px viewport in the stacked layout; bounding it moved that
+to 1,211px, and reaching the pane now leaves the chart **249 of 430px** visible
+instead of none.
 
 ## Colour
 
@@ -495,8 +788,11 @@ theme, a well-formed EMA 20 value, ≥2 loaded font faces and zero console error
 real `out/main/index.js`, so the preload bridge and every IPC handler are on
 the same path they take in production — the run asserts `window.desktop` exists
 there and does *not* exist in the artifact. It also asserts the mark panel is
-populated, and — desktop only — that a verdict written over the real IPC path
-comes back on a re-read and can be removed again.
+populated, that the readout carries a **bar reading** and the marking pane has
+both tabs with rows behind the second, and — desktop only — that a verdict
+written over the real IPC path comes back on a re-read and can be removed again.
+The reading assertions matter because prose fails silently: a dropped clause
+renders as a shorter sentence, not as an error.
 
 `npm run marks:check` is the marking layer's own guard, and it checks things a
 rendered page cannot show:
@@ -512,12 +808,49 @@ rendered page cannot show:
   and a keyed `{#each}` that throws on a collision;
 - per-rule mark counts and eight hand-picked pattern dates match
   `data/marks-golden.json`. Counts are compared only when the dataset
-  fingerprint matches, because `npm run data` legitimately changes them.
+  fingerprint matches, because `npm run data` legitimately changes them;
+- **every session gets exactly one bar reading**, no reading is empty or spans
+  two lines, and every pattern a reading names is a rule that fired on that bar
+  *and* was knowable at its close — the foresight check, run over all 6,550.
 
 Anything visual beyond that gets a one-off Electron probe under
 `scripts/_name.cjs`, run once and deleted. Make its window invisible with
 `win.setOpacity(0)` rather than an off-screen position — the latter lands on a
 second monitor, and opacity 0 still captures at full fidelity.
+
+Five ways a green run lies, all five hit while building this:
+
+- **`npm run smoke:app` can print nothing and exit 0**, which reads as a pass
+  and means no check ran. `src/main/index.ts` opens with
+  `if (!app.requestSingleInstanceLock()) app.quit()`, so a stale `electron`
+  process — a leftover `npm run dev`, or a probe killed before `app.exit` —
+  makes the imported main quit before the smoke reaches its report or its
+  `app.exit(1)`. **Empty output is a failed run.** A healthy one always prints
+  `smoke desktop app: N canvas, …` and then `smoke: ok`.
+- **A probe that diffs "the canvas" must diff every canvas.** lightweight-charts
+  uses several, and marks drawn by the primitive land on a different one than
+  series markers do. Sampling only the largest reported **0 changed pixels for
+  every channel on the chart** while a screenshot plainly showed them
+  highlighted — a conclusion that would have been believed.
+- **A pixel diff needs a noise floor and a first-interaction control.** An
+  opacity-0 window is occluded, so the repaint lands on an erratic animation
+  frame: a fixed 800 ms wait measured 7,848 changed pixels on one run and 0 on
+  the next for identical code, so poll until something moves. And the first
+  interaction of any run moves the pane, the price axis and the time axis
+  whatever it is — spend it on a feature that already ships and compare.
+- **A probe that clicks something Svelte renders must measure in a second
+  call.** Svelte flushes on a microtask, so a click and a
+  `getBoundingClientRect()` in one `executeJavaScript` expression read the DOM
+  as it was *before* the click. It does not look like a race: switching to a
+  hidden tab and measuring its rows in the same expression returned every row
+  `0px` tall and "128 of 128 visible", which reads as a broken layout, and
+  reading `aria-selected` that way said a keyboard handler had not fired when it
+  had. Click, await a beat, measure.
+- **`getImageData` throws `IndexSizeError` on a zero-sized canvas, and
+  lightweight-charts keeps one.** The probe then dies with *"Script failed to
+  execute, this normally means an error was thrown"* and nothing else — no line,
+  no message. Guard on `c.width && c.height`, and have in-page snapshot code
+  return its own caught message rather than throwing into the void.
 
 ## Licences
 

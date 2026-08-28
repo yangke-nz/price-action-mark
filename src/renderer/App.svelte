@@ -8,7 +8,7 @@
   import ChartPanel from '$lib/components/ChartPanel.svelte';
   import Legend from '$lib/components/Legend.svelte';
   import MarkPanel from '$lib/components/MarkPanel.svelte';
-  import MarkList from '$lib/components/MarkList.svelte';
+  import MarkingPane from '$lib/components/MarkingPane.svelte';
   import Notes from '$lib/components/Notes.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
@@ -84,7 +84,7 @@
 
     <aside class="side">
       <MarkPanel {app} />
-      <MarkList {app} />
+      <MarkingPane {app} />
     </aside>
   </div>
 
@@ -124,6 +124,15 @@
     flex-direction: column;
     gap: 18px;
     min-width: 0;
+
+    /* The rules card is bounded in the STACKED layout too, which it
+       deliberately was not. Unbounded, 31 rules run to about 1,300px and push
+       the marking pane 2,059px down the page — measured — which is the defect
+       the two-pane rework fixed for the wide layout, reappearing below the
+       breakpoint. That choice was made when this card was the last thing in
+       the column; it now stands between the chart and the pane the reader
+       actually works in. The wide branch overrides this with its own bound. */
+    --rules-scroll-max: clamp(150px, 30vh, 340px);
   }
 
 
@@ -148,9 +157,9 @@
     .wrap { padding: 20px 13px 40px; }
   }
 
-  /* 1200px is where the chart still gets ~740px after the column's 400px
-     floor and the gutters — narrower than that and the candles are the thing
-     that suffers, which defeats the point. */
+  /* 1200px is where the chart still gets 705px after the column's 420px floor
+     and the gutters — narrower than that and the candles are the thing that
+     suffers, which defeats the point of a second column. */
   @media (min-width: 1200px) {
     /* Beside the marking column the chart is no longer competing with it for
        vertical space, so it takes the height the viewport can actually show.
@@ -168,11 +177,11 @@
     /* The marking column is fluid, not a fixed 400px: the rule rows carry a
        name, a count and a blurb, and the mark table carries five columns, so
        both were being squeezed on exactly the screens this layout is for. The
-       floor keeps the chart above ~720px at the breakpoint; the 820px ceiling
+       floor keeps the chart at 705px at the breakpoint; the 820px ceiling
        is where the mark table stops needing a horizontal scroll of its own,
-       past which extra width buys nothing. MarkList sizes its own columns off
-       a container query, so it adapts to whatever this hands it rather than
-       reading the breakpoint a second time. */
+       past which extra width buys nothing. The pane's two views size their own
+       columns off a container query on the pane, so they adapt to whatever
+       this hands them rather than reading the breakpoint a second time. */
     .stage { grid-template-columns: minmax(0, 1fr) clamp(420px, 34vw, 820px); }
 
     /* Two panes, not one scroller.
@@ -188,21 +197,28 @@
        `max-height` rather than `height` on the rules pane, because it is a
        <details>: closed, it must collapse to its summary bar and hand the
        space to the list, and a fixed height would leave an empty box. */
-    /* Height comes from the CHART CARD, not from the viewport.
+    /* Height comes from the CHART CARD, and now by STRETCHING to it rather
+       than by adding up its parts.
        `100vh - 36px` was the obvious choice and it is wrong here: the column
        starts 201 px down the page, so a viewport-tall column hangs 165 px below
-       the fold and the last rows of the mark list are unreachable until the
-       page is scrolled — and a reader marking up never scrolls the page. The
-       chart card is readout + --chart-h + legend, and --chart-h is already
-       tuned to fit the fold, so deriving from it fits by construction AND
-       leaves the two columns level. 108px is the readout and legend; the
-       overflow below absorbs the couple of pixels that estimate is out by.
+       the fold and the last rows of the pane are unreachable until the page is
+       scrolled — and a reader marking up never scrolls the page. The chart card
+       is readout + --chart-h + legend, and --chart-h is already tuned to fit
+       the fold, so deriving from it fits by construction.
+
+       It used to derive by arithmetic — `calc(var(--chart-h) + 108px)`, where
+       108 was the measured readout and legend. Then the readout grew a line
+       for the bar reading, 42px to 81px, and the columns were 16px out. A
+       grid row that stretches is exact whatever the readout does, and the
+       constant that has to be re-measured every time something above the
+       candles changes is simply gone.
 
        No `position: sticky` either. It existed to keep a 2,257 px column in
        view while it scrolled; there is no such column now, and a sticky one
        cannot be both fold-height at rest and viewport-height when stuck. */
+    .stage { align-items: stretch; }
+
     .side {
-      height: calc(var(--chart-h) + 108px);
       /* auto, not hidden. Where ::details-content is supported the two panes
          divide the column exactly and there is nothing to scroll; where it is
          not, the cards fall back to their own max-heights and can add up to a
@@ -217,17 +233,21 @@
          where the flex chain works it computes a smaller height and wins, so
          these only bind in the browser that needs them. */
       --rules-scroll-max: clamp(150px, 24vh, 320px);
-      --marklist-max-h: max(240px, calc(var(--chart-h) - 250px));
+      --pane-scroll-max: max(240px, calc(var(--chart-h) - 250px));
     }
 
     /* Positional :global selectors: App owns the ORDER of these two, which is
        what the layout is. Anything about their insides stays their own.
        38% of the column to the rules: enough for a whole group plus the next
        heading, which is what makes the grouping worth having, and it leaves
-       the list — the reason for the rework — the clear majority. */
+       the marking pane — the reason for the rework, and now two views rather
+       than one — the clear majority. */
+    /* A percentage, not the arithmetic again: the column's height is definite
+       because the grid row stretches, so 38% of it is exact and stays exact
+       when anything above the candles changes size. */
     .side > :global(*:first-child) {
       flex: none;
-      max-height: clamp(200px, calc((var(--chart-h) + 108px) * 0.38), 430px);
+      max-height: clamp(200px, 38%, 430px);
     }
 
     .side > :global(*:last-child) {

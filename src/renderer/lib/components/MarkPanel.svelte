@@ -167,9 +167,11 @@
   }
 
   /* max-height is the fallback for a browser without ::details-content, where
-     the flex chain above cannot bound this. App supplies the value; unset, this
-     grows to its content and never scrolls, which is right for the stacked
-     layout. */
+     the flex chain above cannot bound this. App supplies the value in BOTH
+     layouts now: unset, thirty-one rules grow to about 1,300px, and in the
+     stacked layout that pushed the marking pane below it 2,059px down the
+     page. Unset here still means "grow", which is the honest default for a
+     card nothing has bounded. */
   .scroll {
     flex: 1 1 auto;
     min-height: 0;

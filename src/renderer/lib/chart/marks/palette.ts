@@ -69,6 +69,25 @@ export const SELECTED_HALO_ALPHA = 0.3;
  */
 export const SELECTED_BAND_ALPHA = 0.16;
 
+/**
+ * The bar the reader clicked in the bar-reading list.
+ *
+ * Deliberately NOT a tone. The mark band above borrows its mark's hue because
+ * the mark has a direction to state; a session does not, and painting the
+ * clicked bar green would say "this bar is bullish" when the reader only
+ * asked "where is this line". So it draws in `--focus`, the colour every other
+ * picked thing in the UI already uses — the mark list's picked row, every
+ * focus ring — and the two bands stay tellable apart when both are showing.
+ *
+ * Slightly stronger than the mark band, plus a one-pixel rail down each edge.
+ * The band alone was hard to find at MAX zoom, where one session is a fraction
+ * of a pixel wide and the fill is clamped to BAND_MIN_PX of near-transparent
+ * blue; the rails are what actually locate it there.
+ */
+export const FOCUS_BAND_ALPHA = 0.22;
+export const FOCUS_RAIL_ALPHA = 0.85;
+export const FOCUS_RAIL_WIDTH = 1;
+
 export interface MarkStyle {
   readonly color: string;
   /** Empty for a solid line; a canvas dash pattern otherwise, in CSS pixels. */

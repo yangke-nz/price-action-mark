@@ -14,8 +14,9 @@ import { DEFAULT_SETTINGS } from '$lib/source/types.ts';
 import { contractStarts } from '$shared/rolls.ts';
 import type { Mark, MarkStore, RuleId, Verdict } from '$shared/marks/types.ts';
 import { emptyStore } from '$shared/marks/types.ts';
-import { buildCtx } from '$shared/marks/rule.ts';
+import { buildCtx, type Ctx } from '$shared/marks/rule.ts';
 import { RULES, detect } from '$shared/marks/registry.ts';
+import { readAt, readingIndex, type BarReading } from '$shared/marks/reading.ts';
 
 /** The table is viewport-scoped, but a MAX viewport is 6,500 rows and nobody
  *  scrolls that. Show the newest slice and say so. */
@@ -23,6 +24,10 @@ export const TABLE_CAP = 400;
 
 /** The mark list is viewport-scoped too, and for the same reason. */
 export const MARK_LIST_CAP = 200;
+
+/** So is the bar reading, which unlike the other two has a line for EVERY
+ *  session in view — a MAX viewport is 6,550 of them. */
+export const READING_CAP = 300;
 
 export const RANGES: { id: RangeId; days: number; label: string }[] = [
   { id: '1M', days: 31, label: '1 month' },
@@ -66,18 +71,30 @@ export class AppState {
   systemDark = $state(false);
 
   /**
+   * Metrics and structure for the loaded dataset, built once and shared.
+   *
+   * Hoisted out of `#allMarks` because the bar reading needs the same columns:
+   * two `buildCtx` calls would walk 6,550 bars twice and, worse, could be
+   * given different structure dials and quietly disagree about what a pullback
+   * was. Measured on the shipped series: 8.4 ms.
+   */
+  #ctx = $derived.by((): Ctx | null => (this.dataset ? buildCtx(this.dataset) : null));
+
+  /**
    * Detection runs EVERY rule once per dataset and toggling filters the
-   * result. Measured on the shipped series: 34 ms to build the context and
-   * detect all fifteen, against 0.26 ms to filter — so re-detecting on each
-   * toggle would make a checkbox 130x more expensive than it needs to be, and
-   * the memory cost is one array of 8,391 small objects.
+   * result. Measured on the shipped series: 42 ms to detect all thirty-one
+   * against 0.26 ms to filter — so re-detecting on each toggle would make a
+   * checkbox two orders of magnitude more expensive than it needs to be, and
+   * the memory cost is one array of 11,026 small objects.
    *
    * Never persisted. Rule output is a pure function of the dataset and the
    * rule config; storing it would let it drift out of alignment with the
    * candles the moment a session arrives.
    */
-  #allMarks = $derived.by((): Mark[] =>
-    this.dataset ? detect(buildCtx(this.dataset)) : []);
+  #allMarks = $derived.by((): Mark[] => {
+    const ctx = this.#ctx;
+    return ctx ? detect(ctx) : [];
+  });
 
   /** A rule is on unless the reader has said otherwise — `settings.marks.rules`
    *  is sparse, so an absent entry means "whatever the rule itself defaults to". */
@@ -161,33 +178,43 @@ export class AppState {
     Object.values(this.markStore.verdicts).filter((v) => v === 'dismissed').length);
 
   /**
+   * The viewport clamped to the series — the one window every viewport-scoped
+   * list reads.
+   *
+   * The chart reports its range on a 160 ms settle and can report one bar past
+   * the end mid-refresh, so the clamp has to happen somewhere; it happens once
+   * here rather than four times, because four copies of `Math.min(viewport.to,
+   * n - 1)` are four chances for the table, the mark list and the reading to
+   * disagree about what is on screen.
+   */
+  #span = $derived.by((): { from: number; to: number } | null => {
+    const n = this.count;
+    if (n === 0) return null;
+    const to = Math.min(this.viewport.to, n - 1);
+    return { from: Math.max(0, Math.min(this.viewport.from, to)), to };
+  });
+
+  /** Marks whose anchor is inside the window, newest first, uncapped. */
+  #marksInView = $derived.by((): Mark[] => {
+    const d = this.dataset;
+    const span = this.#span;
+    if (!d || !span) return [];
+    const lo = d.d[span.from];
+    const hi = d.d[span.to];
+    if (lo === undefined || hi === undefined) return [];
+    const inView = this.marks.filter((mk) => mk.at >= lo && mk.at <= hi);
+    inView.reverse();
+    return inView;
+  });
+
+  /**
    * Marks whose anchor sits inside the current viewport, newest first and
    * capped the way the data table is. A MAX viewport holds every mark in the
    * series and nobody scrolls three thousand rows.
    */
-  visibleMarks = $derived.by((): Mark[] => {
-    const d = this.dataset;
-    if (!d) return [];
-    const to = Math.min(this.viewport.to, d.d.length - 1);
-    const from = Math.max(0, Math.min(this.viewport.from, to));
-    const lo = d.d[from];
-    const hi = d.d[to];
-    if (lo === undefined || hi === undefined) return [];
-    const inView = this.marks.filter((mk) => mk.at >= lo && mk.at <= hi);
-    inView.reverse();
-    return inView.slice(0, MARK_LIST_CAP);
-  });
+  visibleMarks = $derived.by((): Mark[] => this.#marksInView.slice(0, MARK_LIST_CAP));
 
-  markListTruncated = $derived.by((): boolean => {
-    const d = this.dataset;
-    if (!d) return false;
-    const to = Math.min(this.viewport.to, d.d.length - 1);
-    const from = Math.max(0, Math.min(this.viewport.from, to));
-    const lo = d.d[from];
-    const hi = d.d[to];
-    if (lo === undefined || hi === undefined) return false;
-    return this.marks.filter((mk) => mk.at >= lo && mk.at <= hi).length > MARK_LIST_CAP;
-  });
+  markListTruncated = $derived(this.#marksInView.length > MARK_LIST_CAP);
 
   /** How many marks each rule contributes right now, for the panel. */
   markCounts = $derived.by((): Map<RuleId, number> => {
@@ -196,16 +223,106 @@ export class AppState {
     return out;
   });
 
+  // ---- bar reading -----------------------------------------------------
+
+  /**
+   * One line per session in view, newest first — the tape in words.
+   *
+   * Newest first for the same reason the data table is: the reader's question
+   * is almost always "what has just happened", and a list that answers it
+   * without scrolling is worth more than chronological order.
+   *
+   * Deliberately built from the UNFILTERED marks. A rule toggle changes what
+   * is DRAWN; it does not change what a bar did, and a reading that lost its
+   * "breakout" clause because the reader hid the arrows would be a lie about
+   * the session.
+   */
+  /**
+   * The two lookups every reading needs, built once per dataset rather than
+   * per reading. The readout asks for one bar on every crosshair move; without
+   * this that is 8,400 map inserts per pointer event.
+   */
+  #readingIndex = $derived.by(() => {
+    const ctx = this.#ctx;
+    return ctx ? readingIndex(ctx, this.#allMarks) : null;
+  });
+
+  visibleReadings = $derived.by((): BarReading[] => {
+    const ctx = this.#ctx;
+    const index = this.#readingIndex;
+    const span = this.#span;
+    if (!ctx || !index || !span) return [];
+    const from = Math.max(span.from, span.to - READING_CAP + 1);
+    const out: BarReading[] = [];
+    for (let i = span.to; i >= from; i--) out.push(readAt(ctx, index, i));
+    return out;
+  });
+
+  /**
+   * The reading of whatever session the readout is describing.
+   *
+   * Reads `focusIndex`, so it follows the crosshair, the arrow keys and a
+   * clicked line in that order — one line of prose about the bar in front of
+   * the reader, without them having to look anywhere else.
+   */
+  focusReading = $derived.by((): BarReading | null => {
+    const ctx = this.#ctx;
+    const index = this.#readingIndex;
+    const i = this.focusIndex;
+    if (!ctx || !index || i === null) return null;
+    return readAt(ctx, index, i);
+  });
+
+  readingTruncated = $derived.by((): boolean => {
+    const span = this.#span;
+    return span !== null && span.to - span.from + 1 > READING_CAP;
+  });
+
+  /**
+   * The session the reader clicked in the reading list, as a bar index.
+   *
+   * Its own state rather than a reuse of `keyIndex`: the keyboard crosshair
+   * takes precedence over the pointer, so driving this through it would freeze
+   * the readout and stop the chart's own hover from updating it. Transient
+   * view state, never persisted — the same contract `selectedMarkId` holds.
+   */
+  selectedBarIndex = $state<number | null>(null);
+
+  /** The chart anchors on dates, not indices; resolved here so a dataset that
+   *  grew under the selection cannot shift the band onto another session. */
+  selectedBarDate = $derived.by((): string | null => {
+    const i = this.selectedBarIndex;
+    return i === null ? null : this.dataset?.d[i] ?? null;
+  });
+
+  /** Clicking the selected line again clears it, so the highlight is never a
+   *  state the reader has to hunt for a way out of. */
+  selectBar(i: number): void {
+    this.selectedBarIndex = this.selectedBarIndex === i ? null : i;
+  }
+
+  clearBarSelection(): void {
+    this.selectedBarIndex = null;
+  }
+
   readonly can = source.can;
   readonly target = source.kind;
 
   count = $derived(this.dataset?.d.length ?? 0);
 
-  /** What the readout is describing: keyboard beats pointer beats the last
-   *  session, so the panel is never blank. */
+  /**
+   * What the readout is describing: keyboard beats pointer beats a clicked
+   * reading beats the last session, so the panel is never blank.
+   *
+   * The reading sits BELOW the pointer on purpose. Clicking a line should tell
+   * the readout which session it was — but moving the pointer back over the
+   * candles has to take the readout with it, or the reader is left with a
+   * readout stuck on a bar they have finished with.
+   */
   focusIndex = $derived.by((): number | null => {
     if (this.keyIndex !== null) return this.keyIndex;
     if (this.hoverIndex !== null) return this.hoverIndex;
+    if (this.selectedBarIndex !== null) return this.selectedBarIndex;
     return this.count > 0 ? this.count - 1 : null;
   });
 
@@ -219,13 +336,11 @@ export class AppState {
 
   /** Sessions inside the current viewport, newest first, capped. */
   visibleRows = $derived.by((): Bar[] => {
-    const n = this.count;
-    if (n === 0) return [];
-    const to = Math.min(this.viewport.to, n - 1);
-    const from = Math.max(0, Math.min(this.viewport.from, to));
-    const start = Math.max(from, to - TABLE_CAP + 1);
+    const span = this.#span;
+    if (!span) return [];
+    const start = Math.max(span.from, span.to - TABLE_CAP + 1);
     const rows: Bar[] = [];
-    for (let i = to; i >= start; i--) {
+    for (let i = span.to; i >= start; i--) {
       const bar = this.bar(i);
       if (bar) rows.push(bar);
     }
@@ -348,10 +463,11 @@ export class AppState {
   #apply(dataset: Dataset, origin: DatasetOrigin): void {
     this.dataset = dataset;
     this.origin = origin;
-    // Indices are positional, so a longer series would leave the crosshair
-    // pointing at the wrong session.
+    // Indices are positional, so a longer series would leave the crosshair —
+    // and the reading list's highlight — pointing at the wrong session.
     this.keyIndex = null;
     this.hoverIndex = null;
+    this.selectedBarIndex = null;
   }
 
   // ---- settings --------------------------------------------------------

@@ -42,6 +42,15 @@ export interface Rule {
   /** One sentence, shown beside the toggle. */
   readonly blurb: string;
   /**
+   * The label as it reads INSIDE a sentence, for the bar reading.
+   *
+   * Only for the labels whose panel form is not a phrase: "Pullback entry
+   * (H1-H4 / L1-L4)" names a toggle honestly and reads as a definition
+   * mid-sentence. Everything else defaults to the label lower-cased, which is
+   * right for 29 of the 31 — so this stays absent rather than restating them.
+   */
+  readonly phrase?: string;
+  /**
    * Rules that fire on a large fraction of sessions ship off. `trend-bar`
    * alone hits about a third of them, and a chart wearing 2,000 labels is
    * less readable than one wearing none.

@@ -34,7 +34,7 @@ import type { CanvasRenderingTarget2D } from 'fancy-canvas';
 import type { GeometryMark, Mark } from '../../../../shared/marks/types.ts';
 import { isGeometry } from '../../../../shared/marks/types.ts';
 import { styleFor } from './palette.ts';
-import { distanceTo, paint, paintAnchorBand, shapeOf, type Shape, type Space } from './draw.ts';
+import { distanceTo, paint, paintAnchorBand, paintFocusBand, shapeOf, type Shape, type Space } from './draw.ts';
 import { readTokens } from '../tokens.ts';
 
 /** How close the pointer has to get, in CSS pixels, to select a mark. */
@@ -58,6 +58,15 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
   /** The whole mark, not just its id: the anchor band needs its session and
    *  its tone, and a bar mark has no geometry to look them up from. */
   #selected: Mark | null = null;
+  /**
+   * The session the reader picked out of the bar-reading list, as a date.
+   *
+   * A separate field from `#selected`, not a second use of it, because the two
+   * are different gestures on different lists and either can be showing while
+   * the other is: "highlight this pattern" and "show me this bar". A date
+   * rather than a mark — a session has no tone and needs none.
+   */
+  #focusBar: string | null = null;
 
   /** Rebuilt each draw and reused by the hit test in the same frame. */
   #shapes: { mark: GeometryMark; shape: Shape }[] = [];
@@ -93,6 +102,7 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
     this.#marks = [];
     this.#shapes = [];
     this.#selected = null;
+    this.#focusBar = null;
   }
 
   paneViews(): readonly IPrimitivePaneView[] {
@@ -125,6 +135,20 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
   setSelected(mark: Mark | null): void {
     if (mark?.id === this.#selected?.id) return;
     this.#selected = mark;
+    this.#requestUpdate?.();
+  }
+
+  /**
+   * Highlight one session, or none — the line the reader clicked in the
+   * bar-reading list.
+   *
+   * Deliberately not part of `Shape`, so it is invisible to `hitTest`: the hit
+   * test measures against shapes, and a full-height band would make an entire
+   * column of the chart report this session as the thing under the cursor.
+   */
+  setFocusBar(at: string | null): void {
+    if (at === this.#focusBar) return;
+    this.#focusBar = at;
     this.#requestUpdate?.();
   }
 
@@ -181,17 +205,28 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
       if (shape) this.#shapes.push({ mark, shape });
     }
 
-    // Resolved before the paint pass so the band can go down FIRST, under
-    // every mark: it is a pointer into the chart, not something to read.
+    // Resolved before the paint pass so both bands go down FIRST, under every
+    // mark: they are pointers into the chart, not something to read.
     const picked = this.#selected;
     const bandIndex = picked ? space.index(picked.at) : undefined;
     const bandX = bandIndex === undefined ? null : space.xAt(bandIndex);
+    const focusIndex = this.#focusBar === null ? undefined : space.index(this.#focusBar);
+    const focusX = focusIndex === undefined ? null : space.xAt(focusIndex);
 
     target.useBitmapCoordinateSpace(({ context, mediaSize, horizontalPixelRatio, verticalPixelRatio }) => {
       if (picked && bandIndex !== undefined && bandX !== null) {
         paintAnchorBand(
           context, bandX, this.#bandHalfWidth(space, bandIndex), mediaSize.height,
           styleFor(picked.tone, tokens), horizontalPixelRatio, verticalPixelRatio,
+        );
+      }
+
+      // After the mark band, so that when the reader has picked a mark and the
+      // bar under it, the rails still read as the bar selection.
+      if (focusIndex !== undefined && focusX !== null) {
+        paintFocusBand(
+          context, focusX, this.#bandHalfWidth(space, focusIndex), mediaSize.height,
+          tokens.focus, horizontalPixelRatio, verticalPixelRatio,
         );
       }
 

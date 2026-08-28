@@ -14,137 +14,82 @@
   }
 </script>
 
-<!-- open by default. It used to sit below 31 rule rows, so being shut cost
-     nothing; now it is the pane the layout is built around, and a reader who
-     has to open it every session is back where they started. -->
-<details class="panel" open>
-  <summary>
-    <span class="title">Marks in view</span>
-    <span class="count">
-      {integer(rows.length)}{#if app.markListTruncated} of many, capped at {integer(MARK_LIST_CAP)}{/if}
-    </span>
-  </summary>
-
-  {#if rows.length === 0}
-    <p class="empty">Nothing marked in this range. Zoom out, or switch on more rules above.</p>
-  {:else}
-    <p class="hint">Click a mark to highlight it on the chart.</p>
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Session</th>
-            <th scope="col">Mark</th>
-            <th scope="col">Rule</th>
-            <th scope="col">Detail</th>
-            <th scope="col"><span class="sr-only">Verdict</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each rows as mark (mark.id)}
-            <tr class:picked={app.selectedMarkId === mark.id}>
-              <td class="d">
-                {day(mark.at)}
-                {#if lag(mark.at, mark.knownAt)}<span class="lag">{lag(mark.at, mark.knownAt)}</span>{/if}
-              </td>
-              <td class="label" class:bull={mark.tone === 'bull'} class:bear={mark.tone === 'bear'}>
-                <!-- A real button, not a click handler on the <tr>: the row is
-                     not an interactive element and making it behave like one
-                     costs the keyboard and a screen reader the affordance. The
-                     label IS the mark's identity, so it is the thing to click,
-                     and aria-pressed carries the highlight state. -->
-                <button
-                  type="button"
-                  class="pick"
-                  aria-pressed={app.selectedMarkId === mark.id}
-                  title="Highlight this mark on the chart"
-                  onclick={() => app.selectMark(mark.id)}
-                >{mark.label}</button>
-              </td>
-              <td class="rule">{mark.rule}</td>
-              <td class="note">{mark.note ?? ''}</td>
-              <td class="verdict">
-                <!-- Clicking the verdict a mark already has clears it, so a
-                     misclick costs one more click rather than being sticky. -->
-                <button
-                  type="button"
-                  class="v keep"
-                  aria-pressed={app.verdictOf(mark.id) === 'confirmed'}
-                  title="Confirm this mark"
-                  onclick={() => app.setVerdict(mark.id, 'confirmed')}
-                >Keep</button>
-                <button
-                  type="button"
-                  class="v drop"
-                  aria-pressed={app.verdictOf(mark.id) === 'dismissed'}
-                  title="Dismiss this mark and hide it"
-                  onclick={() => app.setVerdict(mark.id, 'dismissed')}
-                >Drop</button>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+{#if rows.length === 0}
+  <p class="empty">Nothing marked in this range. Zoom out, or switch on more rules above.</p>
+{:else}
+  {#if app.markListTruncated}
+    <p class="hint">Newest {integer(MARK_LIST_CAP)} of many listed.</p>
   {/if}
-</details>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Session</th>
+          <th scope="col">Mark</th>
+          <th scope="col">Rule</th>
+          <th scope="col">Detail</th>
+          <th scope="col"><span class="sr-only">Verdict</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as mark (mark.id)}
+          <tr class:picked={app.selectedMarkId === mark.id}>
+            <td class="d">
+              {day(mark.at)}
+              {#if lag(mark.at, mark.knownAt)}<span class="lag">{lag(mark.at, mark.knownAt)}</span>{/if}
+            </td>
+            <td class="label" class:bull={mark.tone === 'bull'} class:bear={mark.tone === 'bear'}>
+              <!-- A real button, not a click handler on the <tr>: the row is
+                   not an interactive element and making it behave like one
+                   costs the keyboard and a screen reader the affordance. The
+                   label IS the mark's identity, so it is the thing to click,
+                   and aria-pressed carries the highlight state. -->
+              <button
+                type="button"
+                class="pick"
+                aria-pressed={app.selectedMarkId === mark.id}
+                title="Highlight this mark on the chart"
+                onclick={() => app.selectMark(mark.id)}
+              >{mark.label}</button>
+            </td>
+            <td class="rule">{mark.rule}</td>
+            <td class="note">{mark.note ?? ''}</td>
+            <td class="verdict">
+              <!-- Clicking the verdict a mark already has clears it, so a
+                   misclick costs one more click rather than being sticky. -->
+              <button
+                type="button"
+                class="v keep"
+                aria-pressed={app.verdictOf(mark.id) === 'confirmed'}
+                title="Confirm this mark"
+                onclick={() => app.setVerdict(mark.id, 'confirmed')}
+              >Keep</button>
+              <button
+                type="button"
+                class="v drop"
+                aria-pressed={app.verdictOf(mark.id) === 'dismissed'}
+                title="Dismiss this mark and hide it"
+                onclick={() => app.setVerdict(mark.id, 'dismissed')}
+              >Drop</button>
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/if}
 
 <style>
-  /* A container, not a media query: this card is full-width in the stacked
-     layout and a side column in the wide one, and the table's five columns
-     need 766px either way. Keying the trim to the CARD's width means it is
-     right wherever App puts it, instead of encoding App's breakpoint here
-     where the two would drift apart. */
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--hair);
-    border-radius: 10px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    container-type: inline-size;
-  }
-
-  /* ::details-content is the flex item, not `.body`.
-     Chromium wraps a <details>'s content in this pseudo-element, so a
-     `display: flex` <details> has TWO children: the summary and this. Without
-     it in the chain a bounded card height stops here — measured: a 320px card
-     held a `.scroll` reporting 498px of content and maxScroll 0, i.e. the rule
-     list was CLIPPED and its last rows unreachable, which is the same failure
-     the column-wide scroll had. min-height: 0 is the half that matters; a flex
-     item will not go below min-content without it. */
-  .panel::details-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  summary {
-    flex: none;
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 11px 16px;
-    cursor: pointer;
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    user-select: none;
-  }
-
-  summary:hover { color: var(--ink-2); }
-  summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .title { color: var(--ink-2); }
-  .count { margin-left: auto; letter-spacing: 0.04em; text-transform: none; }
+  /* A container query, not a media query: this view is a narrow pane in the
+     wide layout and a full-width card when the grid collapses, and the table's
+     five columns need 766px either way. Keying the trim to the PANE's width
+     means it is right wherever the pane is put, instead of encoding App's
+     breakpoint here where the two would drift apart. The container itself is
+     declared by MarkingPane, which owns the box. */
 
   .empty {
     margin: 0;
-    padding: 4px 16px 16px;
-    border-top: 1px solid var(--grid);
+    padding: 12px 16px 16px;
     font-size: 12.5px;
     color: var(--muted);
   }
@@ -153,21 +98,20 @@
     flex: none;
     margin: 0;
     padding: 9px 16px;
-    border-top: 1px solid var(--grid);
     font-family: var(--mono);
     font-size: 10.5px;
     letter-spacing: 0.04em;
     color: var(--muted);
   }
 
-  /* 340px keeps this from running to 3,000px when the card sizes to its own
-     content. In the wide layout's pane the pane is the cap, so App lifts it by
-     setting --marklist-max-h: none on the column — a custom property rather
-     than a selector into here, so the two files stay uncoupled. */
+  /* The fallback keeps this from running to 3,000px where nothing bounds the
+     pane. In the wide layout the pane is the cap and computes a smaller height,
+     which wins — a custom property rather than a selector into here, so the two
+     files stay uncoupled. */
   .scroll {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: var(--marklist-max-h, 340px);
+    max-height: var(--pane-scroll-max, 420px);
     overflow: auto;
     overscroll-behavior: contain;
     border-top: 1px solid var(--grid);
@@ -278,7 +222,7 @@
   }
   .note { font-size: 12px; line-height: 1.45; min-width: 22ch; }
 
-  /* 780px is the card width at which the five columns stop fitting. The 16px
+  /* 780px is the pane width at which the five columns stop fitting. The 16px
      side padding is five cells' worth — 160px of the 766px total — so most of
      the saving is there rather than in the text. The verdict buttons and the
      dates keep their size: they are the two things the reader aims at. */
@@ -291,7 +235,7 @@
   /* Narrower still — a phone, or the side column below about a 1900px screen.
      The rule id is the one cell that is a lookup key rather than something to
      read across, so it wraps instead of forcing the row wider. Below roughly
-     a 480px card the row cannot fit whatever the padding: the date, the label
+     a 480px pane the row cannot fit whatever the padding: the date, the label
      and the two verdict buttons are ~390px on their own, and shrinking THOSE
      costs the reader the three things they actually aim at. The container
      scrolls sideways there, which is what it is for. */

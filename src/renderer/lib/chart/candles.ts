@@ -333,6 +333,19 @@ export class CandleChart {
     this.#primitive.setSelected(id === null ? null : this.#marksById.get(id) ?? null);
   }
 
+  /**
+   * Highlight one session, or none — the line the reader clicked in the
+   * bar-reading list.
+   *
+   * Straight through to the primitive, and deliberately not routed through
+   * `setSelected`: a picked mark and a picked session are two gestures on two
+   * lists, and either can be showing while the other is. The primitive draws
+   * the two bands in different colours for that reason.
+   */
+  setFocusBar(at: string | null): void {
+    this.#primitive.setFocusBar(at);
+  }
+
   /** Colour lives on the marker data, not on options, so this runs again on
    *  every theme change — the same reason `#rollMarkers` is rebuilt there. */
   #buildBarMarkers(): void {

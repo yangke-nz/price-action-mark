@@ -74,6 +74,17 @@ function probe() {
     bridged: typeof window.desktop === 'object' && window.desktop !== null,
     marks: document.querySelectorAll('details.panel')[0]?.querySelector('[class*="count"]')?.textContent?.trim() ?? null,
     notice: document.querySelector('[class*="notice"]')?.textContent?.trim() ?? null,
+    // The bar reading, on both surfaces: the line under the readout figures,
+    // and the pane's second tab. Both are prose the rest of the smoke cannot
+    // see — an empty reading renders as an empty element, not as an error.
+    reading: text('[class*="readout"] p'),
+    tabs: [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent.replace(/\s+/g, ' ').trim()),
+    readingRows: (() => {
+      const tab = [...document.querySelectorAll('[role="tab"]')].find((t) => /Bar reading/.test(t.textContent));
+      if (!tab) return -1;
+      tab.click();
+      return document.querySelectorAll('[id="panel-reading"] button[class*="line"]').length;
+    })(),
   };
 }
 
@@ -169,6 +180,13 @@ app.whenReady().then(async () => {
     [r.bridged === desktopMode, desktopMode ? 'window.desktop is missing' : 'the artifact should have no bridge'],
     [!desktopMode || /Electron \d/.test(r.footer ?? ''), 'the footer never received app info over IPC'],
     [/\d+ marks? from \d+ rules?/.test(r.marks ?? ''), `the mark panel reads ${JSON.stringify(r.marks)}`],
+    // A reading is a sentence about the focused bar, so it must name the bar
+    // and say where it sits: anything shorter means a clause silently dropped.
+    [/bar|doji|flat/.test(r.reading ?? '') && (r.reading ?? '').length > 20,
+      `the readout's reading reads ${JSON.stringify(r.reading)}`],
+    [r.tabs.length === 2 && /Marks in view/.test(r.tabs[0] ?? ''),
+      `the marking pane's tabs read ${JSON.stringify(r.tabs)}`],
+    [r.readingRows > 0, `the bar reading tab holds ${r.readingRows} rows`],
     // Errors the app reports to the reader rather than to the console — a
     // failed IPC call surfaces here and nowhere else.
     [r.notice === null, `the page is showing a notice: ${JSON.stringify(r.notice)}`],
@@ -181,7 +199,7 @@ app.whenReady().then(async () => {
     `smoke ${desktopMode ? 'desktop app' : path.basename(target)}: ` +
       `${r.canvases} canvas, last ${r.last}, ${r.rows} table rows, ` +
       `theme ${r.theme}, ${r.fonts} font faces, bridge ${r.bridged}, origin ${r.origin ?? "?"}, ema ${r.ema},\n` +
-      `  marks: ${r.marks ?? "?"}` +
+      `  marks: ${r.marks ?? "?"}, ${r.readingRows} readings` +
       (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),
   );
 

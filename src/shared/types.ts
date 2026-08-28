@@ -44,7 +44,7 @@ export type ThemeChoice = 'system' | 'light' | 'dark';
  * Which marking rules are on.
  *
  * `rules` is SPARSE: it holds only the ids the reader has moved away from the
- * rule's own `defaultOn`. Persisting all fifteen booleans would freeze today's
+ * rule's own `defaultOn`. Persisting all thirty-one booleans would freeze today's
  * defaults into every settings file on disk, so tightening a rule later — or
  * shipping a new one — would silently never reach anyone who had run the app.
  */
