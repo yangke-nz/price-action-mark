@@ -34,6 +34,8 @@ export type Command =
   /** A rule id, or '*' for the whole marking layer. */
   | { kind: 'mark'; value: string }
   | { kind: 'export'; value: 'csv' | 'json' | 'marks' }
+  /** Open the rules sheet — which rules the panel folds away. */
+  | { kind: 'rules' }
   | { kind: 'focus-chart' };
 
 export type SaveResult = { status: 'saved'; path: string } | { status: 'canceled' };

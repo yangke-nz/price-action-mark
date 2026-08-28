@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AppState } from '$lib/state/app.svelte.ts';
+  import type { Rule } from '$shared/marks/rule.ts';
   import { RULES } from '$shared/marks/registry.ts';
   import { integer } from '$shared/format.ts';
 
@@ -18,10 +19,43 @@
     { id: 'entries', label: 'Entries they set up' },
   ] as const;
 
+  /**
+   * Which drawers are open. Deliberately NOT a setting: `settings.marks` is
+   * sparse on purpose so a later default can still reach someone who has run
+   * the app, and persisting this would freeze today's answer into every
+   * settings file to save one click — the same trade the marking pane's tab
+   * declined.
+   */
+  let open = $state<Record<string, boolean>>({});
+
+  /**
+   * Each group split into what the card lists and what it folds away.
+   *
+   * Both sets come from `app` rather than from `rule.tier` directly, because
+   * the reader can now move a rule off its shipped tier in the rules sheet —
+   * and the invariant that a folded rule which is ON is never hidden has to
+   * have exactly one implementation. `foldedRules` is the setting, so it
+   * decides the quieter name; `hiddenRules` is the effect, so it decides
+   * placement.
+   */
   const grouped = $derived(
-    GROUPS.map((g) => ({ ...g, rules: RULES.filter((r) => r.group === g.id) }))
-      .filter((g) => g.rules.length > 0),
+    GROUPS.map((g) => {
+      const rules = RULES.filter((r) => r.group === g.id);
+      return {
+        ...g,
+        core: rules.filter((r) => !app.hiddenRules.has(r.id)),
+        extra: rules.filter((r) => app.hiddenRules.has(r.id)),
+      };
+    }).filter((g) => g.core.length + g.extra.length > 0),
   );
+
+  const foldedTotal = $derived(grouped.reduce((n, g) => n + g.extra.length, 0));
+  const allOpen = $derived(grouped.every((g) => g.extra.length === 0 || open[g.id] === true));
+
+  function toggleAll(): void {
+    const next = !allOpen;
+    for (const g of grouped) open[g.id] = next;
+  }
 </script>
 
 <details class="panel" open={marks.enabled}>
@@ -53,6 +87,28 @@
         >Confirmed only</button>
       </div>
 
+      <!-- The whole-list shortcut, in the LEFT cluster: this row divides into
+           what is listed and what is kept, and the tally on the right owns the
+           verdicts. It cannot live in the summary — a <summary> IS a button,
+           so a button inside one is a button inside a button, the same
+           constraint that stopped the marking pane's tabs going there. -->
+      {#if foldedTotal > 0}
+        <button
+          type="button" class="foldall" disabled={!marks.enabled}
+          onclick={toggleAll}
+        >{allOpen ? 'Collapse' : `Show all ${foldedTotal}`}</button>
+      {/if}
+
+      <!-- The door to the rules sheet, beside the fold control it configures.
+           A text button rather than an icon: an unlabelled gear in a row of
+           words is a guess, and there is no room for a labelled icon. The
+           sheet itself is mounted by App, so the native menu can open it
+           without going through this card. -->
+      <button
+        type="button" class="foldall" disabled={!marks.enabled}
+        onclick={() => app.openRules()}
+      >Choose rules…</button>
+
       <span class="tally">
         {integer(app.confirmedCount)} kept · {integer(app.dismissedCount)} dropped
         {#if app.confirmedCount + app.dismissedCount > 0}
@@ -68,28 +124,62 @@
     <div class="scroll">
       <div class="rules">
         {#each grouped as group (group.id)}
-          <h3 class="ghead">{group.label}</h3>
-          {#each group.rules as rule (rule.id)}
-            <!-- title carries the blurb for the compact layout, where the
-                 blurb line is hidden: it is the description a screen reader
-                 gets as well, so the text is not simply lost. -->
-            <label class="rule" class:dim={!marks.enabled} title={rule.blurb}>
-              <input
-                type="checkbox"
-                checked={app.enabledRules.has(rule.id)}
+          <h3 class="ghead">
+            <span>{group.label}</span>
+            {#if group.extra.length > 0}
+              <span class="hair"></span>
+              <!-- The fold rides the HEADING rather than taking a row of its
+                   own. The heading already spans the list and already carries
+                   the group's name, so the count costs nothing: a drawer row
+                   per group spent ~16px each to say what this says for free.
+                   A button, not a nested <details> — that would put a second
+                   ::details-content into the flex chain this card's bounded
+                   height depends on. -->
+              <button
+                type="button" class="chip"
+                aria-expanded={open[group.id] === true}
+                aria-label="{open[group.id] ? 'Hide' : 'Show'} {group.extra.length} less-used rules in {group.label}"
                 disabled={!marks.enabled}
-                onchange={() => app.toggleRule(rule.id)}
-              />
-              <span class="name">{rule.label}</span>
-              <span class="n">{integer(app.markCounts.get(rule.id) ?? 0)}</span>
-              <span class="blurb">{rule.blurb}</span>
-            </label>
+                onclick={() => (open[group.id] = !open[group.id])}
+              >
+                <span>{open[group.id] ? '−' : '+'}{group.extra.length}</span>
+                <span class="caret" aria-hidden="true">▾</span>
+              </button>
+            {/if}
+          </h3>
+
+          {#each group.core as rule (rule.id)}
+            {@render row(rule, app.foldedRules.has(rule.id))}
           {/each}
+
+          {#if open[group.id]}
+            {#each group.extra as rule (rule.id)}
+              {@render row(rule, true)}
+            {/each}
+          {/if}
         {/each}
       </div>
     </div>
   </div>
 </details>
+
+<!-- title carries the blurb for the compact layout, where the blurb line is
+     hidden: it is the description a screen reader gets as well, so the text is
+     not simply lost. `quiet` marks a rule that lives in the folded set,
+     whether it is showing because the drawer is open or because it is on. -->
+{#snippet row(rule: Rule, quiet: boolean)}
+  <label class="rule" class:dim={!marks.enabled} class:quiet title={rule.blurb}>
+    <input
+      type="checkbox"
+      checked={app.enabledRules.has(rule.id)}
+      disabled={!marks.enabled}
+      onchange={() => app.toggleRule(rule.id)}
+    />
+    <span class="name">{rule.label}{#if quiet}<span class="sr">, less used</span>{/if}</span>
+    <span class="n">{integer(app.markCounts.get(rule.id) ?? 0)}</span>
+    <span class="blurb">{rule.blurb}</span>
+  </label>
+{/snippet}
 
 <style>
   /* A flex column so a bounded height reaches the scroll region inside. As a
@@ -206,6 +296,25 @@
   .seg button:disabled { opacity: 0.5; cursor: default; }
   .seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
+  /* A text button, not a second segmented control: this row already holds one,
+     and two segs an inch apart read as two halves of the same switch when one
+     is about which rules are listed and the other about which marks publish. */
+  .foldall {
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    text-decoration: underline;
+    text-decoration-color: var(--axis);
+    text-underline-offset: 3px;
+  }
+  .foldall:hover:not(:disabled) { color: var(--ink); text-decoration-color: currentColor; }
+  .foldall:disabled { opacity: 0.5; cursor: default; }
+  .foldall:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
   .tally {
     margin-left: auto;
     display: inline-flex;
@@ -249,6 +358,9 @@
     grid-column: 1 / -1;
     margin: 0;
     padding: 11px 0 3px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
     font-family: var(--mono);
     font-size: 9.5px;
     font-weight: 600;
@@ -258,6 +370,33 @@
   }
 
   .rules > .ghead:first-child { padding-top: 0; }
+
+  /* The rule that gives the heading its span, so the chip sits at the group's
+     edge rather than trailing its name. */
+  .hair { flex: 1 1 auto; height: 1px; background: var(--grid); }
+
+  /* Neutral chrome on purpose. --ema would read as the moving average and
+     --focus as a focused control; a fold is neither, it is furniture. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border: 1px solid var(--hair);
+    border-radius: 20px;
+    background: var(--surface-2);
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.08em;
+    transition: color 0.12s, background 0.12s;
+  }
+
+  .chip:hover:not(:disabled) { color: var(--ink); background: var(--surface); }
+  .chip:disabled { opacity: 0.5; cursor: default; }
+  .chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .chip .caret { font-size: 8px; transition: transform 0.14s; }
+  .chip[aria-expanded="true"] .caret { transform: rotate(180deg); }
 
   .rule {
     display: grid;
@@ -273,10 +412,28 @@
   .rule.dim { opacity: 0.45; cursor: default; }
   .rule:not(.dim):hover .name { color: var(--ink); }
 
+  /* A rule from the folded set keeps a lighter name wherever it appears — in
+     an open drawer, or promoted into the list because it is on. One signal,
+     read the same way in both places; the checkbox says which case it is. */
+  .rule.quiet .name { font-weight: 400; color: var(--muted); }
+  .rule.quiet:not(.dim):hover .name { color: var(--ink-2); }
+
   input { width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--focus); }
   .rule.dim input { cursor: default; }
 
   .name { font-weight: 500; }
+
+  /* The lighter name is a visual signal only, so the same fact is spoken. */
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 
   /* The count is the density warning: a rule firing on a third of all
      sessions is one the reader should think twice about switching on. */

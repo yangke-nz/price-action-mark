@@ -22,7 +22,7 @@ export const DEFAULTS: Settings = {
   range: '6M',
   showRolls: true,
   showEma: true,
-  marks: { enabled: true, show: 'all', rules: {} },
+  marks: { enabled: true, show: 'all', rules: {}, folded: {} },
   window: { width: 1320, height: 900, maximized: false },
 };
 
@@ -31,15 +31,20 @@ export const DEFAULTS: Settings = {
  *  file written by a future version must degrade, never accumulate. */
 function coerceMarks(raw: unknown): MarkSettings {
   const v = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-  const src = (typeof v['rules'] === 'object' && v['rules'] !== null ? v['rules'] : {}) as Record<string, unknown>;
-  const rules: Record<string, boolean> = {};
-  for (const [id, on] of Object.entries(src)) {
-    if (typeof on === 'boolean' && /^[a-z0-9-]{1,40}$/.test(id)) rules[id] = on;
-  }
+  const flags = (key: string): Record<string, boolean> => {
+    const src = (typeof v[key] === 'object' && v[key] !== null ? v[key] : {}) as Record<string, unknown>;
+    const out: Record<string, boolean> = {};
+    for (const [id, on] of Object.entries(src)) {
+      if (typeof on === 'boolean' && /^[a-z0-9-]{1,40}$/.test(id)) out[id] = on;
+    }
+    return out;
+  };
   return {
     enabled: v['enabled'] !== false,
     show: v['show'] === 'confirmed' ? 'confirmed' : 'all',
-    rules,
+    rules: flags('rules'),
+    // Same shape, same rules, same reason it is sparse.
+    folded: flags('folded'),
   };
 }
 

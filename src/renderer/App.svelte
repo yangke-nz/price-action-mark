@@ -9,6 +9,7 @@
   import Legend from '$lib/components/Legend.svelte';
   import MarkPanel from '$lib/components/MarkPanel.svelte';
   import MarkingPane from '$lib/components/MarkingPane.svelte';
+  import RulesSheet from '$lib/components/RulesSheet.svelte';
   import Notes from '$lib/components/Notes.svelte';
   import DataTable from '$lib/components/DataTable.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
@@ -60,6 +61,7 @@
         case 'mark':        command.value === '*' ? app.toggleMarks() : app.toggleRule(command.value); break;
         case 'export':      void app.exportAs(command.value); break;
         case 'focus-chart': panel?.focus(); break;
+        case 'rules':       app.openRules(); break;
       }
     }),
   );
@@ -89,6 +91,12 @@
       <MarkingPane {app} />
     </aside>
   </div>
+
+  <!-- Mounted here, not in MarkPanel: the native menu opens the same sheet,
+       and a dialog that lived inside the card would make the menu route
+       through a component that has nothing to do with it. In the top layer,
+       so its position owes nothing to where it sits in the markup. -->
+  <RulesSheet {app} />
 
   <Notes {app} />
   <DataTable {app} />

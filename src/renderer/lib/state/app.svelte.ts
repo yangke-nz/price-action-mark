@@ -7,7 +7,7 @@
  * recomputes only what actually changed when a 6,500-bar dataset swaps in.
  */
 import { source } from '$source';
-import type { Bar, Dataset, DatasetOrigin, DatasetResult, RangeId, Settings, ThemeChoice } from '$shared/types.ts';
+import type { Bar, Dataset, DatasetOrigin, DatasetResult, MarkSettings, RangeId, Settings, ThemeChoice } from '$shared/types.ts';
 import type { Viewport } from '$lib/chart/candles.ts';
 import { EMA_PERIOD, ema } from '$shared/indicators.ts';
 import { DEFAULT_SETTINGS } from '$lib/source/types.ts';
@@ -15,7 +15,7 @@ import { contractStarts } from '$shared/rolls.ts';
 import type { Mark, MarkStore, RuleId, Verdict } from '$shared/marks/types.ts';
 import { emptyStore } from '$shared/marks/types.ts';
 import { buildCtx, type Ctx } from '$shared/marks/rule.ts';
-import { RULES, detect } from '$shared/marks/registry.ts';
+import { RULES, detect, ruleFor } from '$shared/marks/registry.ts';
 import { readAt, readingIndex, type BarReading } from '$shared/marks/reading.ts';
 import { INTERVALS, intervalOf, rangeFor, specOf, type Interval } from '$shared/interval.ts';
 import { SESSIONS, applySession, type Session } from '$shared/session.ts';
@@ -96,6 +96,7 @@ export class AppState {
       enabled: DEFAULT_SETTINGS.marks.enabled,
       show: DEFAULT_SETTINGS.marks.show,
       rules: { ...DEFAULT_SETTINGS.marks.rules },
+      folded: { ...DEFAULT_SETTINGS.marks.folded },
     },
     window: { ...DEFAULT_SETTINGS.window },
   });
@@ -140,6 +141,30 @@ export class AppState {
   enabledRules = $derived.by((): Set<RuleId> => {
     const overrides = this.settings.marks.rules;
     return new Set(RULES.filter((r) => overrides[r.id] ?? r.defaultOn).map((r) => r.id));
+  });
+
+  /**
+   * Which rules the panel keeps folded away, and which it therefore withholds.
+   *
+   * Two sets, because they answer two different questions and the panel needs
+   * both. `foldedRules` is THE SETTING — the ids marked less-used, whether they
+   * are switched on or not, which is what gives a rule its quieter name and
+   * what the sheet's Fold box reflects. `hiddenRules` is the EFFECT: folded
+   * minus enabled, because a folded rule that is ON is never hidden. Otherwise
+   * the chart wears marks whose toggle is nowhere on the page — the mirror of
+   * not rendering a control that would not work.
+   *
+   * `settings.marks.folded` is sparse, so an absent id means "whatever the
+   * rule's own `tier` says".
+   */
+  foldedRules = $derived.by((): Set<RuleId> => {
+    const over = this.settings.marks.folded;
+    return new Set(RULES.filter((r) => over[r.id] ?? r.tier === 'extra').map((r) => r.id));
+  });
+
+  hiddenRules = $derived.by((): Set<RuleId> => {
+    const on = this.enabledRules;
+    return new Set([...this.foldedRules].filter((id) => !on.has(id)));
   });
 
   /**
@@ -546,6 +571,18 @@ export class AppState {
       for (const [id, on] of Object.entries(next.marks.rules)) {
         if (s.marks.rules[id] !== on) s.marks.rules[id] = on;
       }
+      if (next.marks.folded !== undefined) {
+        const incoming = next.marks.folded;
+        for (const [id, folded] of Object.entries(incoming)) {
+          if (s.marks.folded[id] !== folded) s.marks.folded[id] = folded;
+        }
+        // Field-wise MUST still delete here. `folded` is sparse and taking an
+        // override back is a key going away, so a merge that only ever adds
+        // would leave the reader with a fold they had just undone.
+        for (const id of Object.keys(s.marks.folded)) {
+          if (!(id in incoming)) delete s.marks.folded[id];
+        }
+      }
     }
     // `window` is main's business. Nothing in the renderer reads it, so it is
     // deliberately not mirrored here — copying a fresh object across on every
@@ -707,14 +744,60 @@ export class AppState {
 
   toggleRule(id: RuleId): void {
     const next = !this.enabledRules.has(id);
+    void this.#patchMarks({ rules: { ...this.settings.marks.rules, [id]: next } });
+  }
+
+  /**
+   * Fold rules away, or bring them back — one patch for however many ids.
+   *
+   * An id whose new value agrees with the rule's own `tier` is DELETED rather
+   * than stored: the record has to be able to shrink, or a reader who once
+   * matched today's shipped answer could never be reached by a later change to
+   * it. That is the whole reason it is sparse.
+   */
+  setRulesFolded(ids: readonly RuleId[], folded: boolean): void {
+    const next = { ...this.settings.marks.folded };
+    let changed = false;
+    for (const id of ids) {
+      const authored = ruleFor(id)?.tier === 'extra';
+      if (folded === authored) {
+        if (id in next) { delete next[id]; changed = true; }
+      } else if (next[id] !== folded) {
+        next[id] = folded;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    void this.#patchMarks({ folded: next });
+  }
+
+  /** Back to exactly what the build ships folded. */
+  clearFolds(): void {
+    if (Object.keys(this.settings.marks.folded).length === 0) return;
+    void this.#patchMarks({ folded: {} });
+  }
+
+  /** Every mark patch sends the whole `marks` object, so it is built in one
+   *  place rather than three that can drift about which fields to carry. */
+  #patchMarks(part: Partial<MarkSettings>): void {
+    const m = this.settings.marks;
     void this.patch({
       marks: {
-        enabled: this.settings.marks.enabled,
-        show: this.settings.marks.show,
-        rules: { ...this.settings.marks.rules, [id]: next },
+        enabled: m.enabled,
+        show: m.show,
+        rules: m.rules,
+        folded: m.folded,
+        ...part,
       },
     });
   }
+
+  /** The rules sheet, open or not. View state, never persisted — the same
+   *  contract `selectedMarkId` holds. */
+  rulesOpen = $state(false);
+
+  openRules(): void { this.rulesOpen = true; }
+  closeRules(): void { this.rulesOpen = false; }
 
   // ---- export ----------------------------------------------------------
 

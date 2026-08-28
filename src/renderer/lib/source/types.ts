@@ -77,6 +77,6 @@ export const DEFAULT_SETTINGS: Settings = {
   range: '6M',
   showRolls: true,
   showEma: true,
-  marks: { enabled: true, show: 'all', rules: {} },
+  marks: { enabled: true, show: 'all', rules: {}, folded: {} },
   window: { width: 1320, height: 900, maximized: false },
 };

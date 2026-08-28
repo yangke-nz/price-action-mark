@@ -78,6 +78,7 @@ export const BAR_RULES: readonly Rule[] = [
     label: 'Trend bar',
     blurb: `Body at least ${Math.round(TREND_BODY * 100)}% of the range. Fires on about a third of all sessions, so it ships off.`,
     defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -119,6 +120,7 @@ export const BAR_RULES: readonly Rule[] = [
     label: 'Doji',
     blurb: `Body at most ${Math.round(DOJI_BODY * 100)}% of the range — a one-bar trading range. Common enough to ship off.`,
     defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -135,6 +137,7 @@ export const BAR_RULES: readonly Rule[] = [
     label: 'Inside bar',
     blurb: 'High no higher and low no lower than the session before. One session in eight, so it ships off.',
     defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -155,6 +158,7 @@ export const BAR_RULES: readonly Rule[] = [
     label: 'Outside bar',
     blurb: 'Higher high and lower low than the session before. One session in eight, so it ships off.',
     defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -242,6 +246,7 @@ export const BAR_RULES: readonly Rule[] = [
     label: 'Shaved bar',
     blurb: 'A trend bar with almost no tail at one end — no pullback inside the session.',
     defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];

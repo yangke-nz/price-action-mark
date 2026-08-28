@@ -1,7 +1,7 @@
 # Price Action Mark
 
 Price action charting, daily and 5-minute — mark up the tape, then publish it. The
-chart reads itself with **29 rules drawn from Al Brooks's price action method**
+chart reads itself with **31 rules drawn from Al Brooks's price action method**
 (special bars, the lines they form, the entries they set up); you keep the marks
 you agree with, and the confirmed set travels inside a single self-contained
 HTML file. It also **reads the tape in words** — one line of Brooks prose per
@@ -16,7 +16,7 @@ One Svelte 5 codebase, **two build targets**:
 | Target | Command | Output |
 | --- | --- | --- |
 | Electron desktop app | `npm run build` | `out/` (packaged with `npm run dist`) |
-| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (701 KB, self-contained) |
+| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (746 KB, self-contained) |
 
 Both render the same components against the same dataset, the same design
 tokens and the same chart controller. They differ in exactly one file —
@@ -136,7 +136,8 @@ src/renderer/
   lib/chart/candles.ts        every imperative call into lightweight-charts
   lib/chart/marks/            ONE primitive for all geometry, not one per mark
   lib/components/             Masthead, Controls, Readout, ChartPanel,
-                              MarkPanel, MarkingPane (MarkList | ReadingList), …
+                              MarkPanel, RulesSheet, MarkingPane
+                              (MarkList | ReadingList), …
   styles/                     tokens.css (palette), fonts.css, app.css
 ```
 
@@ -328,6 +329,61 @@ re-reading the page breakpoint, which is how two files drift apart.
 a 700px card, with `bars` / `lines` / `entries` headings earning their place
 once a row is only a name and a count. That takes the 31 rules from **2,199px**
 of card to **498px** of content at two columns, or 895px at one.
+
+Two columns were not enough on their own, so the card also **folds the rules a
+reader rarely reaches for**. Six carry `tier: 'extra'` — the five dense bar
+rules and `pullback-entry` — and each group heading grows a `+5 ▾` chip that
+reveals them in place. The chip rides the heading rather than taking a row of
+its own, because the heading already spans the list and already carries the
+group's name: a `▸ 5 less used` row per group was tried first and spent ~16px
+each to say what the heading says for free. Measured on the artifact at a 642px
+card, the list goes from **506px to 431px**, and the top row carries one
+`Show all 6` for the whole card.
+
+That is a 75px saving, not a fix: at 1904x1015 the list is 431px inside a 197px
+window, so it still scrolls, and about eight more folded rules is what "fits"
+would cost. The fold is also **not** a second `defaultOn`. That flag is about
+density — a rule firing on a third of all sessions makes a chart less readable
+than no marks at all — where `tier` is about how often the reader consults it.
+`climax` fires once a year and is worth a glance; `shaved` fires 38 times and
+may never be switched on. The two lists coincide today, and are free to diverge.
+
+### Choosing what folds
+
+The shipped set is authored, but it is not the last word: `Choose rules…` in the
+card's top row — and Marks ▸ *Choose folded rules…* — opens a modal listing all
+31 rules with two boxes each, `Show` and `Fold`, the outcome spelled out in
+words, and the marks-and-share figures the card has no room for. Group headings
+carry a bulk action, the numeric column sorts by density (which flattens the
+groups, because "what is noisiest" does not respect *bars / lines / entries*),
+and a filter narrows 31 rows to the one you meant.
+
+`settings.marks.folded` stores **only the ids moved off their authored tier**,
+the way `marks.rules` stores only the ids moved off `defaultOn`, and the sheet's
+footer says so out loud: *"5 rules moved off what this build folds — only those
+are stored"*, or *"Nothing stored: every rule is where this build put it"*. A
+fold set written out in full would freeze today's answer into every settings
+file, so the merge that applies it has to be able to **delete** — every other
+field-wise merge only ever adds, and a fold taken back is a key going away.
+
+Two details in that dialog were measured rather than assumed. The `Fold` box is
+**disabled, not hidden**, while a rule is on (25 of 31 by default): an empty
+cell reads as "this cannot be folded", where ticked-and-disabled says "folded,
+and listed anyway because it is on" — and it keeps the preference, so switching
+the rule off later puts it back where you had it. And its width tiers are about
+**row height**, not sideways overflow: the table shrinks instead of scrolling,
+so squeezing the name column wraps every label. At a 572px sheet with all six
+columns the median row is **93px** and the tallest 143px, which shows six rules
+where fifteen fit; the blurb drops at 700px and the numbers at 620px, and from
+392px up a row is back to 32px.
+
+One rule the fold cannot break: **a folded rule that is switched on is never
+hidden.** It is promoted into the list, keeping the lighter name so "less used"
+reads as one signal wherever it appears, with the ticked box saying the rest.
+Hiding it would put marks on the chart whose toggle is nowhere on the page —
+the mirror of the capability rule that says not to render a control that would
+not work. `smoke.cjs` asserts the reveal and the re-fold, in a second
+`executeJavaScript` call, because Svelte flushes on a microtask.
 
 The marking pane declares the container both its views read. The reading rows
 drop their date rail under a 430px pane; the mark table tightens its five
@@ -923,6 +979,12 @@ there and does *not* exist in the artifact. It also asserts the mark panel is
 populated, that the readout carries a **bar reading** and the marking pane has
 both tabs with rows behind the second, and — desktop only — that a verdict
 written over the real IPC path comes back on a re-read and can be removed again.
+Two of those exercise the fold: a heading chip must reveal its less-used rules
+and fold them away again, and the **rules sheet** must open from the card's own
+door, bring a folded rule back into the list, drop that change and close. Both
+click and then measure in a *second* `executeJavaScript` call, because Svelte
+flushes on a microtask — counting rows in the same expression reads the DOM as
+it was before the click and reports every working fold as broken.
 The reading assertions matter because prose fails silently: a dropped clause
 renders as a shorter sentence, not as an error.
 

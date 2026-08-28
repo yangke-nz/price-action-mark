@@ -56,6 +56,17 @@ export interface Rule {
    * less readable than one wearing none.
    */
   readonly defaultOn: boolean;
+  /**
+   * Rules the panel folds away until the reader asks for them.
+   *
+   * Absent means core, so a rule opts IN to being quiet and the other
+   * twenty-five need no line. This is a USAGE decision, NOT the density one
+   * `defaultOn` makes, and the two lists are not the same: `climax` fires once
+   * a year and is worth a glance, `shaved` fires 38 times and may never be
+   * switched on. Presentation only — nothing in the marking layer reads it, so
+   * detection, the counts, the CLI report and `marks:check` are unaffected.
+   */
+  readonly tier?: 'extra';
   detect(ctx: Ctx): Mark[];
 }
 

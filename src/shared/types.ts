@@ -59,12 +59,14 @@ export type RangeId = '1D' | '3D' | '1W' | '2W' | '1M' | '3M' | '6M' | '1Y' | '5
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
 /**
- * Which marking rules are on.
+ * Which marking rules are on, and which the panel folds away.
  *
- * `rules` is SPARSE: it holds only the ids the reader has moved away from the
- * rule's own `defaultOn`. Persisting all thirty-one booleans would freeze today's
- * defaults into every settings file on disk, so tightening a rule later — or
- * shipping a new one — would silently never reach anyone who had run the app.
+ * BOTH RECORDS ARE SPARSE, for the same reason. `rules` holds only the ids the
+ * reader has moved away from the rule's own `defaultOn`; `folded` only the ids
+ * moved off the rule's own `tier`. Persisting all thirty-one booleans either
+ * way would freeze today's answer into every settings file on disk, so
+ * tightening a rule later — or folding a new one — would silently never reach
+ * anyone who had run the app.
  */
 export interface MarkSettings {
   /** Master switch for the whole marking layer. */
@@ -73,6 +75,10 @@ export interface MarkSettings {
    *  mode a chart should be in before it is published. */
   show: 'all' | 'confirmed';
   rules: Record<string, boolean>;
+  /** Only the ids the reader moved off `Rule.tier`. `true` means "fold this
+   *  away even though it ships listed", `false` the reverse; an absent id
+   *  means the rule's own tier still decides. */
+  folded: Record<string, boolean>;
 }
 
 export interface Settings {

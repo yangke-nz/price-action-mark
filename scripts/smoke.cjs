@@ -56,6 +56,8 @@ const looksLikePrice = (v) =>
 
 const errors = [];
 let verdictRoundTrip = 'was not tested';
+let foldReveal = 'was not tested';
+let rulesSheet = 'was not tested';
 
 /** Serialised into the page, so it may not close over anything out here. */
 function probe() {
@@ -187,6 +189,78 @@ app.whenReady().then(async () => {
     })()`);
   }
 
+  // The rules card folds its less-used rules away, and that is presentation,
+  // so it applies to both targets: the card must list fewer rules than the
+  // registry holds and a chip must reveal the rest. A fold that silently
+  // reveals nothing looks exactly like a short list. The click is MEASURED IN
+  // A SECOND STEP because Svelte flushes on a microtask — counting rows in the
+  // same expression reads the DOM as it was before the click, which reports
+  // every fold as broken.
+  foldReveal = await win.webContents.executeJavaScript(`(async () => {
+    const card = document.querySelector('details.panel');
+    if (!card) return 'found no rules card';
+    const rows = () => card.querySelectorAll('label[class*="rule"]').length;
+    const chip = card.querySelector('h3 button[aria-expanded]');
+    if (!chip) return 'found no fold';
+    const before = rows();
+    chip.click();
+    await new Promise((r) => setTimeout(r, 80));
+    const opened = rows();
+    chip.click();
+    await new Promise((r) => setTimeout(r, 80));
+    const closed = rows();
+    if (opened <= before) return 'revealed nothing';
+    if (closed !== before) return 'did not fold away again';
+    return 'revealed ' + (opened - before) + ' of ' + opened;
+  })()`);
+
+  // The rules sheet, driven through its real path: the card's own door, a
+  // fold taken back, the card's list following it, and the dialog closing.
+  // Every measurement is a SEPARATE await — Svelte flushes on a microtask, so
+  // clicking and counting in one expression reads the DOM as it was before.
+  //
+  // Deliberately UNFOLDS an already-folded rule rather than folding a fresh
+  // one: by default every rule that is off is already folded, and unfolding
+  // touches only `marks.folded`, which the run then puts back.
+  rulesSheet = await win.webContents.executeJavaScript(`(async () => {
+    const beat = () => new Promise((r) => setTimeout(r, 150));
+    const card = document.querySelector('details.panel');
+    const rows = () => card.querySelectorAll('label[class*="rule"]').length;
+    const find = (root, re) => [...root.querySelectorAll('button')].find((b) => re.test(b.textContent));
+
+    const door = find(card, /Choose rules/);
+    if (!door) return 'has no door in the card';
+    door.click();
+    await beat();
+
+    const sheet = document.querySelector('dialog[class*="sheet"]');
+    if (!sheet) return 'is not mounted';
+    if (!sheet.open) return 'did not open';
+    if (sheet.querySelectorAll('tbody tr').length < 31) return 'listed only ' + sheet.querySelectorAll('tbody tr').length + ' rows';
+
+    const before = rows();
+    const box = [...sheet.querySelectorAll('input[type=checkbox][aria-label^="Fold"]')]
+      .find((b) => !b.disabled && b.checked);
+    if (!box) return 'offered no folded rule to bring back';
+    box.click();
+    await beat();
+    const after = rows();
+
+    const drop = find(sheet, /Drop my changes/);
+    if (!drop) return 'never offered to drop the change';
+    drop.click();
+    await beat();
+    const restored = rows();
+
+    find(sheet, /^\s*Done\s*$/).click();
+    await beat();
+
+    if (after !== before + 1) return 'unfolding a rule took the card from ' + before + ' to ' + after;
+    if (restored !== before) return 'dropping the change left ' + restored + ' rules, not ' + before;
+    if (sheet.open) return 'would not close';
+    return 'listed ' + before + ', unfolded to ' + after + ', restored and closed';
+  })()`);
+
   const r = await win.webContents.executeJavaScript(`(${probe.toString()})()`);
 
   const checks = [
@@ -203,6 +277,8 @@ app.whenReady().then(async () => {
     [r.bridged === desktopMode, desktopMode ? 'window.desktop is missing' : 'the artifact should have no bridge'],
     [!desktopMode || /Electron \d/.test(r.footer ?? ''), 'the footer never received app info over IPC'],
     [/\d+ marks? from \d+ rules?/.test(r.marks ?? ''), `the mark panel reads ${JSON.stringify(r.marks)}`],
+    [/^revealed \d+ of \d+$/.test(foldReveal), `the rules card's fold ${foldReveal}`],
+    [/^listed \d+, unfolded to \d+, restored and closed$/.test(rulesSheet), `the rules sheet ${rulesSheet}`],
     // A reading is a sentence about the focused bar, so it must name the bar
     // and say where it sits: anything shorter means a clause silently dropped.
     [/bar|doji|flat/.test(r.reading ?? '') && (r.reading ?? '').length > 20,
@@ -249,7 +325,8 @@ app.whenReady().then(async () => {
       `  ${r.status ?? "?"}` +
       (r.timeframes.length ? `, timeframes ${r.timeframes.join("/")}` : ', no timeframe control') +
       `
-  marks: ${r.marks ?? "?"}, ${r.readingRows} readings` +
+  marks: ${r.marks ?? "?"}, ${r.readingRows} readings, fold ${foldReveal},
+  sheet: ${rulesSheet}` +
       (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),
   );
 

@@ -74,7 +74,7 @@ npm run marks          # metric columns for any span; --check runs invariants
                        #   --read --rolls reads only the contract changes
                        #   --rules / --catalogue / --trades for the marking layer
                        #   --structure adds pivots/trend/pullback, --tune sweeps
-                       #   --rules / --catalogue / --trades, --golden rewrites the fixture
+                       #   --golden rewrites the regression fixture
 npm run marks:check    # the marking layer's regression guard; fails on drift
 npm run smoke          # headless render check of the artifact
 npm run smoke:app      # headless render check of the desktop app
@@ -278,6 +278,7 @@ src/renderer/
     palette.ts                     tone -> token; caution is dashed, not a 4th hue
   lib/components/                Masthead, Controls, Readout, ChartPanel, …
     MarkPanel.svelte               rule toggles, counts, the publish switch
+    RulesSheet.svelte              the fold set as a modal; mounted by App
     MarkingPane.svelte             the tablist; owns the card both views sit in
     MarkList.svelte                view 1 - what is marked; keep / drop / highlight
     ReadingList.svelte             view 2 - one line per session; click to highlight
@@ -297,6 +298,13 @@ the preload and every IPC handler run on their production path. It also asserts
 the readout's **bar reading** and the marking pane's two tabs, because prose
 fails silently — a dropped clause renders as a shorter sentence, never as an
 error, and an empty reading is an empty element.
+
+It also drives the **fold** on both targets: a heading chip has to reveal its
+less-used rules and fold them away again, and the **rules sheet** has to open
+from the card's door, bring a folded rule back into the list, drop that change
+and close. Both are the same class of silent failure — a fold that reveals
+nothing looks exactly like a short list — and both CLICK THEN MEASURE IN A
+SECOND `executeJavaScript`, for the reason the probe note below gives.
 
 **`smoke:app` can print NOTHING and exit 0 — that is a FAILED run, not a pass.**
 [main/index.ts](src/main/index.ts) opens with
@@ -647,6 +655,75 @@ delete that directory first.
 - **A trendline break is measured on the CLOSE, not the extreme.** A wick
   through a trendline is what trendlines are for; counting those as breaks
   rejects every real channel on the chart.
+- **The rules card FOLDS its less-used rules, and `Rule.tier` is the only thing
+  that decides which.** Six carry `tier: 'extra'` today — the five dense bar
+  rules and `pullback-entry`. Absent means core, so a rule opts IN to being
+  quiet and the other twenty-five need no line; nothing in the marking layer
+  reads it, so detection, the counts, `--catalogue` and `marks:check` are
+  untouched. Four things are load-bearing, and each was decided by measuring
+  the alternative in a mock first:
+  - **The control is a CHIP ON THE GROUP HEADING, not a drawer row per group.**
+    The heading already spans the list and already carries the group's name, so
+    `+5 ▾` costs no row; a `▸ 5 less used` row per group spent ~16px each to
+    say what the heading says for free. Measured on the artifact at the pane's
+    642px: 31 rules are 506px of list, 25 are **431px**.
+  - **A folded rule the reader has switched ON is never hidden.** It is
+    promoted into the list, keeping the quieter name so "less used" stays ONE
+    signal rather than two — its ticked box says the rest. Without this the
+    chart wears marks whose toggle is nowhere on the page, which is the mirror
+    of not rendering a control that would not work.
+  - **`tier` is a USAGE decision and `defaultOn` is a DENSITY one, and the two
+    lists are not the same.** `climax` fires once a year and is worth a glance;
+    `shaved` fires 38 times and may never be switched on. They happen to
+    coincide today because the dense rules are also the rarely-consulted ones.
+  - **Open or closed is component `$state`, and the show-all lives in `.top`,
+    not the `<summary>`.** A summary IS a button, so a button inside one is a
+    button inside a button — the constraint that stopped the marking pane's
+    tabs going there. Persisting the open state would freeze today's answer
+    into every settings file, the argument the next note makes.
+  It does NOT make the card fit, and should not be described as if it does: at
+  1904x1015 the list is 431px in a 197px window, so folding about eight more
+  rules is what "fits" would take. `smoke.cjs` asserts the fold reveals and
+  re-folds — measured in a SECOND `executeJavaScript`, because Svelte flushes
+  on a microtask and counting rows in the same expression reports every fold as
+  broken.
+- **The READER can move a rule off its shipped tier, in the rules sheet.**
+  [RulesSheet.svelte](src/renderer/lib/components/RulesSheet.svelte) is a
+  modal `<dialog>` listing all 31 with a `Show` box, a `Fold` box, the outcome
+  in words, and the density figures the card has no room for. Two doors:
+  `Choose rules…` in the card's top row, and Marks ▸ *Choose folded rules…*
+  (no accelerator — Ctrl+R/E/K/0-9 and Ctrl+Shift+E/M are all taken by things
+  used every session). Both verified end to end; the menu one goes over the
+  real `{ kind: 'rules' }` command.
+  - **`settings.marks.folded` is sparse, and `#merge` DELETES from it.** Every
+    other field-wise merge only ever adds, which is fine for `rules`; taking a
+    fold back is a key *going away*, so `folded` compares against the incoming
+    record and drops what is missing. Without that the reader undoes a fold and
+    it comes straight back.
+  - **`app.foldedRules` vs `app.hiddenRules`.** The first is the SETTING (what
+    is marked less-used, on or off) and gives a rule its quieter name; the
+    second is the EFFECT (folded minus enabled) and decides placement. The
+    invariant lives in `hiddenRules` and nowhere else — `MarkPanel` and the
+    sheet both read it rather than testing `rule.tier`.
+  - **The sheet is mounted by `App`, not `MarkPanel`.** The native menu opens
+    the same dialog, and routing that through the card would make a component
+    with nothing to do with menus own the flag. It is a real `<dialog>` +
+    `showModal()`, so the focus trap, Escape, the backdrop and the top layer
+    are the platform's. `onclose` syncs `app.rulesOpen` back — without it
+    Escape leaves the flag set and the sheet never reopens.
+  - **The `Fold` box is DISABLED, not hidden, while a rule is on** (25 of 31
+    by default). An empty cell reads as "cannot be folded"; ticked-and-disabled
+    says "folded, and listed anyway because it is on", and it keeps the
+    preference so switching the rule off later puts it back. The `Where`
+    column states the outcome in words, because two checkboxes have four
+    combinations and only three outcomes.
+  - **The sheet's container tiers are about ROW HEIGHT, not overflow.** The
+    table shrinks rather than scrolling sideways, so the failure mode is names
+    and blurbs wrapping: measured at a 572px sheet with everything on, the
+    name column is 163px and the median row 93px (tallest 143px), which shows
+    six rules instead of fifteen. The blurb therefore goes first and early
+    (700px), the numeric columns at 620px, `Where` at 420px — after which
+    every width from 392px up holds a 32px row.
 - **`settings.marks.rules` is sparse on purpose.** It stores only the ids the
   reader moved off the rule's own `defaultOn`. Persisting all thirty-one booleans
   would freeze today's defaults into every settings file, so a later tightening

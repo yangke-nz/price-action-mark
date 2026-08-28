@@ -125,6 +125,14 @@ export function buildMenu(settings: Settings): void {
               checked: settings.marks.enabled,
               click: () => send({ kind: 'mark', value: '*' }),
             },
+            {
+              // The second door to the sheet. No accelerator: this is a
+              // set-once dialog, and Ctrl+R/E/K/0-9 and Ctrl+Shift+E/M are
+              // taken by things a reader uses every session.
+              label: 'Choose folded rules…',
+              enabled: settings.marks.enabled,
+              click: () => send({ kind: 'rules' }),
+            },
             { type: 'separator' },
             // Built from the registry, so a new rule appears here without
             // this file being touched.

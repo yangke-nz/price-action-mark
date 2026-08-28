@@ -56,6 +56,9 @@ function readStored(): Settings {
         rules: typeof parsed.marks?.rules === 'object' && parsed.marks.rules !== null
           ? parsed.marks.rules
           : {},
+        folded: typeof parsed.marks?.folded === 'object' && parsed.marks.folded !== null
+          ? parsed.marks.folded
+          : {},
       },
       window: DEFAULT_SETTINGS.window,
     };
@@ -71,9 +74,14 @@ function writeStored(next: Settings): void {
     // published — the same sparseness `marks.rules` uses, and for the same
     // reason. Writing it unconditionally would mean the first theme click
     // pinned the current default forever.
+    // `folded` rides along only when the viewer has actually moved a rule off
+    // its shipped tier: an empty record written out would be indistinguishable
+    // from a choice, and the fold set is exactly the thing a republish should
+    // still be able to change.
+    const folds = Object.keys(marks.folded).length > 0 ? { folded: marks.folded } : {};
     const stored = marks.show === publishedDefault
-      ? { enabled: marks.enabled, rules: marks.rules }
-      : marks;
+      ? { enabled: marks.enabled, rules: marks.rules, ...folds }
+      : { ...marks, ...folds };
     localStorage.setItem(KEY, JSON.stringify({ theme, range, showRolls, showEma, marks: stored }));
   } catch {
     /* private window, blocked storage — the setting just does not persist */

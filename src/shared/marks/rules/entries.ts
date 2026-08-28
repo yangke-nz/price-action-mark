@@ -95,6 +95,7 @@ export const PULLBACK_ENTRY: Rule = {
   phrase: 'pullback entry',
   blurb: 'Every counted attempt to resume the trend. Around 1,600 over the series, so it ships off; second-entry is the subset worth watching.',
   defaultOn: false,
+  tier: 'extra',
   detect: (ctx) => pullbackEntries(ctx, 'pullback-entry'),
 };
 
