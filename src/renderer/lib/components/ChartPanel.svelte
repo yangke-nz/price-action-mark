@@ -3,7 +3,7 @@
   import { CandleChart } from '$lib/chart/candles.ts';
   import { RANGES, type AppState } from '$lib/state/app.svelte.ts';
   import type { Dataset, RangeId } from '$shared/types.ts';
-  import { day, price } from '$shared/format.ts';
+  import { barLabel, price } from '$shared/format.ts';
 
   let { app }: { app: AppState } = $props();
 
@@ -43,7 +43,7 @@
     const settings = untrack(() => app.settings);
     instance.setEmaVisible(settings.showEma);
     instance.setRollsVisible(settings.showRolls);
-    instance.showLastDays(daysFor(settings.range));
+    instance.showLastDays(daysFor(untrack(() => app.range)));
     instance.setMarks(untrack(() => app.marks));
     instance.setSelected(untrack(() => app.selectedMark?.id ?? null));
     instance.setFocusBar(untrack(() => app.selectedBarDate));
@@ -65,7 +65,7 @@
     if (!chart || !dataset || dataset === applied) return;
     applied = dataset;
     chart.setData(dataset);
-    chart.showLastDays(daysFor(untrack(() => app.settings.range)));
+    chart.showLastDays(daysFor(untrack(() => app.range)));
   });
 
   // Each of these reads its reactive value into a local BEFORE touching the
@@ -100,7 +100,7 @@
     chart?.setRollsVisible(showRolls);
   });
   $effect(() => {
-    const days = daysFor(app.settings.range);
+    const days = daysFor(app.range);
     chart?.showLastDays(days);
   });
 
@@ -139,7 +139,7 @@
     // region already exists to describe the focused bar in prose, and a
     // sentence about what the bar did belongs in a sentence.
     const reading = app.focusReading ? ` ${app.focusReading.text}.` : '';
-    return `${day(bar.date)}: open ${price(bar.open)}, high ${price(bar.high)}, ` +
+    return `${barLabel(bar.date)}: open ${price(bar.open)}, high ${price(bar.high)}, ` +
       `low ${price(bar.low)}, close ${price(bar.close)}, ` +
       `${move.abs >= 0 ? 'up' : 'down'} ${Math.abs(move.pct).toFixed(2)} percent${gap}` +
       `${bar.isRoll ? '. Contract roll: this change is carry, not a traded move.' : '.'}` +
@@ -158,7 +158,7 @@
   class="chart"
   tabindex="0"
   role="application"
-  aria-label="Candlestick chart of E-Mini S&P 500 futures daily bars. Left and right arrow keys step through sessions and the readout above announces each one. Page Up and Page Down move a month; Home and End jump to the ends. A full data table is available below the chart."
+  aria-label={`Candlestick chart of E-Mini S&P 500 futures, ${app.subjectLabel}. Left and right arrow keys step through bars and the readout above announces each one. Page Up and Page Down move about a month of bars; Home and End jump to the ends. A full data table is available below the chart.`}
   onkeydown={onKeydown}
   onblur={() => { app.clearKeyboard(); chart?.clearCrosshair(); }}
 ></div>

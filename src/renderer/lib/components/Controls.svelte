@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { RANGES, type AppState } from '$lib/state/app.svelte.ts';
+  import { type AppState } from '$lib/state/app.svelte.ts';
   import type { ThemeChoice } from '$shared/types.ts';
+  import { INTERVAL_IDS, INTERVALS } from '$shared/interval.ts';
+  import { SESSIONS, SESSION_IDS } from '$shared/session.ts';
 
   let { app }: { app: AppState } = $props();
 
@@ -12,12 +14,53 @@
 </script>
 
 <div class="controls">
+  <!-- Timeframe first: it decides which range presets exist, so reading left to
+       right matches the order the two choices actually depend on. Only a target
+       that can fetch a second dataset renders it — the artifact carries one
+       snapshot and IS whatever bar size that snapshot holds. -->
+  {#if app.can.timeframes}
+    <div class="seg" role="group" aria-label="Bar size">
+      {#each INTERVAL_IDS as id (id)}
+        <button
+          type="button"
+          title={INTERVALS[id].maxDays === null
+            ? `${INTERVALS[id].label} bars, full history`
+            : `${INTERVALS[id].label} bars — the last ${INTERVALS[id].maxDays} days, which is all this feed keeps`}
+          aria-pressed={app.interval === id}
+          disabled={app.status === 'refreshing'}
+          onclick={() => app.setInterval(id)}
+        >{id === '1d' ? '1D' : id}</button>
+      {/each}
+    </div>
+  {/if}
+
+  <!-- Only on an intraday interval. A daily bar IS a whole session, so there is
+       no window to apply, and a control that cannot do anything is worse than
+       no control. Needs no capability: the filter is a pure transform over the
+       dataset already in hand, so an artifact built from an intraday snapshot
+       offers it too. -->
+  {#if app.intraday}
+    <div class="seg" role="group" aria-label="Session">
+      {#each SESSION_IDS as id (id)}
+        <button
+          type="button"
+          title={SESSIONS[id].title}
+          aria-pressed={app.session === id}
+          onclick={() => app.setSession(id)}
+        >{SESSIONS[id].label}</button>
+      {/each}
+    </div>
+  {/if}
+
+  <!-- The presets come from the interval, not from a fixed list: a 5-year
+       button against a 60-day intraday archive would show the same thing as
+       MAX and imply history that is not there. -->
   <div class="seg" role="group" aria-label="Date range">
-    {#each RANGES as range (range.id)}
+    {#each app.ranges as range (range.id)}
       <button
         type="button"
         title={range.label}
-        aria-pressed={app.settings.range === range.id}
+        aria-pressed={app.range === range.id}
         onclick={() => app.setRange(range.id)}
       >{range.id}</button>
     {/each}

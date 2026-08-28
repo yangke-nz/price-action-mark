@@ -2,7 +2,8 @@
   import { source } from '$source';
   import type { AppInfo } from '$shared/ipc.ts';
   import type { AppState } from '$lib/state/app.svelte.ts';
-  import { day, integer, price, relative, stamp } from '$shared/format.ts';
+  import { barLabel, integer, price, relative, stamp } from '$shared/format.ts';
+  import { specOf } from '$shared/interval.ts';
 
   let { app }: { app: AppState } = $props();
 
@@ -25,7 +26,8 @@
   const coverage = $derived.by(() => {
     const d = app.dataset;
     if (!d || d.d.length === 0) return '';
-    const span = `${integer(d.d.length)} sessions, ${day(d.d[0]!)} to ${day(d.d[d.d.length - 1]!)}`;
+    const span = `${integer(d.d.length)} ${specOf(d).intraday ? 'bars' : 'sessions'}, ` +
+      `${barLabel(d.d[0]!)} to ${barLabel(d.d[d.d.length - 1]!)}`;
     const band = d.w52l != null && d.w52h != null
       ? ` 52-week range ${price(d.w52l)}–${price(d.w52h)}.`
       : '';

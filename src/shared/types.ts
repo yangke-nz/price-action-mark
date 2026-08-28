@@ -9,7 +9,14 @@ export interface Dataset {
   fetched: string;
   w52h: number | null;
   w52l: number | null;
-  /** ISO `YYYY-MM-DD`, ascending, de-duplicated. All six arrays share this index. */
+  /**
+   * The bar key, ascending and de-duplicated. All six arrays share this index.
+   *
+   * `YYYY-MM-DD` for a daily bar, `YYYY-MM-DDTHH:MM:00Z` for an intraday one.
+   * Both are ISO 8601 and therefore sort lexicographically, which is why the
+   * date->index map, the mark ids and the viewport tests did not have to learn
+   * about time — see interval.ts.
+   */
   d: string[];
   o: number[];
   h: number[];
@@ -21,6 +28,15 @@ export interface Dataset {
    *  change crosses contracts is the one after. Every consumer that means
    *  "where the carry is" derives it with `contractStarts()` from rolls.ts. */
   rolls: number[];
+  /**
+   * Bar size. OPTIONAL, and absent means daily.
+   *
+   * Required would invalidate every cached dataset and the committed snapshot,
+   * and `isDataset()` would have to keep accepting the old shape anyway — the
+   * same argument that kept `tick` out of this interface. Read it through
+   * `intervalOf()`, never directly.
+   */
+  interval?: '1d' | '5m';
 }
 
 export interface Bar {
@@ -37,7 +53,9 @@ export interface Bar {
   isRoll: boolean;
 }
 
-export type RangeId = '1M' | '3M' | '6M' | '1Y' | '5Y' | 'MAX';
+/** Viewport presets. Which of these are OFFERED depends on the bar size — a
+ *  5-year button against a 60-day intraday archive is a lie. See interval.ts. */
+export type RangeId = '1D' | '3D' | '1W' | '2W' | '1M' | '3M' | '6M' | '1Y' | '5Y' | 'MAX';
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
 /**
@@ -59,6 +77,12 @@ export interface MarkSettings {
 
 export interface Settings {
   theme: ThemeChoice;
+  /** Bar size. The range below is validated against it on load, because one
+   *  stored range has to serve every timeframe — see `rangeFor()`. */
+  interval: '1d' | '5m';
+  /** Regular or extended hours. Only bites on an intraday interval: a daily
+   *  bar is a whole session, so there is no window to apply. */
+  session: 'eth' | 'rth';
   range: RangeId;
   showRolls: boolean;
   showEma: boolean;

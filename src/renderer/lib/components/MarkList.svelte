@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AppState } from '$lib/state/app.svelte.ts';
   import { MARK_LIST_CAP } from '$lib/state/app.svelte.ts';
-  import { day, integer } from '$shared/format.ts';
+  import { barLabel, integer } from '$shared/format.ts';
 
   let { app }: { app: AppState } = $props();
 
@@ -10,7 +10,7 @@
   /** A mark that needed later bars to confirm is worth flagging: it says the
    *  chart is showing something that was not readable on the day it points at. */
   function lag(at: string, knownAt: string): string {
-    return knownAt === at ? '' : `confirmed ${day(knownAt)}`;
+    return knownAt === at ? '' : `confirmed ${barLabel(knownAt)}`;
   }
 </script>
 
@@ -35,7 +35,7 @@
         {#each rows as mark (mark.id)}
           <tr class:picked={app.selectedMarkId === mark.id}>
             <td class="d">
-              {day(mark.at)}
+              {barLabel(mark.at)}
               {#if lag(mark.at, mark.knownAt)}<span class="lag">{lag(mark.at, mark.knownAt)}</span>{/if}
             </td>
             <td class="label" class:bull={mark.tone === 'bull'} class:bear={mark.tone === 'bear'}>

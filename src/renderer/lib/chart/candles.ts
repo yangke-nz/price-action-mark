@@ -17,6 +17,12 @@
  *  - Markers do not thin themselves. All 104 roll arrows render at MAX zoom
  *    and become a picket fence, so they are dropped below ~18px of separation
  *    and the readout says why.
+ *  - A BAR'S TIME IS TWO DIFFERENT TYPES. lightweight-charts takes a business
+ *    day STRING for a daily series and a UTCTimestamp NUMBER for an intraday
+ *    one, and it is not interchangeable: hand it '2026-08-28T13:45:00Z' and the
+ *    series silently draws nothing. `#timeOf` converts the dataset's key once
+ *    and `#indexOfTime` maps the library's value back, because the crosshair
+ *    hands back whichever type was put in.
  *  - There is ONE marker source and ONE canvas primitive, not one per mark.
  *    Bar labels join the roll arrows in the single marker list so they go
  *    through the same thinning pass, and every line, channel and zone is drawn
@@ -46,13 +52,18 @@ import { readTokens } from './tokens.ts';
 import { EMA_PERIOD, ema } from '../../../shared/indicators.ts';
 import { contractStarts } from '../../../shared/rolls.ts';
 import { tickFor } from '../../../shared/instrument.ts';
+import { epochOf, specOf } from '../../../shared/interval.ts';
 import type { BarMark, Mark } from '../../../shared/marks/types.ts';
 import { MarkPrimitive } from './marks/primitive.ts';
 import { styleFor } from './marks/palette.ts';
 
-/** Quarterly rolls sit about 63 trading days apart. Below this many pixels of
- *  separation the arrows stop reading as annotations and become a fence. */
+/** Below this many pixels of separation the roll arrows stop reading as
+ *  annotations and become a fence. */
 const MARKER_MIN_PX = 18;
+/** Fallback spacing when there are fewer than two rolls to measure: about a
+ *  quarter of daily sessions. Derived from the data where possible, because on
+ *  a 5-minute series a quarter is ~14,000 bars, not 63, and a constant would
+ *  hide every arrow on one interval or none on the other. */
 const SESSIONS_PER_QUARTER = 63;
 /**
  * Bar labels sit on individual sessions rather than a quarter apart, so they
@@ -86,12 +97,12 @@ export interface CandleChartOptions {
 
 /** Only the sessions the average is actually defined for. Sending the warm-up
  *  as zeroes would draw a line diving to the axis for the first 19 bars. */
-function emaPoints(data: Dataset): LineData<Time>[] {
+function emaPoints(data: Dataset, timeOf: (key: string) => Time): LineData<Time>[] {
   const values = ema(data.c, EMA_PERIOD);
   const out: LineData<Time>[] = [];
   for (let i = 0; i < values.length; i++) {
     const value = values[i];
-    if (value !== null && value !== undefined) out.push({ time: data.d[i] as Time, value });
+    if (value !== null && value !== undefined) out.push({ time: timeOf(data.d[i]!), value });
   }
   return out;
 }
@@ -105,7 +116,22 @@ export class CandleChart {
 
   #ema: ISeriesApi<'Line'> | null = null;
   #data: Dataset;
+  /** Bar key -> index. What the primitive resolves a mark's anchor against. */
   #indexOf = new Map<string, number>();
+  /**
+   * The library's own time value -> index, for the crosshair.
+   *
+   * A second map rather than converting back, because the crosshair hands back
+   * whatever type was put in — a string on a daily series and a number on an
+   * intraday one — and reconstructing a key from a number means re-deriving a
+   * format that has to match `keyOf()` exactly. A map cannot drift.
+   */
+  #indexOfTime = new Map<string | number, number>();
+  /** True while the loaded dataset's bars are shorter than a session. */
+  #intraday = false;
+  /** Smallest gap in BARS between consecutive roll markers, for the density
+   *  test. Measured off the data; falls back where there is nothing to measure. */
+  #rollGapBars = SESSIONS_PER_QUARTER;
   #rollMarkers: SeriesMarker<Time>[] = [];
   #emaPoints: LineData<Time>[] = [];
   #showRolls = true;
@@ -177,8 +203,10 @@ export class CandleChart {
     this.setData(data);
 
     this.#chart.subscribeCrosshairMove((param) => {
-      const time = param.time as string | undefined;
-      const hit = time === undefined ? undefined : this.#indexOf.get(time);
+      // Keyed on the library's OWN time value, which is a string on a daily
+      // series and a number on an intraday one.
+      const time = param.time as string | number | undefined;
+      const hit = time === undefined ? undefined : this.#indexOfTime.get(time);
       this.#opts.onHover(hit ?? null);
     });
 
@@ -198,8 +226,19 @@ export class CandleChart {
     this.#chart.timeScale().subscribeVisibleLogicalRangeChange(() => this.#settle());
   }
 
+  /**
+   * A dataset key as the library's time value.
+   *
+   * Daily is a business-day string, intraday a UTCTimestamp in SECONDS. Giving
+   * an intraday series the ISO string draws an empty chart with no error, which
+   * is why this is one function rather than a cast at each of the six call
+   * sites it used to be.
+   */
+  #timeOf = (key: string): Time => (this.#intraday ? (epochOf(key) as unknown as Time) : (key as Time));
+
   setData(data: Dataset): void {
     this.#data = data;
+    this.#intraday = specOf(data).intraday;
     const n = data.d.length;
 
     // A refresh normally brings the same instrument, but the data layer is
@@ -214,32 +253,40 @@ export class CandleChart {
 
     const bars: CandlestickData<Time>[] = new Array(n);
     this.#indexOf = new Map();
+    this.#indexOfTime = new Map();
     for (let i = 0; i < n; i++) {
-      const time = data.d[i] as Time;
+      const key = data.d[i]!;
+      const time = this.#timeOf(key);
       bars[i] = { time, open: data.o[i]!, high: data.h[i]!, low: data.l[i]!, close: data.c[i]! };
-      this.#indexOf.set(data.d[i]!, i);
+      this.#indexOf.set(key, i);
+      this.#indexOfTime.set(time as unknown as string | number, i);
     }
     this.#candles.setData(bars);
 
     // On the contract START, not on `data.rolls`, which holds the expiries.
     // The arrow exists to say "the change into this bar is carry", and that is
     // true of the session after the expiry, never of the expiry itself.
-    this.#rollMarkers = contractStarts(data.d, data.rolls)
-      .filter((i) => i >= 0 && i < n)
-      .map((i) => ({
-        time: data.d[i] as Time,
-        position: 'belowBar' as const,
-        shape: 'arrowUp' as const,
-        color: readTokens().muted,
-        size: 0.6,
-        id: `roll-${data.d[i]}`,
-      }));
+    const starts = contractStarts(data.d, data.rolls).filter((i) => i >= 0 && i < n);
+    this.#rollMarkers = starts.map((i) => ({
+      time: this.#timeOf(data.d[i]!),
+      position: 'belowBar' as const,
+      shape: 'arrowUp' as const,
+      color: readTokens().muted,
+      size: 0.6,
+      id: `roll-${data.d[i]}`,
+    }));
+    // The density floor, measured rather than assumed: on a daily series
+    // consecutive rolls sit ~63 bars apart, on a 5-minute one ~14,000, and a
+    // constant would either hide every arrow or never hide any.
+    let gap = Number.POSITIVE_INFINITY;
+    for (let k = 1; k < starts.length; k++) gap = Math.min(gap, starts[k]! - starts[k - 1]!);
+    this.#rollGapBars = Number.isFinite(gap) ? gap : SESSIONS_PER_QUARTER;
 
-    // The primitive anchors marks on dates and the chart is the only thing
-    // that knows which bar a date is.
+    // The primitive anchors marks on keys and the chart is the only thing that
+    // knows which bar a key is.
     this.#primitive.setIndex(this.#indexOf);
 
-    this.#emaPoints = emaPoints(data);
+    this.#emaPoints = emaPoints(data, this.#timeOf);
     if (this.#ema) this.#ema.setData(this.#emaPoints);
     this.#refreshMarkers();
   }
@@ -286,7 +333,12 @@ export class CandleChart {
         ? width / Math.max(1, range.to - range.from)
         : Number.POSITIVE_INFINITY;
 
-    this.#rollsHidden = this.#showRolls && pxPerBar * SESSIONS_PER_QUARTER < MARKER_MIN_PX;
+    // `#rollMarkers.length > 0` is not redundant: a 60-day intraday window can
+    // contain no quarterly expiry at all, and without it the readout announced
+    // "rolls too dense to mark" about markers that did not exist.
+    this.#rollsHidden = this.#showRolls
+      && this.#rollMarkers.length > 0
+      && pxPerBar * this.#rollGapBars < MARKER_MIN_PX;
     this.#barMarksHidden = this.#barMarkers.length > 0 && pxPerBar < BAR_MARK_MIN_PX;
 
     const out: SeriesMarker<Time>[] = [];
@@ -353,7 +405,7 @@ export class CandleChart {
     this.#barMarkers = this.#barMarks
       .filter((m) => this.#indexOf.has(m.at))
       .map((m) => ({
-        time: m.at as Time,
+        time: this.#timeOf(m.at),
         position: m.placement === 'above' ? ('aboveBar' as const) : ('belowBar' as const),
         shape: 'circle' as const,
         // Constant. Growing the selected one was tried and an `aboveBar`
@@ -400,10 +452,15 @@ export class CandleChart {
       return;
     }
     const last = this.#data.d[n - 1]!;
-    const from = new Date(Date.parse(last + 'T00:00:00Z') - days * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    this.#chart.timeScale().setVisibleRange({ from: from as Time, to: last as Time });
+    // Arithmetic on the INSTANT, not on the string. The old form appended
+    // 'T00:00:00Z' to the last key, which for an intraday key produced
+    // '2026-08-28T13:45:00ZT00:00:00Z' — NaN, and a range request the library
+    // quietly ignores.
+    const fromEpoch = epochOf(last) - days * 86_400;
+    const from = this.#intraday
+      ? (fromEpoch as unknown as Time)
+      : (new Date(fromEpoch * 1000).toISOString().slice(0, 10) as Time);
+    this.#chart.timeScale().setVisibleRange({ from, to: this.#timeOf(last) });
     this.#settle();
   }
 
@@ -411,7 +468,7 @@ export class CandleChart {
   moveCrosshair(index: number): void {
     const d = this.#data;
     const i = Math.min(Math.max(index, 0), d.d.length - 1);
-    this.#chart.setCrosshairPosition(d.c[i]!, d.d[i] as Time, this.#candles);
+    this.#chart.setCrosshairPosition(d.c[i]!, this.#timeOf(d.d[i]!), this.#candles);
   }
 
   clearCrosshair(): void {

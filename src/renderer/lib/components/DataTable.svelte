@@ -7,7 +7,7 @@
 
 <details class="tableview">
   <summary>
-    Data table &mdash; {integer(app.visibleCount)} session{app.visibleCount === 1 ? '' : 's'} in the current viewport
+    Data table &mdash; {integer(app.visibleCount)} {app.intraday ? 'bar' : 'session'}{app.visibleCount === 1 ? '' : 's'} in the current viewport
     {#if app.tableTruncated}<span class="dim">(newest {integer(TABLE_CAP)} listed)</span>{/if}
   </summary>
 
@@ -15,7 +15,12 @@
     <table>
       <thead>
         <tr>
-          <th scope="col">Date</th>
+          <!-- The cell holds the raw bar key, which is an instant on an
+               intraday series — a column labelled "Date" holding
+               `2026-08-28T13:45:00Z` is the same mislabelling the CSV header
+               had. The key stays raw: this table is the data reference, and
+               what it prints should be what a consumer can paste. -->
+          <th scope="col">{app.intraday ? 'Time' : 'Date'}</th>
           <th scope="col">Open</th>
           <th scope="col">High</th>
           <th scope="col">Low</th>

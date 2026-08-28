@@ -12,10 +12,10 @@ function bridge(): NonNullable<Window['desktop']> {
 
 export const source: Source = {
   kind: 'electron',
-  can: { refresh: true, export: true, persist: true, fitWindow: true },
+  can: { refresh: true, export: true, persist: true, fitWindow: true, timeframes: true },
 
-  load: () => bridge().getDataset(),
-  refresh: () => bridge().refreshDataset(),
+  load: (interval) => bridge().getDataset(interval),
+  refresh: (interval) => bridge().refreshDataset(interval),
 
   getSettings: async () => {
     try {

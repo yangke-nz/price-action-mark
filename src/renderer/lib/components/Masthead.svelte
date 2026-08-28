@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppState } from '$lib/state/app.svelte.ts';
-  import { delta, day, price } from '$shared/format.ts';
+  import { barLabel, delta, price } from '$shared/format.ts';
 
   let { app }: { app: AppState } = $props();
 
@@ -16,10 +16,18 @@
       <span>{app.dataset?.currency ?? 'USD'}</span><span class="dot"></span>
       <span>$50 &times; index</span>
     </div>
-    <h1>E-Mini S&amp;P 500 futures, daily bars</h1>
+    <!-- The subject of the chart, which includes the bar size: this said "daily
+         bars" over five-minute candles until the timeframe switch existed. The
+         PRODUCT name lives in <title>, the window title and the footer. -->
+    <h1>E-Mini S&amp;P 500 futures, {app.subjectLabel}</h1>
     <p class="sub">
-      Front-month continuous series. Every candle is one CME session &mdash; open, high, low,
-      settle. Scroll to zoom, drag to pan, arrow keys step the crosshair.
+      Front-month continuous series.
+      {#if app.intraday}
+        Every candle is five minutes of the Globex session, timed in UTC.
+      {:else}
+        Every candle is one CME session &mdash; open, high, low, settle.
+      {/if}
+      Scroll to zoom, drag to pan, arrow keys step the crosshair.
     </p>
   </div>
 
@@ -29,7 +37,7 @@
       <div class="val" class:pos={(move?.abs ?? 0) >= 0} class:neg={(move?.abs ?? 0) < 0}>
         {move ? delta(move.abs, move.pct) : '—'}
       </div>
-      <div class="cap">{last ? day(last.date) : 'last session'}</div>
+      <div class="cap">{last ? barLabel(last.date) : 'last bar'}</div>
     </div>
   </div>
 </header>

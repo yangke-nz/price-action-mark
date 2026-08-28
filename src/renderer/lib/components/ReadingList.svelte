@@ -14,7 +14,7 @@
    */
   import { READING_CAP, type AppState } from '$lib/state/app.svelte.ts';
   import { DEFAULT_STRENGTH } from '$shared/marks/structure.ts';
-  import { integer } from '$shared/format.ts';
+  import { clock, integer } from '$shared/format.ts';
   import Reading from './Reading.svelte';
 
   let { app }: { app: AppState } = $props();
@@ -23,9 +23,18 @@
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  /** `2026-08-27` -> `27 Aug`. The year is a separate sub-label — see below. */
-  function short(iso: string): string {
-    const [, m, d] = iso.split('-');
+  /**
+   * The rail's first line: `27 Aug`, or `13:45` on an intraday bar.
+   *
+   * Intraday rows lead with the TIME. A 5-minute list is nearly all one
+   * session — 223 bars of it — so repeating the date down the rail spends it on
+   * the one thing that is not changing. The date moves to the sub-label, where
+   * the year sits on a daily list, and prints only when the session turns.
+   */
+  function short(key: string): string {
+    const time = clock(key);
+    if (time !== '') return time;
+    const [, m, d] = key.split('-');
     return `${d} ${MONTHS[Number(m) - 1] ?? m}`;
   }
 
@@ -36,21 +45,30 @@
    * it to 11ch on every row to repeat a fact that changes once a year. Printed
    * on the first row and at each turn, as a sub-label under the day, the rail
    * stays 7ch and the year is still never missing from a list that spans one.
+   *
+   * On an intraday list the two swap: the rail is the time and the sub-label is
+   * the date. See `short`.
    */
   function yearTurn(i: number): string {
     const at = rows[i]?.at;
     if (at === undefined) return '';
-    const y = at.slice(0, 4);
-    return i === 0 || rows[i - 1]?.at.slice(0, 4) !== y ? y : '';
+    // Intraday the sub-label is the DAY and turns when the session does; daily
+    // it is the year, which turns once a year. Same rule, different unit: print
+    // it on the first row and wherever it changes.
+    const intraday = clock(at) !== '';
+    const unit = (key: string): string =>
+      intraday ? key.slice(5, 10).replace('-', '/') : key.slice(0, 4);
+    const prev = rows[i - 1]?.at;
+    return i === 0 || prev === undefined || unit(prev) !== unit(at) ? unit(at) : '';
   }
 </script>
 
 {#if rows.length === 0}
-  <p class="empty">No sessions in view.</p>
+  <p class="empty">No bars in view.</p>
 {:else}
   <p class="hint">
     The always-in state and the H/L count are what was readable at that close; a swing pivot
-    is the chart as it now stands, confirmed {DEFAULT_STRENGTH} sessions later.
+    is the chart as it now stands, confirmed {DEFAULT_STRENGTH} bars later.
     {#if app.readingTruncated}<span class="cap">Newest {integer(READING_CAP)} listed.</span>{/if}
   </p>
   <div class="scroll">

@@ -28,10 +28,18 @@
   </div>
 
   <div class="note">
-    <h3>All {integer(app.count)} sessions, always</h3>
+    <h3>All {integer(app.count)} bars, always</h3>
     <p>
-      No aggregation and no downsampling &mdash; every daily bar is loaded and the chart pans
-      across the full history. The range buttons only move the viewport.
+      No aggregation and no downsampling &mdash; every bar the feed has is loaded and the
+      chart pans across the whole span. The range buttons only move the viewport.
+      {#if app.intraday}
+        Intraday is a <b>60-day rolling window</b>: that is the entire archive this feed
+        keeps, not a page of a longer one.
+        {#if app.hiddenBars > 0}
+          <b>RTH</b> is showing the 09:30&ndash;16:15 New York session and holding back
+          {integer(app.hiddenBars)} overnight bars &mdash; switch to ETH for all of them.
+        {/if}
+      {/if}
     </p>
   </div>
 </div>

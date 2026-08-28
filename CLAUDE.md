@@ -1,6 +1,7 @@
 # Price Action Mark — working notes
 
-Price action charting for daily bars. **One Svelte 5 codebase, two build targets:**
+Price action charting, daily and 5-minute. **One Svelte 5 codebase, two build
+targets:**
 an Electron 44 desktop app, and a single self-contained HTML file for publishing.
 Ships with E-Mini S&P 500 futures (`ES=F`) from Yahoo's keyless v8 endpoint; the
 data layer is symbol-generic.
@@ -59,6 +60,7 @@ Everything else is current: Electron 44.0.0, Svelte 5.56.10, lightweight-charts
 ```bash
 npm install            # postinstall fetches the Electron binary
 npm run data           # refresh data/es_data.json from Yahoo    (optional)
+                       #   --interval 5m -> data/es_5m.json (untracked)
 npm run dev            # desktop app, renderer hot-reloads, main restarts
 npm run artifact       # single file -> dist/price_action_mark.html + preview.html
                        #   publish flow: mark up, File > Export marks…,
@@ -66,6 +68,7 @@ npm run artifact       # single file -> dist/price_action_mark.html + preview.ht
 npm run build          # typecheck, then main + preload + renderer -> out/
 npm run pack           # unpacked app -> release/   (dist = installer)
 npm run typecheck      # tsc over node side, svelte-check over the renderer
+npm run csv            # Yahoo -> CSV; --interval 5m writes an instant column
 npm run marks          # metric columns for any span; --check runs invariants
                        #   --read prints the bar-by-bar reading, in words
                        #   --read --rolls reads only the contract changes
@@ -97,9 +100,12 @@ src/renderer/lib/source/
 ```
 
 Each Vite config aliases `$source` to one of the two implementations. The desktop
-app can pull live data, save through a native dialog, persist settings and resize
-its window; the artifact runs under a CSP with no remote origin and a sandbox that
-blocks downloads, so it can do none of those. Components read `source.can.*` and
+app can pull live data, switch timeframe, save through a native dialog, persist
+settings and resize its window; the artifact runs under a CSP with no remote
+origin and a sandbox that blocks downloads, so it can do none of those. Note
+`can.timeframes` needs a SECOND dataset, which is why the artifact lacks it —
+while RTH/ETH needs no capability at all, being a pure transform over the
+dataset already in hand. Components read `source.can.*` and
 **do not render a control that would not work**:
 
 ```svelte
@@ -144,6 +150,16 @@ Break one of these and it fails quietly, not loudly.
 ### Data
 - **`range=max` is broken for `ES=F`** — it returns ~266 near-monthly bars.
   `period1=0` returns the full ~6,550. Never send `range`; always explicit epochs.
+- **INTRADAY IS A ROLLING WINDOW, not a shorter page of the same archive.**
+  Measured against the live endpoint, not read from documentation: `5m` serves
+  the last **60 days** and 422s on anything older — including a 15-day window
+  ending 55 days ago, so the WHOLE request must sit inside the window and there
+  is no paging backwards. `period1=0` is rejected outright, which is why
+  `fetchChart` CLAMPS `start` for an interval with a `maxDays`: a 422 and an
+  empty chart look identical to a reader. For reference, `1m` is different —
+  8 days per request over a ~30-day archive, and that one IS pageable. About
+  19% of a 60-day 5m pull is null closes (2,804 of 14,688); `toRows()` drops
+  them, leaving ~223 bars a session out of a 22.9-hour Globex day.
 - **The series is unadjusted front-month, not back-adjusted.** Real price
   discontinuities at quarterly expiries (`2024-12-23` is +2.77%). A return across
   a roll is carry, not a tradable move — and **the EMA runs straight through and
@@ -160,7 +176,10 @@ Break one of these and it fails quietly, not loudly.
   carry and stays silent on the carry; it was wrong in v2.0.0 and is fixed.
   Measured: 34 of the 37 boundary jumps above 1% fall on the bar *after* the roll
   index, and all 3 that fall on it are exactly those holiday quarters.
-- **Ten sessions print a close outside their own high/low.** Eight are quarterly
+- **Ten DAILY sessions print a close outside their own high/low, and zero
+  intraday bars do** — measured on both. The cause is the quarterly settlement
+  price being stamped onto a daily bar, which is not a thing that happens to a
+  five-minute bar, so the widening in `metrics()` is inert on intraday. Eight are quarterly
   expiries carrying the final settlement price — they are the only closes in the
   series off the 0.25 tick grid — and 2002-01-31 (by 0.5) and 2008-03-18 (by 40)
   are plain dirt. Untreated they push `closePos` past 1 and would fire `shaved`
@@ -218,6 +237,8 @@ scripts/mark-report.ts         the text oracle for the marking rules
 
 src/shared/                    imported by main, renderer AND the CLI scripts
   yahoo.ts                       fetch + normalise; the only network code
+  interval.ts                    bar size: keys, ranges, feed limits
+  session.ts                     RTH/ETH window; the only timezone code
   rolls.ts                       expiry arithmetic + contractStarts()
   indicators.ts                  ema(), atr(), trueRange(); pure series maths
   marks/metrics.ts               per-bar columns every marking rule reads
@@ -327,7 +348,8 @@ in-page snapshot code in a `try/catch` that RETURNS the message, or you get to
 diagnose a blank failure.
 
 **A canvas diff needs a noise floor AND a first-interaction control, or it lies
-twice.** An opacity-0 window is occluded, so the chart's repaint lands on an
+twice — and this has now caught the same wrong conclusion on two different
+features.** An opacity-0 window is occluded, so the chart's repaint lands on an
 erratic animation frame: a fixed 800ms wait measured 7,848 changed pixels on one
 run and **0** on the next for identical code — poll until something moves. And
 the FIRST interaction of any run moves canvases 0, 2 and 4 (the pane, the price
@@ -385,15 +407,21 @@ delete that directory first.
   are dataset detail rather than a chart study. Do not reinstate the pane.
 - **No symbol picker in the UI.** The data layer is symbol-generic —
   `npm run csv -- --symbol ESZ26.CME` works today — but the app charts whatever
-  `data/es_data.json` holds. Adding a picker means an IPC round trip and a cache
-  key per symbol; it is a feature, not a gap.
+  `data/es_data.json` holds. The argument used to be that a picker needs an IPC
+  round trip and a cache key per symbol; the TIMEFRAME switch built exactly that
+  plumbing (a parameter on `getDataset`, a cache file per key, a load-before-
+  commit setter), so a picker is now mostly a matter of following it. Still a
+  feature rather than a gap, but a cheaper one than this note used to claim.
 - **No migration from the old `%APPDATA%/es-futures-chart/`.** The project was
   renamed from *E-Mini Daily Tape*; the old userData directory is orphaned and
   holds only a settings file and a dataset cache, both of which regenerate. Safe
   to delete. Do not write migration code for it.
-- **The masthead H1 names the instrument, not the product.** *"E-Mini S&P 500
-  futures, daily bars"* is the chart's subject; the product name lives in
-  `<title>`, the window title and the footer. That is intentional.
+- **The masthead H1 names the SUBJECT, not the product** — and the bar size is
+  part of the subject. *"E-Mini S&P 500 futures, 5-minute bars, RTH"* is what
+  the chart is of; the product name lives in `<title>`, the window title and
+  the footer. It was hard-coded to *"daily bars"* and said so over five-minute
+  candles until the switch existed, which is why the smoke now asserts the
+  heading and the status line agree about the bar size.
 - **`--threshold warning` on svelte-check is intentional.** Do not relax it to
   make a warning go away.
 - **There is no full-width bar-reading card below the chart.** It shipped that
@@ -403,6 +431,11 @@ delete that directory first.
   rework fixed for the mark list. The list lives in the marking pane and the
   focused bar's reading lives in the readout. Re-adding the card would put the
   reading in two places and bring the fold problem back with it.
+- **No committed intraday snapshot, and no 1-minute timeframe.** A 5m
+  snapshot is a 60-day rolling window — stale in a day, worthless in two months
+  — so `data/es_5m.json` is gitignored and the app fetches it. `1m` is a
+  different shape again (8 days a request over a ~30-day archive, pageable) and
+  would need chunked fetching to be worth anything; it is a feature, not a gap.
 - **The pane's open tab is not persisted.** `settings.marks` is sparse on
   purpose (see below), and storing a tab would freeze today's answer into every
   settings file to save one click.
@@ -535,11 +568,15 @@ delete that directory first.
   primitives share that channel. There is no second gesture: the library's click
   event carries no modifier keys, so Drop stays in the mark list.
 - **Bar labels need ~24px a bar, not 8.** Three-character labels at 11px mono are
-  ~20px wide, so below that adjacent bars' labels overlap into garbage. They
-  therefore only appear at 1M, and the readout says *"zoom in for bar marks"*
-  everywhere else. Marks stacked on ONE bar are fine — the library offsets those.
-- **Density is the design constraint.** `npm run marks -- --catalogue` prints the
-  hit rate per rule. The defaults are budgeted to 0.56 marks per session; a rule
+  ~20px wide, so below that adjacent bars' labels overlap into garbage. The test
+  is PIXELS PER BAR, not the name of a range: on daily that works out to the 1M
+  preset and nothing wider, but 1M of five-minute bars is 6,320 of them, so
+  intraday needs 1D or shorter before a label appears. The readout says *"zoom
+  in for bar marks"* the rest of the time, on either timeframe. Marks stacked on ONE bar are fine — the library offsets those.
+- **Density is the design constraint, and it TRANSFERS.** `npm run marks --
+  --catalogue` prints the hit rate per rule. The defaults are budgeted to 0.56
+  marks a bar on daily — and measured 0.54 on a 60-day 5-minute pull, which is
+  close enough that the budget did not need a second set of numbers. A rule
   firing on 10%+ of bars ships `defaultOn: false` (`trend-bar` alone is 34.5%).
   When a rule looks too eager, tighten the rule before hiding it: `reversal-bar`
   went 22% -> 5.2% by requiring it to actually reverse a 10-session extreme.
@@ -637,6 +674,150 @@ delete that directory first.
   thresholds move; a mark that vanishes today comes back when a tolerance is
   loosened. They cost a few bytes and dropping them would silently discard
   decisions the reader made.
+
+## Timeframes
+
+Two bar sizes: daily, and 5-minute. [interval.ts](src/shared/interval.ts) owns
+everything that depends on which, and the reason the rest of the codebase barely
+changed is one decision.
+
+- **`Dataset.d[i]` IS STILL AN OPAQUE SORTABLE STRING.** A daily bar is
+  `2026-08-28`, an intraday one `2026-08-28T13:45:00Z`. Both are ISO 8601, so
+  `<` and `>` order them, `Map<string, number>` indexes them, `markId(rule, at)`
+  keys a verdict on them, and the viewport test `mk.at >= lo && mk.at <= hi` is
+  untouched. Every consumer that treats a bar's date as a handle rather than a
+  date needed no change at all — the marking layer, the primitive, the mark
+  store, `--read`. Do not "improve" this into a numeric timestamp column.
+- **`Dataset.interval` is OPTIONAL and absent means daily.** Required would
+  invalidate every cached dataset and the committed snapshot, and `isDataset()`
+  would have to keep accepting the old shape anyway — the same argument that
+  kept `tick` out of `Dataset`. Read it through `intervalOf()`.
+- **A BAR'S TIME IS TWO DIFFERENT TYPES TO lightweight-charts**, and it fails
+  silently. Daily takes a business-day STRING, intraday a `UTCTimestamp`
+  NUMBER; hand an intraday series the ISO string and it draws NOTHING, with no
+  error. `candles.ts` converts once in `#timeOf` and keeps a SECOND map,
+  `#indexOfTime`, because the crosshair hands back whichever type went in —
+  reconstructing a key from a number would mean re-deriving `keyOf()`'s format
+  somewhere it could drift.
+- **`showLastDays` does arithmetic on the INSTANT, not the string.** It used to
+  append `'T00:00:00Z'` to the last key, which for an intraday key produces
+  `...13:45:00ZT00:00:00Z` — NaN, and a range request the library ignores.
+- **Rolls are a CALENDAR fact, so `rolls.ts` works off the day part.**
+  `rollIndices` finds the first bar OF that day and `contractStarts` steps to
+  the first bar of the next SESSION, not `i + 1` — five minutes after an expiry
+  is still the expiring contract, and the old form put the carry warning ~223
+  bars early. On a daily series both reduce to exactly what they did before;
+  `marks:check` is what proves that, and it still passes unchanged.
+- **Range presets belong to the interval.** `5Y` against a 60-day archive shows
+  the same thing as `MAX` while implying history that is not there, so
+  `INTERVALS[x].ranges` decides what the control and the menu offer, and
+  `rangeFor()` substitutes the interval's default when a stored range does not
+  apply. Deliberately NOT a range per interval in settings — that would freeze
+  today's preset list into every settings file, the argument `marks.rules`
+  makes for being sparse. The menu's `Ctrl+1..0` number by POSITION in the
+  offered list, so Ctrl+1 is always the shortest range that exists.
+- **The daily userData cache MOVED, and the old file is orphaned.** It was
+  `es_data.json`; it is now `es_daily.json`, because the name is derived from
+  the interval. Every existing install therefore re-fetches once and leaves a
+  dead `es_data.json` behind. Deliberately no migration code, for the same
+  reason there is none for the old `%APPDATA%/es-futures-chart/`: a cache
+  regenerates, and the file is safe to delete.
+- **One cache file per interval, and NO intraday seed.** Sharing a cache would
+  have a 5-minute pull overwrite 26 years of daily bars. `data/es_5m.json` is
+  **gitignored**: an intraday snapshot is a 60-day rolling window, stale within
+  a day and worthless within two months, so the first switch to 5m needs the
+  network and says so if it cannot have it. `data/es_data.json` stays tracked
+  for exactly the opposite reason.
+- **`setInterval` loads BEFORE it commits the setting.** An intraday timeframe
+  can fail (no seed, no network), and committing first would leave the app
+  claiming 5-minute bars while showing daily ones. It also verifies the dataset
+  it got back is the interval it asked for.
+- **`adopt()` drops a push for another interval.** The boot refresh fires for
+  whatever timeframe the window opened on, and the reader can switch before it
+  lands; without the guard it would swap 60 days of 5-minute bars for 26 years
+  of daily ones under them, silently.
+- **The rule dials are in BARS and were swept on daily.** Strength 3,
+  `BREAKOUT_LOOKBACK` 20, `ATR_PERIOD` 20 — none of them say "days", so they
+  run on 5m unchanged, and the density transfers better than expected: a pivot
+  every 6.7 bars against 6.8 daily, and `--check` passes on
+  `data/es_5m.json` including the no-lookahead test. They are still UNVALIDATED
+  at that scale — nobody has swept `--tune` on intraday — so treat the numbers
+  as inherited, not chosen. The golden fixture is daily and `--check` now says
+  so rather than reporting four failures that mean "wrong dataset".
+- **Displayed times are UTC, and the readout says so.** The stored key is UTC
+  and a mark id is built from it, so an exchange-local clock would put a
+  different time in front of the reader than the one in the data, and spread
+  DST arithmetic across the axis, the readout, both lists and the CSV. One
+  clock; the `· 12:17 UTC` in the readout is where it is stated.
+- **Three things the first pass got wrong, all found by probe, none by the
+  typechecker.** The status line said *"Daily bars"* on a 5-minute chart. The
+  readout rendered `28 Aug 202612:17 UTC` — a `margin-left` is not a space, and
+  that element sits in an `aria-live` region. And the readout announced *"rolls
+  too dense to mark"* on a 60-day window containing **no expiry at all**,
+  because the density test never asked whether there were any markers.
+- **`--interval 5m` writes a DIFFERENT file** (`data/es_5m.json`), and the CSV
+  export renames its first column `time`: a spreadsheet reading a column called
+  `date` will parse `2026-08-28T13:45:00Z` as a date and drop the time.
+
+### RTH / ETH
+
+- **[session.ts](src/shared/session.ts) is the ONLY code here that knows about
+  exchange-local time, and that is deliberate.** Everything DISPLAYED is UTC
+  because the stored key is UTC and a mark id is built from it. A session
+  WINDOW is the opposite case: "regular hours" is defined by the exchange in
+  its own clock — 09:30 to 16:15 New York — which is 13:30 UTC in summer and
+  14:30 in winter, so filtering on a UTC clock would shift the window by an
+  hour twice a year. On a 5-minute chart that is twelve bars of the wrong
+  session at one end and twelve missing at the other.
+- **One `Intl` call per SESSION DAY, not per bar.** Measured on a 60-day pull:
+  per-bar `formatToParts` is 50 ms, the per-day offset cache is **3 ms**, and
+  the output is byte-identical. Intl is the only correct way to get a zone
+  offset without shipping a timezone table, and it is slow enough to matter
+  11,609 times. Note the shipped window sits entirely inside EDT (-240
+  everywhere), so nothing in the current data would catch a hard-coded offset:
+  the per-day cache is right by construction, not by test.
+- **It FILTERS the dataset; it does not hide bars on the chart.** `applySession`
+  returns a new `Dataset`, so metrics, structure, ATR, the rules and the
+  readings all see RTH bars only — an RTH chart whose ATR was computed over the
+  overnight is not an RTH chart. The consequence is that bar i-1 to bar i
+  crosses the overnight at a session boundary and `gap` fires there, which is
+  correct and exactly how a daily series already behaves across a night.
+  Measured: 11,609 -> 3,402 bars, **81 a session, every session** (min = median
+  = max), 41 overnight boundaries, and `--check` passes on the filtered series.
+- **`rolls` is REBUILT, not remapped.** The indices are positions in `d` and
+  dropping 71% of the bars moves every one of them.
+- **`app.interval` READS THE DATASET, NOT THE SETTING — and `app.range` is
+  resolved against it.** The setting is a request; the loaded dataset is the
+  answer, and they can legitimately differ. The artifact is the case that
+  proves it: it carries one snapshot, cannot switch and therefore never patches
+  the setting, so an artifact built from a 5-minute snapshot had
+  `settings.interval === '1d'` and told the reader **"Daily bars"** over
+  intraday candles — while the session control, which derives from the dataset,
+  correctly appeared. `range` is resolved the same way, because the artifact
+  never runs settings coercion and a stored `6M` would leave every preset
+  unpressed. Read `app.interval` / `app.range`; `settings.*` is what is on disk.
+  Build an artifact from `data/es_5m.json` before trusting anything here — the
+  daily smoke cannot see this class of bug.
+- **`AppState.dataset` is DERIVED from `#raw` plus the session.** One pull
+  serves both windows, so switching is a re-derive (~70 ms) rather than a round
+  trip, and nothing can hold a dataset that disagrees with the setting. Two
+  places had to learn the difference: `refresh()` compares the new length
+  against `#raw`, not `count`, or an RTH refresh reports having lost 71% of its
+  bars; and `adopt()` compares `#raw.fetched`.
+- **ETH is the default**, because it means "every bar the feed has" and this app
+  does not silently drop 71% of what it pulled — the Notes card says how many
+  bars RTH is holding back for the same reason. RTH is the reader's choice.
+- **The control is intraday-only and needs NO capability.** A daily bar is a
+  whole session, so on daily it is absent rather than present and inert. And
+  the filter is a pure transform over a dataset already in hand, so an artifact
+  built from an intraday snapshot offers it too — unlike the timeframe switch,
+  which needs a second dataset and therefore `can.timeframes`.
+- **The export filename says which window it holds** (`ES_F_5m_rth.csv`),
+  derived from the DATA rather than from settings, so the name stays true if the
+  reader switches before the dialog closes. Two exports of one symbol and
+  interval otherwise differ by 71% of their rows under the same name.
+
+---
 
 ## Bar reading
 
@@ -777,8 +958,8 @@ bar. Every session gets a line.
 ## Direction
 
 The name is the brief: **price action chart drawing and marking.** The charting,
-data, theming, publishing, packaging, the **marking layer** and the **bar
-reading** are done: 31 rules over three groups (special bars, the lines they
+data, theming, publishing, packaging, **two timeframes**, the **marking layer**
+and the **bar reading** are done: 31 rules over three groups (special bars, the lines they
 form, the entries they set up), drawn as one canvas primitive, with the reader's
 keep/drop verdicts persisted per symbol and publishable into the artifact — and
 a line of Brooks prose for every session in view, clickable back to the bar.

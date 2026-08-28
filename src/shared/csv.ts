@@ -1,11 +1,17 @@
 import type { Dataset } from './types.ts';
 import { contractStarts } from './rolls.ts';
+import { specOf } from './interval.ts';
 import type { Row } from './yahoo.ts';
 
 const HEADER = 'date,open,high,low,close,volume';
+/** An intraday row's first column is an ISO instant, not a date, and a
+ *  spreadsheet that reads `date` will parse it as one and drop the time. */
+const HEADER_INTRADAY = 'time,open,high,low,close,volume';
 
-export function rowsToCsv(rows: Row[]): string {
-  const out = [HEADER];
+/** The standalone CSV. `intraday` picks the header, because the row's first
+ *  field is an ISO instant there rather than a date. */
+export function rowsToCsv(rows: Row[], intraday = false): string {
+  const out = [intraday ? HEADER_INTRADAY : HEADER];
   for (const r of rows) {
     out.push(`${r.date},${r.open},${r.high},${r.low},${r.close},${r.volume}`);
   }
@@ -20,7 +26,7 @@ export function rowsToCsv(rows: Row[]): string {
  *  carry — the expiry's own change is an ordinary same-contract move. */
 export function datasetToCsv(ds: Dataset): string {
   const rolls = new Set(contractStarts(ds.d, ds.rolls));
-  const out = [HEADER + ',roll'];
+  const out = [(specOf(ds).intraday ? HEADER_INTRADAY : HEADER) + ',roll'];
   for (let i = 0; i < ds.d.length; i++) {
     out.push(
       `${ds.d[i]},${ds.o[i]},${ds.h[i]},${ds.l[i]},${ds.c[i]},${ds.v[i]},${rolls.has(i) ? 1 : 0}`,
@@ -29,7 +35,7 @@ export function datasetToCsv(ds: Dataset): string {
   return out.join('\n') + '\n';
 }
 
-export function suggestedFilename(symbol: string, ext: 'csv' | 'json'): string {
+export function suggestedFilename(symbol: string, ext: 'csv' | 'json', slug = 'daily'): string {
   const safe = symbol.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'series';
-  return `${safe}_daily.${ext}`;
+  return `${safe}_${slug}.${ext}`;
 }

@@ -5,12 +5,20 @@ import { app } from 'electron';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { MarkSettings, RangeId, Settings, ThemeChoice } from '../shared/types.ts';
+import { INTERVALS, isInterval, rangeFor } from '../shared/interval.ts';
+import { isSession } from '../shared/session.ts';
 
-const RANGES: RangeId[] = ['1M', '3M', '6M', '1Y', '5Y', 'MAX'];
+/** Every preset any interval offers. Which are OFFERED is the renderer's
+ *  business; this only has to refuse a value that is not a preset at all. */
+const RANGES: RangeId[] = [
+  ...new Set(Object.values(INTERVALS).flatMap((spec) => spec.ranges)),
+];
 const THEMES: ThemeChoice[] = ['system', 'light', 'dark'];
 
 export const DEFAULTS: Settings = {
   theme: 'dark',
+  interval: '1d',
+  session: 'eth',
   range: '6M',
   showRolls: true,
   showEma: true,
@@ -59,10 +67,23 @@ function coerce(raw: unknown): Settings {
   if (typeof w['x'] === 'number' && Number.isFinite(w['x'])) win.x = Math.round(w['x'] as number);
   if (typeof w['y'] === 'number' && Number.isFinite(w['y'])) win.y = Math.round(w['y'] as number);
 
+  // The range is validated against the INTERVAL, not just against the list of
+  // presets: one stored range serves every timeframe, so a file written while
+  // on daily can hold `5Y`, which is not a preset the 60-day intraday archive
+  // offers. `rangeFor` substitutes that interval's own default rather than
+  // storing a range per interval — which would freeze today's preset list into
+  // every settings file, the argument `marks.rules` makes for being sparse.
+  const interval = isInterval(v['interval']) ? v['interval'] : DEFAULTS.interval;
+  const stored = RANGES.includes(v['range'] as RangeId) ? (v['range'] as RangeId) : DEFAULTS.range;
+
   return {
     marks: coerceMarks(v['marks']),
     theme: THEMES.includes(v['theme'] as ThemeChoice) ? (v['theme'] as ThemeChoice) : DEFAULTS.theme,
-    range: RANGES.includes(v['range'] as RangeId) ? (v['range'] as RangeId) : DEFAULTS.range,
+    interval,
+    // ETH by default: it means "every bar the feed has", and this app does not
+    // silently drop 71% of what it pulled. RTH is a choice the reader makes.
+    session: isSession(v['session']) ? v['session'] : DEFAULTS.session,
+    range: rangeFor(interval, stored),
     showRolls: v['showRolls'] !== false,
     showEma: v['showEma'] !== false,
     window: win,

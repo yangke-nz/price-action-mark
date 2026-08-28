@@ -121,7 +121,11 @@ function body(ctx: Ctx, i: number): string {
   const { m } = ctx;
   // A doji is a one-bar trading range, so its direction is not worth a word: a
   // two-tick body up says the same thing as a two-tick body down.
-  if (m.range[i] === 0) return 'flat bar, one price all session';
+  // Reachable, and not only in theory: no daily session in 26 years prints a
+  // zero range, but an intraday bar does — the partial bar at the right edge of
+  // a 5m chart routinely has one price. "All session" was wrong for a bar that
+  // is five minutes long.
+  if (m.range[i] === 0) return 'flat bar, a single price';
   if (m.bodyPct[i]! <= DOJI_BODY) return 'doji';
   const dir = m.dir[i]!;
   const way = dir > 0 ? 'bull' : dir < 0 ? 'bear' : 'flat';
@@ -175,7 +179,10 @@ function against(ctx: Ctx, i: number): string[] {
   if (i === 0) return out;
   const hi = m.high[i]!;
   const lo = m.low[i]!;
-  if (hi <= m.high[i - 1]! && lo >= m.low[i - 1]!) out.push('inside the session before');
+  // "the bar before", not "the session before": on an intraday series the
+  // previous bar is five minutes ago, and on a daily one the previous bar IS
+  // the previous session, so bar-relative wording is right for both.
+  if (hi <= m.high[i - 1]! && lo >= m.low[i - 1]!) out.push('inside the bar before');
   else if (hi > m.high[i - 1]! && lo < m.low[i - 1]!) out.push('outside bar, engulfing it');
   if (m.gap[i] === 1) out.push('gapped up clear of the previous range');
   else if (m.gap[i] === -1) out.push('gapped down clear of the previous range');
@@ -253,9 +260,13 @@ function readBar(
   pivot?: 'high' | 'low',
 ): BarReading {
   const { m } = ctx;
-  const size = sizeOf(m.rangeAtr[i]!);
+  // A bar with no range is neither big nor small, and its size is already in
+  // the noun: "small flat bar, a single price, 0.0x ATR" says one thing three
+  // times.
+  const flat = m.range[i] === 0;
+  const size = flat ? '' : sizeOf(m.rangeAtr[i]!);
   const bar = [
-    `${magnitude(m.rangeAtr[i]!)}${body(ctx, i)}`,
+    `${flat ? '' : magnitude(m.rangeAtr[i]!)}${body(ctx, i)}`,
     ...extremes(ctx, i),
     ...(size === '' ? [] : [size]),
     ...against(ctx, i),

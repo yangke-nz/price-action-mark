@@ -17,19 +17,33 @@ import { emptyStore } from '$shared/marks/types.ts';
 import { buildCtx, type Ctx } from '$shared/marks/rule.ts';
 import { RULES, detect } from '$shared/marks/registry.ts';
 import { readAt, readingIndex, type BarReading } from '$shared/marks/reading.ts';
+import { INTERVALS, intervalOf, rangeFor, specOf, type Interval } from '$shared/interval.ts';
+import { SESSIONS, applySession, type Session } from '$shared/session.ts';
 
-/** The table is viewport-scoped, but a MAX viewport is 6,500 rows and nobody
- *  scrolls that. Show the newest slice and say so. */
+/** The table is viewport-scoped, but a MAX viewport is 6,550 rows on daily and
+ *  11,600 on a 60-day 5-minute pull, and nobody scrolls either. Show the newest
+ *  slice and say so. */
 export const TABLE_CAP = 400;
 
 /** The mark list is viewport-scoped too, and for the same reason. */
 export const MARK_LIST_CAP = 200;
 
-/** So is the bar reading, which unlike the other two has a line for EVERY
- *  session in view — a MAX viewport is 6,550 of them. */
+/** So is the bar reading, which unlike the other two has a line for EVERY bar
+ *  in view — a MAX viewport is 6,550 of them on daily, 11,600 intraday. */
 export const READING_CAP = 300;
 
+/**
+ * Every preset, in days. Which are OFFERED is a property of the bar size —
+ * `INTERVALS[x].ranges` — because a 5-year button against a 60-day intraday
+ * archive shows the same thing as MAX while implying history that is not
+ * there. The days are shared: the chart moves a viewport, and a viewport is
+ * measured in time whatever the bars are made of.
+ */
 export const RANGES: { id: RangeId; days: number; label: string }[] = [
+  { id: '1D', days: 1, label: '1 day' },
+  { id: '3D', days: 3, label: '3 days' },
+  { id: '1W', days: 7, label: '1 week' },
+  { id: '2W', days: 14, label: '2 weeks' },
   { id: '1M', days: 31, label: '1 month' },
   { id: '3M', days: 92, label: '3 months' },
   { id: '6M', days: 183, label: '6 months' },
@@ -37,6 +51,11 @@ export const RANGES: { id: RangeId; days: number; label: string }[] = [
   { id: '5Y', days: 1827, label: '5 years' },
   { id: 'MAX', days: Number.POSITIVE_INFINITY, label: 'Full history' },
 ];
+
+export function rangesFor(interval: Interval): { id: RangeId; days: number; label: string }[] {
+  const offered = INTERVALS[interval].ranges;
+  return RANGES.filter((r) => offered.includes(r.id));
+}
 
 export type Status = 'loading' | 'ready' | 'refreshing';
 
@@ -46,7 +65,27 @@ export interface Notice {
 }
 
 export class AppState {
-  dataset = $state<Dataset | null>(null);
+  /**
+   * Exactly what the source returned, before the session window.
+   *
+   * Held separately so RTH/ETH is a re-derive rather than a re-fetch: one
+   * network pull serves both, and switching is the cost of filtering 11,609
+   * bars (3 ms) plus recomputing metrics and rules, not a round trip.
+   */
+  #raw = $state<Dataset | null>(null);
+
+  /**
+   * The series everything else reads — the raw pull reduced to the chosen
+   * session.
+   *
+   * A derived value rather than a stored one, so nothing can hold a dataset
+   * that disagrees with the session setting. Note that this is what the CHART,
+   * the marking layer and the exports all see: an RTH chart whose ATR was
+   * computed over the overnight would not be an RTH chart.
+   */
+  dataset = $derived.by((): Dataset | null =>
+    this.#raw === null ? null : applySession(this.#raw, this.settings.session));
+
   origin = $state<DatasetOrigin>('bundled');
   status = $state<Status>('loading');
   notice = $state<Notice | null>(null);
@@ -413,7 +452,7 @@ export class AppState {
   async boot(): Promise<void> {
     this.#merge(await source.getSettings());
     try {
-      const result = await source.load();
+      const result = await source.load(this.interval);
       this.#apply(result.dataset, result.origin);
       // After the dataset, because the store is keyed by its symbol.
       try {
@@ -433,8 +472,11 @@ export class AppState {
     this.status = 'refreshing';
     this.notice = null;
     try {
-      const result = await source.refresh();
-      const grew = result.dataset.d.length - this.count;
+      const result = await source.refresh(this.interval);
+      // Against the RAW length, not `count`: `count` is post-session-filter, so
+      // comparing the two would report a refresh as having lost 71% of its bars
+      // whenever RTH is on.
+      const grew = result.dataset.d.length - (this.#raw?.d.length ?? 0);
       this.#apply(result.dataset, result.origin);
       this.notice = result.error
         ? { tone: 'error', text: `Refresh failed, showing the ${result.origin}: ${result.error}` }
@@ -455,13 +497,18 @@ export class AppState {
    */
   adopt(result: DatasetResult): void {
     if (this.status === 'refreshing') return;
-    const current = this.dataset;
+    // Not for the timeframe on screen. The boot refresh is fired for whatever
+    // interval the window opened on, and the reader can switch before it
+    // lands; adopting it would swap 60 days of 5-minute bars for 26 years of
+    // daily ones under them, silently.
+    if (intervalOf(result.dataset) !== this.interval) return;
+    const current = this.#raw;
     if (current && current.fetched === result.dataset.fetched) return;
     this.#apply(result.dataset, result.origin);
   }
 
   #apply(dataset: Dataset, origin: DatasetOrigin): void {
-    this.dataset = dataset;
+    this.#raw = dataset;
     this.origin = origin;
     // Indices are positional, so a longer series would leave the crosshair —
     // and the reading list's highlight — pointing at the wrong session.
@@ -484,6 +531,8 @@ export class AppState {
   #merge(next: Partial<Settings>): void {
     const s = this.settings;
     if (next.theme !== undefined && next.theme !== s.theme) s.theme = next.theme;
+    if (next.interval !== undefined && next.interval !== s.interval) s.interval = next.interval;
+    if (next.session !== undefined && next.session !== s.session) s.session = next.session;
     if (next.range !== undefined && next.range !== s.range) s.range = next.range;
     if (next.showRolls !== undefined && next.showRolls !== s.showRolls) s.showRolls = next.showRolls;
     if (next.showEma !== undefined && next.showEma !== s.showEma) s.showEma = next.showEma;
@@ -510,6 +559,104 @@ export class AppState {
     } catch {
       /* persistence is best-effort; the session keeps the change either way */
     }
+  }
+
+  // ---- timeframe ---------------------------------------------------------
+
+  /**
+   * The bar size on screen — read from the DATASET, not from the setting.
+   *
+   * The setting is a request; the loaded dataset is the answer, and the two can
+   * legitimately differ. The artifact is the case that proves it: it carries one
+   * snapshot, cannot switch and therefore never patches the setting, so an
+   * artifact built from a 5-minute snapshot had `settings.interval === '1d'`
+   * and told the reader "Daily bars" over intraday candles. Falls back to the
+   * setting only before the first load, which is what `boot()` asks with.
+   */
+  interval = $derived<Interval>(
+    this.dataset ? intervalOf(this.dataset) : this.settings.interval,
+  );
+
+  /** The presets this bar size offers — see `rangesFor`. */
+  ranges = $derived(rangesFor(this.interval));
+
+  /**
+   * The range actually in force, which is the stored one only if this interval
+   * offers it.
+   *
+   * Resolved here rather than only when settings are coerced, because the
+   * artifact never coerces: a stored `6M` against a 5-minute snapshot would
+   * leave every preset button unpressed and the chart on a range the control
+   * cannot show. Read this; `settings.range` is what is on disk.
+   */
+  range = $derived(rangeFor(this.interval, this.settings.range));
+
+  intervalLabel = $derived(INTERVALS[this.interval].label);
+  /** The adjective form, so `${intervalBars} bars` reads: "5-minute bars", not
+   *  "5 minutes bars". */
+  intervalBars = $derived(INTERVALS[this.interval].bars);
+
+  /** True while the loaded dataset's bars carry a time of day. */
+  intraday = $derived(this.dataset ? specOf(this.dataset).intraday : false);
+
+  /** The session window on screen. Inert on a daily interval, where a bar is a
+   *  whole session — the control hides rather than lying about it. */
+  session = $derived<Session>(this.settings.session);
+  sessionLabel = $derived(SESSIONS[this.session].label);
+
+  /**
+   * What the chart is OF, for the masthead heading and the chart's accessible
+   * name: `daily bars`, or `5-minute bars, RTH`.
+   *
+   * The bar size is part of the subject, so the heading has to carry it — it
+   * read "daily bars" over five-minute candles until the timeframe switch
+   * existed. The product name stays in `<title>` and the footer.
+   *
+   * Declared AFTER `intraday` and `sessionLabel` on purpose: these are class
+   * field initialisers and they run in declaration order, so a derived that
+   * reads a field below it is not untidy, it is broken.
+   */
+  subjectLabel = $derived(
+    `${this.intervalBars.toLowerCase()} bars${this.intraday ? `, ${this.sessionLabel}` : ''}`,
+  );
+
+  /** How many bars the session window is hiding, for the notes card. */
+  hiddenBars = $derived((this.#raw?.d.length ?? 0) - this.count);
+
+  setSession(session: Session): void {
+    if (session === this.session) return;
+    void this.patch({ session });
+  }
+
+  /**
+   * Switch bar size.
+   *
+   * Loads before it commits: an intraday timeframe ships no offline seed, so
+   * the first switch needs the network and can fail. Committing the setting
+   * first would leave the app claiming 5-minute bars while showing daily ones.
+   *
+   * The range is moved with it, because one stored range serves every
+   * timeframe and `5Y` is not a preset a 60-day archive offers.
+   */
+  async setInterval(next: Interval): Promise<void> {
+    if (next === this.interval || !this.can.timeframes || this.status === 'refreshing') return;
+    this.status = 'refreshing';
+    this.notice = null;
+    try {
+      const result = await source.load(next);
+      if (intervalOf(result.dataset) !== next) {
+        throw new Error(`asked for ${next} bars and got ${intervalOf(result.dataset)}`);
+      }
+      this.#apply(result.dataset, result.origin);
+      await this.patch({ interval: next, range: rangeFor(next, this.settings.range) });
+      if (result.error) this.notice = { tone: 'error', text: result.error };
+    } catch (err) {
+      this.notice = {
+        tone: 'error',
+        text: `Could not load ${INTERVALS[next].label.toLowerCase()} bars: ${message(err)}`,
+      };
+    }
+    this.status = 'ready';
   }
 
   setRange(range: RangeId): void { void this.patch({ range }); }

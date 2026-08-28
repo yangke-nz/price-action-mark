@@ -109,8 +109,10 @@ const unavailable = (what: string): never => {
 
 export const source: Source = {
   kind: 'artifact',
-  can: { refresh: false, export: false, persist: true, fitWindow: false },
+  can: { refresh: false, export: false, persist: true, fitWindow: false, timeframes: false },
 
+  // The interval is ignored on purpose: there is exactly one snapshot inlined
+  // at build time, and whatever bar size it holds is what this artifact is.
   load: async () => ({ dataset: bundled, origin: 'bundled' }),
   refresh: async () => unavailable('refresh'),
 

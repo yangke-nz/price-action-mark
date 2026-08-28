@@ -1,12 +1,15 @@
 # Price Action Mark
 
-Price action charting for daily bars — mark up the tape, then publish it. The
+Price action charting, daily and 5-minute — mark up the tape, then publish it. The
 chart reads itself with **29 rules drawn from Al Brooks's price action method**
 (special bars, the lines they form, the entries they set up); you keep the marks
 you agree with, and the confirmed set travels inside a single self-contained
 HTML file. It also **reads the tape in words** — one line of Brooks prose per
 session in view, clickable back to the bar it describes. Ships with E-Mini S&P 500 futures (CME `ES`) from a free, keyless
 source; the data layer is symbol-generic.
+
+Two timeframes — **daily** back to 2000, and the last 60 days of **5-minute**
+bars — from one keyless source.
 
 One Svelte 5 codebase, **two build targets**:
 
@@ -82,8 +85,8 @@ npm run smoke:app      # headless render check of the desktop app
 | `build` | typecheck, then build main + preload + renderer into `out/` |
 | `dist` / `pack` | electron-builder installer / unpacked directory |
 | `artifact` | Vite bundle + [inline-artifact.ts](scripts/inline-artifact.ts) |
-| `data` | Yahoo → `data/es_data.json` (`-- --symbol MES=F`) |
-| `csv` | Yahoo → CSV, any symbol (`-- --symbol ESZ26.CME --out z26.csv`) |
+| `data` | Yahoo → `data/es_data.json` (`-- --symbol MES=F`, `-- --interval 5m`) |
+| `csv` | Yahoo → CSV, any symbol or interval (`-- --interval 5m`) |
 | `marks` | the marking layer's text oracle — see [Marking](#marking) |
 | `marks -- --read` | the bar-by-bar reading in words — see [Reading the bars](#reading-the-bars) |
 | `marks:check` | invariants + the regression fixture; exits non-zero on drift |
@@ -100,6 +103,8 @@ scripts/mark-report.ts      the marking layer's text oracle
 
 src/shared/                 imported by main, renderer AND the CLI scripts
   yahoo.ts                    fetch + normalise; the only network code
+  interval.ts                 bar size: keys, ranges, feed limits
+  session.ts                  RTH/ETH window; the only timezone code
   rolls.ts                    expiry arithmetic + contractStarts()
   indicators.ts               ema(), atr(), trueRange()
   instrument.ts               per-symbol tick size
@@ -138,12 +143,13 @@ src/renderer/
 ## The data
 
 Yahoo Finance's undocumented v8 chart endpoint, symbol `ES=F`. Free, no API
-key, 6,550 daily bars back to 2000-09-18. All of it lives in
+key, 6,550 daily bars back to 2000-09-18 — and, on the intraday timeframe, the
+last 60 days of 5-minute bars. All of it lives in
 [src/shared/yahoo.ts](src/shared/yahoo.ts), which runs unchanged in Node and in
 the Electron main process — both have global `fetch`, and neither is subject to
 CORS.
 
-Three things that cost real time to discover:
+Four things that cost real time to discover:
 
 - **`range=max` is broken for this symbol.** It returns ~266 near-monthly bars.
   `range=10y` gives 2,517; an explicit `period1=0` gives the full 6,593. The
@@ -169,6 +175,39 @@ Licence note: yfinance-style access to this endpoint is personal/research use.
 Yahoo's terms are not a commercial data licence. For anything customer-facing,
 [Databento](https://databento.com/catalog/cme/GLBX.MDP3/futures/ES) is the
 cheapest legitimate CME source.
+
+### Intraday is a rolling window, not a shorter page
+
+Measured against the live endpoint rather than read from documentation:
+
+| interval | works | window | pageable backwards |
+| --- | --- | --- | --- |
+| `1m` | yes | 8 days a request, **~30-day archive** | **yes** |
+| `5m` | yes | **60 rolling days**, 14,688 bars | no |
+| `15m` / `30m` / `1h` | yes | 60 days | — |
+
+The 60 days is the whole archive. A window covering days 60–120 ago returns
+**HTTP 422**, and so does a 15-day window ending 55 days ago — the *entire*
+requested range has to sit inside the window, so there is no walking backwards
+to build history. `period1=0`, the trick that gets the full daily series, is
+rejected outright:
+
+```
+422 — 5m data not available for startTime=969249600 …
+      The requested range must be within the last 60 days.
+```
+
+So `fetchChart` **clamps** `start` for any interval with a `maxDays`, because a
+422 and an empty chart look identical to a reader. Coverage where it exists is
+good: ~223 non-null bars a session out of a 22.9-hour Globex day, with
+`meta.tradingPeriods` present and `includePrePost` making no difference to a
+future. Roughly 19% of a 60-day pull is null closes — 2,804 of 14,688 — which is
+the weekend and holiday gaps, and `toRows()` drops them.
+
+One thing that gets de-duplicated wrongly if you are not careful: `toRows()`
+keys on the **bar**, not the calendar day. Keyed on the day, a 5-minute pull
+collapses 275 bars a session into one, and the guard that exists to drop Yahoo's
+duplicated live bar quietly becomes a downsampler.
 
 ### Where the desktop app gets its bars
 
@@ -346,8 +385,100 @@ exists. The creation effect reads its dependencies through `untrack`, so a
 data refresh calls `setData` instead of tearing the chart down and rebuilding
 it.
 
-No aggregation and no downsampling: all 6,550 sessions are loaded the whole
+No aggregation and no downsampling: every bar the feed has is loaded the whole
 time and the range buttons only move the viewport.
+
+## Two timeframes
+
+Daily, and 5-minute. [interval.ts](src/shared/interval.ts) owns everything that
+depends on which, and the feature is small because of one decision.
+
+**`Dataset.d[i]` stays an opaque, sortable string.** A daily bar is
+`2026-08-28`; a 5-minute bar is `2026-08-28T13:45:00Z`. Both are ISO 8601, so
+`<` and `>` order them, a `Map<string, number>` indexes them, `markId(rule, at)`
+keys a verdict on them, and the viewport test `at >= lo && at <= hi` is
+unchanged. Everything that treats a bar's date as a *handle* rather than a date
+needed no change at all: the whole marking layer, the canvas primitive, the mark
+store, the `--read` oracle. `Dataset.interval` is optional and absent means
+daily, so no cached file and no committed snapshot had to be migrated — the same
+argument that kept `tick` out of `Dataset`.
+
+What genuinely had to learn about time was small:
+
+- **A bar's time is two different types to lightweight-charts, and it fails
+  silently.** Daily takes a business-day string, intraday a `UTCTimestamp`
+  number. Hand an intraday series the ISO string and it draws **nothing**, with
+  no error. One converter, plus a second map from the library's own time value
+  back to an index — the crosshair returns whichever type went in.
+- **`showLastDays` had to do arithmetic on the instant.** It appended
+  `'T00:00:00Z'` to the last key, which intraday produces
+  `…13:45:00ZT00:00:00Z`: NaN, and a range request the library ignores.
+- **Rolls are a calendar fact.** `rollIndices` finds the first bar *of* the
+  expiry day and `contractStarts` steps to the first bar of the next *session*,
+  not `i + 1` — five minutes after an expiry is still the expiring contract, and
+  the old form put the carry warning ~223 bars early. On a daily series both
+  reduce to exactly what they did before, which `npm run marks:check` proves by
+  still passing unchanged.
+- **Range presets belong to the interval.** `5Y` against a 60-day archive shows
+  the same thing as `MAX` while implying history that is not there, so the
+  control, the menu and `Ctrl+1..0` all come from `INTERVALS[x].ranges`, and a
+  stored range that does not apply falls back to that interval's default rather
+  than being stored per interval.
+
+The marking layer runs on 5-minute bars **unchanged**, because none of its dials
+say "days": strength 3, `BREAKOUT_LOOKBACK` 20, `ATR_PERIOD` 20. The density
+transfers better than expected — a pivot every 6.7 bars against 6.8 on daily —
+and `npm run marks -- --check --file data/es_5m.json` passes, including the
+no-lookahead test that rebuilds structure from a truncated series. They are
+still *inherited* rather than chosen: nobody has swept `--tune` at that scale.
+One clause did have to change, and only because intraday reached it: no daily
+session in 26 years prints a zero range, but the partial bar at the right edge of
+a 5-minute chart routinely does, and it used to read *"one price all session"*.
+
+### Regular against extended hours
+
+Intraday adds an **RTH / ETH** switch. ETH is every bar the feed has — the
+near-24-hour Globex session — and RTH is 09:30 to 16:15 New York, the contract's
+own regular hours and the session Brooks reads. Measured: 11,609 bars become
+**3,402**, at exactly **81 a session, every session** (min = median = max).
+
+[session.ts](src/shared/session.ts) is the only code in the project that knows
+about exchange-local time, and that is the point. Everything *displayed* is UTC
+because the stored key is UTC and mark ids are built from it. A session *window*
+is the opposite case: regular hours are defined in the exchange's own clock,
+which is 13:30 UTC in summer and 14:30 in winter, so filtering on a UTC clock
+would shift the window by an hour twice a year — twelve bars of the wrong session
+at one end and twelve missing at the other. It costs one `Intl` call per session
+day rather than per bar: **3 ms against 50 ms**, byte-identical output.
+
+It **filters the dataset** rather than hiding bars on the chart, so the ATR, the
+pivots, the rules and the readings all see RTH bars only — an RTH chart whose ATR
+was computed over the overnight is not an RTH chart. The consequence is that a
+session boundary is now a gap in the series and `gap` fires there, which is
+correct and exactly how a daily chart already behaves across a night. `npm run
+marks -- --check` passes on the filtered series.
+
+One trap worth naming, because only the *artifact* exposes it: the bar size on
+screen is read from the **dataset**, not from the setting. The artifact carries
+one snapshot, cannot switch, and so never patches `settings.interval` — an
+artifact built from a 5-minute snapshot said **"Daily bars"** over intraday
+candles, while the session control (which does read the dataset) correctly
+appeared beside it. The range preset is resolved the same way, since the artifact
+never runs settings coercion. Build one from `data/es_5m.json` before trusting
+that path; a daily smoke cannot see it.
+
+ETH is the default, because it means "every bar the feed has" and this app does
+not silently drop 71% of what it pulled; the Notes card reports how many bars RTH
+is holding back. Switching is a re-derive of one pull — no round trip — and the
+control is absent on daily, where a bar is already a whole session.
+
+Two operational notes. `data/es_5m.json` is **gitignored** — a 60-day rolling
+window is stale in a day and worthless in two months, so the first switch to 5m
+needs the network, while `data/es_data.json` stays tracked for exactly the
+opposite reason. And every displayed time is **UTC**, stated as such in the
+readout: the stored key is UTC and a mark id is built from it, so an
+exchange-local clock would show a different time than the one in the data and
+spread DST arithmetic across the axis, the readout, both lists and the CSV.
 
 ## Marking
 
@@ -447,7 +578,8 @@ everywhere.
 
 `trend-bar` fires on 34.5% of all sessions and `doji` on 27.2%; a chart wearing
 every label is strictly less readable than one wearing none. The shipped
-defaults are budgeted to **0.56 marks per session**, and
+defaults are budgeted to **0.56 marks a bar** — measured at 0.54 on a 60-day
+5-minute pull, close enough that intraday needed no second budget — and
 `npm run marks -- --catalogue` prints the hit rate per rule so the budget is
 checkable rather than felt.
 

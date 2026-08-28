@@ -1,6 +1,6 @@
 <script lang="ts">
   import { TABLE_CAP, type AppState } from '$lib/state/app.svelte.ts';
-  import { day, delta, integer, price, signedPct, volume } from '$shared/format.ts';
+  import { clock, day, delta, integer, price, signedPct, volume } from '$shared/format.ts';
   import Reading from './Reading.svelte';
 
   let { app }: { app: AppState } = $props();
@@ -12,7 +12,10 @@
    *  chart cannot show about itself: how much is off-screen, and whether the
    *  roll markers were suppressed. */
   const status = $derived.by(() => {
-    const parts = [`Daily bars · ${integer(app.visibleCount)} in view`];
+    const parts = [
+      `${app.intervalBars} bars${app.intraday ? ` · ${app.sessionLabel}` : ''}` +
+      ` · ${integer(app.visibleCount)} in view`,
+    ];
     if (app.tableTruncated) parts.push(`table capped at ${integer(TABLE_CAP)}`);
     if (app.viewport.rollsHidden) parts.push('rolls too dense to mark');
     // Bar labels vanish below 8px a bar, which from the chart alone is
@@ -24,8 +27,15 @@
 
 <div class="readout" aria-live="polite" aria-atomic="true">
   <div class="figures">
+    <!-- The full date AND the time, with the zone stated. Every displayed
+         time in this app is UTC because the stored bar key is UTC and a mark
+         id is built from it; a local clock in front of the reader would not be
+         the clock in the data. Stated here, where there is room, rather than in
+         the dense lists. -->
     <span class="date">
-      {bar ? day(bar.date) : '—'}{#if bar?.isRoll}<span class="rollflag">&nbsp;·&nbsp;ROLL</span>{/if}
+      {bar ? day(bar.date) : '—'}{#if bar}{@const t = clock(bar.date)}{#if t}<span class="at"
+        >&nbsp;·&nbsp;{t} UTC</span>{/if}{/if}{#if bar?.isRoll}<span class="rollflag"
+        >&nbsp;·&nbsp;ROLL</span>{/if}
     </span>
     <span class="f">O <b>{price(bar?.open)}</b></span>
     <span class="f">H <b>{price(bar?.high)}</b></span>
@@ -95,6 +105,10 @@
   }
 
   .date { min-width: 9.5ch; font-weight: 600; color: var(--ink); letter-spacing: 0.01em; }
+  /* The time qualifies the date rather than competing with it. The separator is
+     a real character, not a margin: this sits in an aria-live region, and a
+     margin left "28 Aug 202612:17" for anything reading the text. */
+  .at { font-weight: 500; color: var(--ink-2); }
   .rollflag { color: var(--muted); font-weight: 500; }
   .f { display: inline-flex; gap: 5px; color: var(--muted); }
   .f b { font-weight: 600; color: var(--ink-2); }

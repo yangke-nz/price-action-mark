@@ -5,9 +5,15 @@ import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from
 import { toggleVerticalMaximize } from './window.ts';
 import { CH, type Command } from '../shared/ipc.ts';
 import type { RangeId, Settings } from '../shared/types.ts';
+import { INTERVAL_IDS, INTERVALS } from '../shared/interval.ts';
+import { SESSIONS, SESSION_IDS } from '../shared/session.ts';
 import { RULES } from '../shared/marks/registry.ts';
 
-const RANGES: RangeId[] = ['1M', '3M', '6M', '1Y', '5Y', 'MAX'];
+/** The presets for the timeframe the window is on. Offering all of them would
+ *  put a 5-year item on a menu for a 60-day archive. */
+function rangesFor(settings: Settings): RangeId[] {
+  return [...INTERVALS[settings.interval].ranges];
+}
 const isMac = process.platform === 'darwin';
 
 function send(command: Command): void {
@@ -53,12 +59,38 @@ export function buildMenu(settings: Settings): void {
       label: '&View',
       submenu: [
         {
+          label: 'Timeframe',
+          submenu: INTERVAL_IDS.map((id) => ({
+            label: INTERVALS[id].label,
+            type: 'radio' as const,
+            checked: settings.interval === id,
+            click: () => send({ kind: 'interval', value: id }),
+          })),
+        },
+        {
+          label: 'Session',
+          // Disabled rather than hidden on a daily interval: the item is part
+          // of the menu's shape, and a menu that changes length as you switch
+          // timeframe is harder to learn than one greyed item.
+          enabled: settings.interval !== '1d',
+          submenu: SESSION_IDS.map((id) => ({
+            label: `${SESSIONS[id].label} — ${SESSIONS[id].title.split(' — ')[1] ?? ''}`.trim(),
+            type: 'radio' as const,
+            checked: settings.session === id,
+            enabled: settings.interval !== '1d',
+            click: () => send({ kind: 'session', value: id }),
+          })),
+        },
+        {
           label: 'Range',
-          submenu: RANGES.map((id) => ({
+          submenu: rangesFor(settings).map((id, i) => ({
             label: id,
             type: 'radio' as const,
             checked: settings.range === id,
-            accelerator: id === 'MAX' ? 'CmdOrCtrl+0' : `CmdOrCtrl+${RANGES.indexOf(id) + 1}`,
+            // Numbered by POSITION in this interval's list, so Ctrl+1 is always
+            // the shortest range offered rather than a preset that may not be
+            // on the menu at all.
+            accelerator: id === 'MAX' ? 'CmdOrCtrl+0' : `CmdOrCtrl+${i + 1}`,
             click: () => send({ kind: 'range', value: id }),
           })),
         },

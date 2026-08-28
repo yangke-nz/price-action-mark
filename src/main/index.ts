@@ -10,6 +10,8 @@ import type { MarkStore } from '../shared/marks/types.ts';
 import { coerceStore } from '../shared/marks/types.ts';
 import { datasetToCsv, suggestedFilename } from '../shared/csv.ts';
 import { isDataset } from '../shared/yahoo.ts';
+import { isInterval, specOf } from '../shared/interval.ts';
+import { SESSIONS, inRth } from '../shared/session.ts';
 import * as datasetStore from './dataset.ts';
 import * as settingsStore from './settings.ts';
 import * as markStore from './marks.ts';
@@ -109,11 +111,26 @@ async function saveMarksDialog(store: MarkStore): Promise<SaveResult> {
   return { status: 'saved', path: filePath };
 }
 
+/**
+ * `5m_rth` rather than `5m`, when that is what the file holds.
+ *
+ * The dataset handed over is the one on screen, already session filtered, so two
+ * exports of the same symbol and interval can differ by 71% of their rows.
+ * Derived from the DATA rather than from settings, so the name stays true to the
+ * file even if the reader switches timeframe before the dialog closes.
+ */
+function slugFor(dataset: Dataset): string {
+  const spec = specOf(dataset);
+  if (!spec.intraday) return spec.slug;
+  const everyBarIsRth = dataset.d.every((key) => inRth(key));
+  return `${spec.slug}_${everyBarIsRth ? SESSIONS.rth.slug : SESSIONS.eth.slug}`;
+}
+
 async function saveDialog(dataset: Dataset, ext: 'csv' | 'json'): Promise<SaveResult> {
   if (!mainWindow) return { status: 'canceled' };
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: ext === 'csv' ? 'Export daily bars as CSV' : 'Export dataset as JSON',
-    defaultPath: suggestedFilename(dataset.symbol, ext),
+    title: ext === 'csv' ? 'Export bars as CSV' : 'Export dataset as JSON',
+    defaultPath: suggestedFilename(dataset.symbol, ext, slugFor(dataset)),
     filters: [
       ext === 'csv'
         ? { name: 'Comma-separated values', extensions: ['csv'] }
@@ -129,8 +146,13 @@ async function saveDialog(dataset: Dataset, ext: 'csv' | 'json'): Promise<SaveRe
 }
 
 function registerIpc(): void {
-  ipcMain.handle(CH.datasetGet, () => datasetStore.warm());
-  ipcMain.handle(CH.datasetRefresh, () => datasetStore.refresh());
+  // The interval arrives from the renderer and is validated here rather than
+  // trusted: everything over the bridge is untrusted input, and an unknown
+  // value would index INTERVALS with undefined.
+  ipcMain.handle(CH.datasetGet, (_e, interval: unknown) =>
+    datasetStore.warm(isInterval(interval) ? interval : '1d'));
+  ipcMain.handle(CH.datasetRefresh, (_e, interval: unknown) =>
+    datasetStore.refresh(isInterval(interval) ? interval : '1d'));
 
   ipcMain.handle(CH.settingsGet, () => settingsStore.load());
   ipcMain.handle(CH.settingsPatch, (_event, patch: Partial<Settings>) => {
@@ -202,9 +224,13 @@ void app.whenReady().then(() => {
   // Only the boot refresh broadcasts. A refresh the user asked for returns
   // through its own IPC call, and pushing that one too would apply the same
   // dataset twice and reset the crosshair under them.
+  // On whatever timeframe the window opened, which is the one the reader left
+  // it on. Refreshing daily while they are looking at 5-minute bars would push
+  // a dataset the renderer has to discard.
+  const booted = settingsStore.load().interval;
   void datasetStore
-    .warm()
-    .then(() => datasetStore.refresh())
+    .warm(booted)
+    .then(() => datasetStore.refresh(booted))
     .then((result) => {
       if (result.origin !== 'network') return;   // nothing new arrived
       for (const win of BrowserWindow.getAllWindows()) {

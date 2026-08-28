@@ -31,9 +31,36 @@ export function volume(v: number | null | undefined): string {
 /** `2024-12-23` -> `23 Dec 2024`. Deliberately not `toLocaleDateString`:
  *  the readout is tabular-numeric and must not reflow with the locale. */
 export function day(iso: string): string {
-  const [y, m, d] = iso.split('-');
+  const [y, m, d] = iso.slice(0, 10).split('-');
   if (!y || !m || !d) return iso;
   return `${d} ${MONTHS[Number(m) - 1] ?? m} ${y}`;
+}
+
+/**
+ * The time of day in a bar key, or `''` for a daily bar.
+ *
+ * UTC, and every displayed time in this app is UTC for one reason: the stored
+ * key is UTC, and a mark id is built from that key. Rendering exchange-local
+ * time would put a different clock in front of the reader than the one in the
+ * data, and would spread DST arithmetic across the axis, the readout, the two
+ * lists and the CSV. One clock, stated where there is room to state it.
+ */
+export function clock(key: string): string {
+  return key.length > 10 ? key.slice(11, 16) : '';
+}
+
+/**
+ * What a bar is called: `23 Dec 2024`, or `23 Dec 13:45` intraday.
+ *
+ * The year goes when a time arrives — an intraday archive is 60 days deep, so
+ * the year is never in question, and the two together are too wide for a
+ * table cell.
+ */
+export function barLabel(key: string): string {
+  const time = clock(key);
+  if (time === '') return day(key);
+  const [, m, d] = key.slice(0, 10).split('-');
+  return `${d} ${MONTHS[Number(m) - 1] ?? m} ${time}`;
 }
 
 export function signed(v: number): string {

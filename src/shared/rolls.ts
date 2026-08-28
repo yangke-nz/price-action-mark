@@ -1,3 +1,5 @@
+import { dayOf } from './interval.ts';
+
 /** Quarterly ES contracts expire on the third Friday of Mar/Jun/Sep/Dec. */
 export function thirdFriday(year: number, month1to12: number): string {
   const first = Date.UTC(year, month1to12 - 1, 1);
@@ -11,13 +13,31 @@ export function isoDay(msUtc: number): string {
 }
 
 /**
- * Indices of the first session on/after each quarterly expiry — the bars where
- * the stitched front-month series changes contract. The price gap across one of
- * these is carry, not a move anybody could have traded.
+ * The FIRST bar of each calendar day, by day.
+ *
+ * On a daily series that is one entry per bar and this is an identity map. On
+ * an intraday one it is the session's opening bar, which is what every
+ * contract-roll question is actually asking about: a roll is a calendar fact,
+ * and "the first bar on or after the expiry" means the first bar of that
+ * session, not whichever five minutes happens to match a date string.
  */
-export function rollIndices(days: string[]): number[] {
+function firstBarOfDay(keys: readonly string[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (let i = 0; i < keys.length; i++) {
+    const day = dayOf(keys[i]!);
+    if (!out.has(day)) out.set(day, i);
+  }
+  return out;
+}
+
+/**
+ * Indices of the first bar on/after each quarterly expiry — where the stitched
+ * front-month series changes contract. The price gap across one of these is
+ * carry, not a move anybody could have traded.
+ */
+export function rollIndices(days: readonly string[]): number[] {
   if (days.length === 0) return [];
-  const indexOf = new Map(days.map((d, i) => [d, i]));
+  const indexOf = firstBarOfDay(days);
   const firstYear = Number(days[0]!.slice(0, 4));
   const lastYear = Number(days[days.length - 1]!.slice(0, 4));
 
@@ -59,11 +79,25 @@ export function rollIndices(days: string[]): number[] {
 export function contractStarts(days: readonly string[], rolls: readonly number[]): number[] {
   const out: number[] = [];
   for (const i of rolls) {
-    const day = days[i];
-    if (day === undefined) continue;
+    const key = days[i];
+    if (key === undefined) continue;
+    const day = dayOf(key);
     const settledThatDay = day === thirdFriday(Number(day.slice(0, 4)), Number(day.slice(5, 7)));
-    const start = settledThatDay ? i + 1 : i;
-    if (start < days.length) out.push(start);
+    // "The next bar" on a daily series; "the first bar of the next session" on
+    // an intraday one. The carry appears across the SESSION boundary — five
+    // minutes after the expiry's close is still the expiring contract, and
+    // flagging that bar would put the warning ~275 bars early.
+    const start = settledThatDay ? nextSession(days, i) : i;
+    if (start !== null && start < days.length) out.push(start);
   }
   return out;
+}
+
+/** The first bar belonging to a later calendar day than bar `i`. */
+function nextSession(days: readonly string[], i: number): number | null {
+  const day = dayOf(days[i]!);
+  for (let k = i + 1; k < days.length; k++) {
+    if (dayOf(days[k]!) !== day) return k;
+  }
+  return null;
 }

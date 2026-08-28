@@ -10,8 +10,8 @@ import type { Dataset, DatasetResult, Settings } from '../shared/types.ts';
 import type { MarkStore } from '../shared/marks/types.ts';
 
 const api: DesktopApi = {
-  getDataset: () => ipcRenderer.invoke(CH.datasetGet) as Promise<DatasetResult>,
-  refreshDataset: () => ipcRenderer.invoke(CH.datasetRefresh) as Promise<DatasetResult>,
+  getDataset: (interval) => ipcRenderer.invoke(CH.datasetGet, interval) as Promise<DatasetResult>,
+  refreshDataset: (interval) => ipcRenderer.invoke(CH.datasetRefresh, interval) as Promise<DatasetResult>,
 
   getSettings: () => ipcRenderer.invoke(CH.settingsGet) as Promise<Settings>,
   patchSettings: (patch) => ipcRenderer.invoke(CH.settingsPatch, patch) as Promise<Settings>,

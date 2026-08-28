@@ -54,6 +54,8 @@
         case 'refresh':     void app.refresh(); break;
         case 'theme':       app.setTheme(command.value); break;
         case 'range':       app.setRange(command.value); break;
+        case 'interval':    void app.setInterval(command.value); break;
+        case 'session':     app.setSession(command.value); break;
         case 'toggle':      command.value === 'rolls' ? app.toggleRolls() : app.toggleEma(); break;
         case 'mark':        command.value === '*' ? app.toggleMarks() : app.toggleRule(command.value); break;
         case 'export':      void app.exportAs(command.value); break;

@@ -35,6 +35,7 @@ import { structure, type Structure } from '../src/shared/marks/structure.ts';
 import { buildCtx } from '../src/shared/marks/rule.ts';
 import { RULES, defaultEnabled, detect } from '../src/shared/marks/registry.ts';
 import { phraseOf, readAt, readingIndex, readings } from '../src/shared/marks/reading.ts';
+import { intervalOf, specOf } from '../src/shared/interval.ts';
 import { walkForward, type TradePlan } from '../src/shared/marks/trade.ts';
 import type { Dataset } from '../src/shared/types.ts';
 
@@ -503,7 +504,7 @@ function catalogue(): void {
   }
   lines.push('-'.repeat(head.length));
   lines.push(`${padr('shipped on by default', 27)}${pad(String(shipped), 7)}` +
-    `${pad((shipped / data.d.length).toFixed(2), 8)}   marks per session`);
+    `${pad((shipped / data.d.length).toFixed(2), 8)}   marks per bar`);
   process.stdout.write(lines.join('\n') + '\n');
 }
 
@@ -705,6 +706,19 @@ async function checkGolden(fails: string[], notes: string[]): Promise<void> {
     golden = JSON.parse(await readFile(GOLDEN, 'utf8')) as Golden;
   } catch {
     notes.push('no fixture yet — run `npm run marks -- --golden` to record one');
+    return;
+  }
+
+  // The fixture is a DAILY fixture: its hand-picked patterns are dates in the
+  // daily series and its counts are counts of daily bars. Run against an
+  // intraday file it reported four failures that meant only "this is not that
+  // dataset" — so say that instead, the same way a refreshed series reports
+  // drift rather than failing.
+  if (intervalOf(data) !== '1d') {
+    notes.push(
+      `fixture not compared: it holds the daily series, this file is ` +
+      `${intervalOf(data)} (${data.d.length} bars to ${data.d[data.d.length - 1]})`,
+    );
     return;
   }
 

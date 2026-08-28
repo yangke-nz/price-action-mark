@@ -2,6 +2,8 @@
  *  The preload exposes exactly `DesktopApi` on `window.desktop`; nothing else
  *  crosses the bridge, and the renderer has no Node access at all. */
 import type { Dataset, DatasetResult, Settings } from './types.ts';
+import type { Interval } from './interval.ts';
+import type { Session } from './session.ts';
 import type { MarkStore } from './marks/types.ts';
 
 export const CH = {
@@ -26,6 +28,8 @@ export type Command =
   | { kind: 'refresh' }
   | { kind: 'theme'; value: Settings['theme'] }
   | { kind: 'range'; value: Settings['range'] }
+  | { kind: 'interval'; value: Interval }
+  | { kind: 'session'; value: Session }
   | { kind: 'toggle'; value: 'rolls' | 'ema' }
   /** A rule id, or '*' for the whole marking layer. */
   | { kind: 'mark'; value: string }
@@ -47,8 +51,11 @@ export interface AppInfo {
 }
 
 export interface DesktopApi {
-  getDataset(): Promise<DatasetResult>;
-  refreshDataset(): Promise<DatasetResult>;
+  /** The bar size is a parameter, not a setting main reads for itself: the
+   *  renderer owns which timeframe is on screen, and main caches one dataset
+   *  per interval so switching back is free. */
+  getDataset(interval: Interval): Promise<DatasetResult>;
+  refreshDataset(interval: Interval): Promise<DatasetResult>;
   getSettings(): Promise<Settings>;
   patchSettings(patch: Partial<Settings>): Promise<Settings>;
   exportCsv(dataset: Dataset): Promise<SaveResult>;

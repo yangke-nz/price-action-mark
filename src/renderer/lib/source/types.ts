@@ -12,6 +12,7 @@
  */
 import type { AppInfo, Command, SaveResult } from '../../../shared/ipc.ts';
 import type { Dataset, DatasetResult, Settings } from '../../../shared/types.ts';
+import type { Interval } from '../../../shared/interval.ts';
 import type { MarkStore } from '../../../shared/marks/types.ts';
 
 export interface Capabilities {
@@ -23,6 +24,16 @@ export interface Capabilities {
   persist: boolean;
   /** There is a real OS window to resize. */
   fitWindow: boolean;
+  /**
+   * Can change the bar size on demand.
+   *
+   * Not the same thing as `refresh`, even though only a target that can refresh
+   * can currently do it — the artifact carries ONE snapshot inlined at build
+   * time, so it displays whatever interval that snapshot holds and has no
+   * second one to switch to. An artifact built from a 5-minute snapshot is a
+   * 5-minute chart; it simply cannot become a daily one.
+   */
+  timeframes: boolean;
 }
 
 // Note there is no `markSets` capability. Both targets persist verdicts — the
@@ -35,8 +46,10 @@ export interface Source {
   readonly kind: 'electron' | 'artifact';
   readonly can: Capabilities;
 
-  load(): Promise<DatasetResult>;
-  refresh(): Promise<DatasetResult>;
+  /** The bar size to load. A target that cannot switch timeframe ignores it
+   *  and returns the snapshot it was built with — see `can.timeframes`. */
+  load(interval: Interval): Promise<DatasetResult>;
+  refresh(interval: Interval): Promise<DatasetResult>;
 
   getSettings(): Promise<Settings>;
   patchSettings(patch: Partial<Settings>): Promise<Settings>;
@@ -59,6 +72,8 @@ export interface Source {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
+  interval: '1d',
+  session: 'eth',
   range: '6M',
   showRolls: true,
   showEma: true,

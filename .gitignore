@@ -6,3 +6,9 @@ release/
 *.log
 .DS_Store
 Thumbs.db
+
+# Intraday snapshots. `data/es_data.json` is tracked on purpose — it is the
+# artifact's whole dataset and the desktop app's offline seed — but an intraday
+# pull is a 60-day rolling window, so a committed one is stale within a day and
+# worthless within two months. Fetch it with `npm run data -- --interval 5m`.
+data/es_5m*.json

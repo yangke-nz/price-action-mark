@@ -78,6 +78,29 @@ function probe() {
     // and the pane's second tab. Both are prose the rest of the smoke cannot
     // see — an empty reading renders as an empty element, not as an error.
     reading: text('[class*="readout"] p'),
+    // The bar size control, and the range presets it decides. Not the switch
+    // itself: that needs a second network pull, and a render check should not
+    // depend on two. A probe covers the switch.
+    status: text('[class*="gran"]'),
+    timeframes: (() => {
+      const seg = [...document.querySelectorAll('[class*="seg"]')]
+        .find((g) => g.getAttribute('aria-label') === 'Bar size');
+      return seg ? [...seg.querySelectorAll('button')].map((b) => b.textContent.trim()) : [];
+    })(),
+    ranges: (() => {
+      const seg = [...document.querySelectorAll('[class*="seg"]')]
+        .find((g) => g.getAttribute('aria-label') === 'Date range');
+      return seg ? [...seg.querySelectorAll('button')].map((b) => b.textContent.trim()) : [];
+    })(),
+    // The masthead names the SUBJECT, bar size included. It said "daily bars"
+    // over five-minute candles until the switch existed, and a heading is the
+    // one thing on the page nobody re-reads.
+    heading: text('h1'),
+    session: (() => {
+      const seg = [...document.querySelectorAll('[class*="seg"]')]
+        .find((g) => g.getAttribute('aria-label') === 'Session');
+      return seg ? [...seg.querySelectorAll('button')].map((b) => b.textContent.trim()) : [];
+    })(),
     tabs: [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent.replace(/\s+/g, ' ').trim()),
     readingRows: (() => {
       const tab = [...document.querySelectorAll('[role="tab"]')].find((t) => /Bar reading/.test(t.textContent));
@@ -187,6 +210,30 @@ app.whenReady().then(async () => {
     [r.tabs.length === 2 && /Marks in view/.test(r.tabs[0] ?? ''),
       `the marking pane's tabs read ${JSON.stringify(r.tabs)}`],
     [r.readingRows > 0, `the bar reading tab holds ${r.readingRows} rows`],
+    // The status line names the bar size, and said "Daily bars" on a 5-minute
+    // chart until it was told to ask.
+    [/^(Daily|5-minute) bars · /.test(r.status ?? ''), `the status line reads ${JSON.stringify(r.status)}`],
+    // The timeframe control is desktop-only: the artifact carries one snapshot
+    // and IS whatever bar size it holds, with no second one to switch to.
+    [desktopMode
+      ? r.timeframes.join(',') === '1D,5m'
+      : r.timeframes.length === 0,
+      `the bar size control reads ${JSON.stringify(r.timeframes)}`],
+    // Presets follow the interval, so a daily chart must not offer 3D and an
+    // intraday one must not offer 5Y.
+    [r.ranges.includes('MAX') && !(r.ranges.includes('5Y') && r.ranges.includes('3D')),
+      `the range presets read ${JSON.stringify(r.ranges)}`],
+    // RTH/ETH is intraday-only: a daily bar IS a whole session, so on a daily
+    // chart the control must be absent rather than present and inert. Both
+    // targets are built from a daily snapshot, so both are checked the same way.
+    [/Daily bars/.test(r.status ?? '') ? r.session.length === 0 : r.session.join(',') === 'ETH,RTH',
+      `the session control reads ${JSON.stringify(r.session)} on ${JSON.stringify(r.status)}`],
+    // The heading and the status line must agree about the bar size, which is
+    // the check that would have caught "daily bars" over intraday candles.
+    [/Daily bars/.test(r.status ?? '')
+      ? /daily bars$/.test(r.heading ?? '')
+      : /5-minute bars, (ETH|RTH)$/.test(r.heading ?? ''),
+      `the heading reads ${JSON.stringify(r.heading)} beside ${JSON.stringify(r.status)}`],
     // Errors the app reports to the reader rather than to the console — a
     // failed IPC call surfaces here and nowhere else.
     [r.notice === null, `the page is showing a notice: ${JSON.stringify(r.notice)}`],
@@ -199,7 +246,10 @@ app.whenReady().then(async () => {
     `smoke ${desktopMode ? 'desktop app' : path.basename(target)}: ` +
       `${r.canvases} canvas, last ${r.last}, ${r.rows} table rows, ` +
       `theme ${r.theme}, ${r.fonts} font faces, bridge ${r.bridged}, origin ${r.origin ?? "?"}, ema ${r.ema},\n` +
-      `  marks: ${r.marks ?? "?"}, ${r.readingRows} readings` +
+      `  ${r.status ?? "?"}` +
+      (r.timeframes.length ? `, timeframes ${r.timeframes.join("/")}` : ', no timeframe control') +
+      `
+  marks: ${r.marks ?? "?"}, ${r.readingRows} readings` +
       (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),
   );
 
