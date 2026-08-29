@@ -20,14 +20,23 @@ import { readTokens, type ChartTokens } from '../tokens.ts';
 /** Annotation over data. Loud enough to read, quiet enough to look through. */
 export const MARK_ALPHA = 0.75;
 /**
- * The band inside a channel, and the box between entry and stop.
+ * The band inside a channel, and the band on an entry's price.
  *
- * Raised from 0.1 after looking at it: a channel band spans dozens of bars and
- * reads fine that faint, but a trade's risk box is one bar wide and simply
- * vanished against the candles. This is the level at which the narrow one is
- * visible without the wide one turning into a slab.
+ * It was 0.1, then 0.18, and it is 0.1 again — and the round trip is the note
+ * worth keeping, because the reason for the middle number no longer exists.
+ * 0.1 was raised to 0.18 because a trade's box was one bar wide and simply
+ * VANISHED at that alpha, while a channel band spanning dozens of bars read
+ * fine. The entry band is stroked as well as filled now (see the `trade` case
+ * in draw.ts, and the hit test, which measures `lines` and never a fill), so
+ * the narrow mark no longer depends on its fill to exist — and the wide one is
+ * what the fill was always too strong for.
+ *
+ * A channel band covers about a third of the pane at the zoom a reader marks
+ * up at, and the whole of it when they zoom in; a fill is annotation over the
+ * candles, and at this level the candles under it stay the thing being read.
+ * A one-bar entry band is a stroked box that happens to be tinted.
  */
-export const FILL_ALPHA = 0.18;
+export const FILL_ALPHA = 0.1;
 
 /**
  * The selected mark — the one the reader clicked in the mark list.

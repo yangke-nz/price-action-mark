@@ -15,8 +15,8 @@
    *  remaining clue on the card to what a rule is about. */
   const GROUPS = [
     { id: 'bars', label: 'Special bars' },
-    { id: 'lines', label: 'Lines they form' },
-    { id: 'entries', label: 'Entries they set up' },
+    { id: 'lines', label: 'Lines' },
+    { id: 'entries', label: 'Entries' },
   ] as const;
 
   /**

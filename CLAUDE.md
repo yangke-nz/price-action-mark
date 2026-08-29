@@ -821,6 +821,19 @@ delete that directory first.
   `marks` so a dropped or filtered-out mark stops highlighting without a
   cleanup effect. The id is kept, not cleared, so switching a rule back on
   returns the reader's place.
+- **`FILL_ALPHA` WENT BACK TO 0.1, and the round trip is the note.** It was
+  0.1, was raised to 0.18 because a trade's box was one bar wide and simply
+  vanished at that alpha, and is 0.1 again because that reason no longer
+  exists: an entry's band is STROKED as well as filled now, so the narrow mark
+  does not depend on its fill to be seen — or to be clicked, since the hit test
+  measures `lines` and never a fill. The wide mark is what the fill was always
+  too strong for: a channel band covers about a third of the pane at the zoom a
+  reader marks up at, and the whole of it when they zoom in. Measured on the
+  shipped series before choosing: 433 channel marks spanning 4 to 101 bars,
+  median 6, and one real bull channel covers 36% of the pane zoomed in against
+  13% with room around it — which is why a single flat number reads well on one
+  chart and as a slab on the other. Anything that raises it again has to answer
+  for the wide case first.
 - **Emphasis for a selected mark is WEIGHT, never a colour, and never the
   fill.** Tone owns hue. Raising the band's fill alpha to 0.32 was tried and a
   selected channel at 1M — one channel spanning all 24 visible bars — became a
@@ -916,19 +929,26 @@ delete that directory first.
   entry to stop, a line at the entry, a line at the target — of which the box
   and the entry line said the same thing twice and nothing was clickable but
   two thin rails. Now the box IS the entry: a band a quarter of the risk thick
-  (`BAND_SHARE` in draw.ts), stroked AND filled, running from the signal bar to
-  where the trade resolved. Four things in it were decided rather than
-  defaulted:
+  (`BAND_SHARE` in draw.ts), stroked AND filled, ONE BAR WIDE, over the signal
+  bar. Four things in it were decided rather than defaulted:
   - **The thickness is in PRICE, not pixels** — a quarter of the risk — so it
     means the same thing at every zoom instead of swelling into the candles
     when the reader zooms out. A band on one price with no thickness is a line,
     which is what this replaced.
-  - **It extends half a bar past each end**, unlike every other shape here,
-    which runs centre to centre. The band says the order was live over these
-    SESSIONS, and a session is a bar wide — and 573 of the 1,655 entries in the
-    series resolve on the very next bar, so centre to centre leaves those one
-    bar spacing of thin band. Measure that half bar from integer indices; see
-    the `logicalToCoordinate` trap above, which cost a debugging session.
+  - **The band is ONE BAR and the RAILS carry the duration.** It drew from the
+    signal bar to `through` for one iteration, which made the box say the same
+    thing the rails already say — how long the trade took — and stopped it
+    saying the thing it is for. The point of entry is a session, so the box is
+    a session: half a bar either side of the signal bar's centre, and the
+    dashed rails run on to where the trade resolved. Measured at 3M: a 16px
+    band against 13px bar spacing, beside a 114px rail. Measure that half bar
+    from integer indices; see the `logicalToCoordinate` trap above, which cost
+    a debugging session.
+  - **NOT clamped to a minimum width**, though the anchor band under a selected
+    mark is. That one is a pointer into the chart and may be drawn wider than
+    the thing it points at; this is data, and a box drawn wider than the
+    session it marks would be saying something untrue at exactly the zoom where
+    the reader cannot check it.
   - **`Shape.dashed` is a SECOND REGISTER, not a second shape.** The band is
     the mark; the rails are a statement about it the reader can switch off, so
     they are dashed and thinner whatever the tone says. Shape is the channel

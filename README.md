@@ -749,6 +749,18 @@ Re-measured across all 20 rules with marks in a 6M viewport: 3,285–9,851 chang
 pixels each, all on the primitive's canvas, with the price axis untouched
 everywhere.
 
+### How solid a fill is
+
+One constant, `FILL_ALPHA`, paints every filled area on the chart: a channel's
+band and an entry's band. It is **0.1**, and it has been here before — it was
+0.1, went to 0.18 because a trade's box was one bar wide and vanished at that
+alpha, and came back when the entry band gained a stroke and stopped needing
+its fill to exist. What the fill was always too strong for is the wide case:
+measured on the shipped series, one real bull channel covers **36%** of the
+pane zoomed in and **13%** with room around it, so a single flat number that
+reads well on one of those reads as a slab over the candles on the other. The
+same wall is why raising it to 0.32 for the *selected* mark was rejected.
+
 ### An entry is a band, and its stop and target are a switch
 
 An entry used to draw three things at once: a filled box from the entry down to
@@ -756,11 +768,20 @@ the stop, a line at the entry, and a line at the target. The box and the line
 said the same thing twice, and the only clickable parts were the two thin rails.
 
 The box is the **entry** now — a band on the entry price, a quarter of the risk
-thick, stroked and filled, running from the signal bar to wherever the trade
-resolved. The thickness is in price rather than pixels, so it means the same
-thing at every zoom; the band runs half a bar past each end, because the order
-was live over those sessions and 573 of the 1,655 entries in the series resolve
-on the very next bar.
+thick, stroked and filled, and **one bar wide**, sitting on the signal bar. The
+thickness is in price rather than pixels, so it means the same thing at every
+zoom, and the width is a session because that is what a point of entry is.
+
+It spanned the whole trade for one iteration, and that was wrong for a reason
+worth keeping: the box then said what the rails already say — how long the trade
+took — and stopped saying the thing it exists to say. The duration belongs to
+the rails, which still run out to where the trade resolved. Measured at a 3M
+viewport: a 16px band against 13px of bar spacing, beside a 114px rail.
+
+It is deliberately not clamped to a minimum width. The faint band under a
+selected mark is clamped, because that one is a pointer into the chart; this is
+data, and a box wider than the session it marks would be stating something
+untrue at exactly the zoom where a reader cannot check it.
 
 The stop and the target are a second register: **dashed, thinner, and under a
 switch** — `Stop & target`, in the marking card's top row beside `Show marks`

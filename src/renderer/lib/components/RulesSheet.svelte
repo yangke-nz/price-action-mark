@@ -27,8 +27,8 @@
 
   const GROUPS = [
     { id: 'bars', label: 'Special bars' },
-    { id: 'lines', label: 'Lines they form' },
-    { id: 'entries', label: 'Entries they set up' },
+    { id: 'lines', label: 'Lines' },
+    { id: 'entries', label: 'Entries' },
   ] as const;
 
   /** A rule firing on this share of sessions is one to think twice about. */

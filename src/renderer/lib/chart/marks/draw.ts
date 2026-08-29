@@ -147,35 +147,43 @@ export function shapeOf(
       const i0 = space.index(mark.at);
       const i1 = space.index(mark.through);
       if (i0 === undefined || i1 === undefined) return null;
-      // Half a bar out at each end, unlike every other shape here, which runs
-      // centre to centre. The band says the order was live over these
-      // SESSIONS, and a session is a bar wide rather than a point — and 573 of
-      // the 1,655 entries in the series resolve on the very next bar, so
-      // centre to centre would leave those one bar spacing of thin band.
+      // The band is ONE BAR WIDE, over the signal bar and nothing else: it
+      // marks the point of entry, which is a session, not a stretch of them.
+      // The RAILS are what carry the duration — they run on to `through`,
+      // where the trade resolved — so the two say different things instead of
+      // both saying "this lasted four days".
       //
-      // Measured from two integer indices, NOT by asking for `i - 0.5`.
-      // `logicalToCoordinate` takes a fractional logical without complaining
-      // and answers nonsense for one: every band collapsed to a few pixels at
-      // the pane's left edge — 170 lit pixels in canvas column 0 for ten marks
-      // that should have covered a thousand. It fails silently, which is the
-      // whole reason this note is here.
+      // Half a bar either side of the bar's centre, measured from two INTEGER
+      // indices rather than by asking for `i - 0.5`. `logicalToCoordinate`
+      // takes a fractional logical without complaining and answers nonsense
+      // for one: every band collapsed to a few pixels at the pane's left edge
+      // — 170 lit pixels in canvas column 0 for ten marks that should have
+      // covered a thousand. It fails silently, which is why this note is here.
       const a = space.xAt(i0);
       const b = space.xAt(i1);
       const next = space.xAt(i0 + 1);
       if (a === null || b === null) return null;
       const halfBar = next === null ? 0 : Math.abs(next - a) / 2;
-      const x0: number | null = a - halfBar;
-      const x1: number | null = b + halfBar;
+      const x0 = a - halfBar;
+      const x1 = a + halfBar;
+      // Deliberately NOT clamped to a minimum width. The anchor band under a
+      // selected mark is clamped, because that one is a pointer into the
+      // chart; this is data, and a box drawn wider than the session it marks
+      // would be saying something untrue at exactly the zoom where the reader
+      // cannot check it.
+      const railEnd = b + halfBar;
       const half = Math.abs(mark.entry - mark.stop) * BAND_SHARE * 0.5;
       const yTop = space.y(mark.entry + half);
       const yBottom = space.y(mark.entry - half);
       const yStop = space.y(mark.stop);
       const yTarget = space.y(mark.target);
-      if (x0 === null || x1 === null || yTop === null || yBottom === null) return null;
+      if (yTop === null || yBottom === null) return null;
 
-      // The band is BOTH stroked and filled. A one-bar entry is a few pixels
-      // of box, where a fill at FILL_ALPHA alone is invisible — and unclickable
-      // as well, since the hit test measures `lines` and never a fill.
+      // BOTH stroked and filled, and at one bar wide the stroke is what
+      // carries it: the band is a few pixels across at any wide viewport,
+      // where a fill at FILL_ALPHA is invisible — and unclickable as well,
+      // since the hit test measures `lines` and never a fill. That stroke is
+      // also what let FILL_ALPHA go back down to 0.1; see palette.ts.
       const band: Pt[] = [
         { x: x0, y: yTop }, { x: x1, y: yTop },
         { x: x1, y: yBottom }, { x: x0, y: yBottom }, { x: x0, y: yTop },
@@ -186,8 +194,8 @@ export function shapeOf(
         // the scale: `autoscaleInfo()` returns null on purpose and the
         // measured-move targets reach 21x the risk, so a target below the
         // visible low is ordinary here rather than exceptional.
-        if (yStop !== null) rails.push([{ x: x0, y: yStop }, { x: x1, y: yStop }]);
-        if (yTarget !== null) rails.push([{ x: x0, y: yTarget }, { x: x1, y: yTarget }]);
+        if (yStop !== null) rails.push([{ x: x0, y: yStop }, { x: railEnd, y: yStop }]);
+        if (yTarget !== null) rails.push([{ x: x0, y: yTarget }, { x: railEnd, y: yTarget }]);
       }
       return { lines: [band], fills: [band], dashed: rails };
     }
