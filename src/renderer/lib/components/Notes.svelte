@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppState } from '$lib/state/app.svelte.ts';
-  import { integer } from '$shared/format.ts';
+  import { day, integer } from '$shared/format.ts';
 
   let { app }: { app: AppState } = $props();
 </script>
@@ -36,7 +36,9 @@
          explanation of the aggregation is the card contradicting itself in one
          paragraph, which is worse than either sentence alone. -->
     <h3>
-      {#if app.aggregated}Built from {integer(app.count)} sessions{:else}All {integer(app.count)} bars, always{/if}
+      {#if app.aggregated}Built from {integer(app.count)} sessions
+      {:else if app.pendingSession}All {integer(app.count)} closed bars
+      {:else}All {integer(app.count)} bars, always{/if}
     </h3>
     <p>
       {#if app.aggregated}
@@ -46,6 +48,19 @@
         last close, the extremes between. That series is a <b>60-day rolling window</b>,
         so this chart is {integer(app.count)} sessions rather than 26 years &mdash; switch
         to <b>ETH</b> for the feed's own daily bars and the full history.
+      {:else if app.pendingSession}
+        <!-- The sentence in the {:else} below is FALSE in this state: the feed
+             HAS a row for this session and it is not loaded, because the row
+             carries no close. Same class of fault as "no aggregation" sitting
+             over aggregated bars, one field narrower. -->
+        No aggregation and no downsampling &mdash; every bar the feed has
+        <b>closed</b> is loaded. {day(app.pendingSession)} has traded, but its daily
+        row carries an open, a high and a low and <b>no settlement close</b>, so
+        there is no bar to draw yet.
+        {#if app.can.timeframes}
+          <b>RTH</b> has it: those bars are built from the 5-minute series, which
+          does not wait for a settlement.
+        {/if}
       {:else}
         No aggregation and no downsampling &mdash; every bar the feed has is loaded and the
         chart pans across the whole span. The range buttons only move the viewport.

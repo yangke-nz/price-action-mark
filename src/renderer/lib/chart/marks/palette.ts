@@ -88,14 +88,16 @@ export const SELECTED_BAND_ALPHA = 0.16;
  * picked thing in the UI already uses — the mark list's picked row, every
  * focus ring — and the two bands stay tellable apart when both are showing.
  *
- * Slightly stronger than the mark band, plus a one-pixel rail down each edge.
- * The band alone was hard to find at MAX zoom, where one session is a fraction
- * of a pixel wide and the fill is clamped to BAND_MIN_PX of near-transparent
- * blue; the rails are what actually locate it there.
+ * Slightly stronger than the mark band, and a FILL AND NOTHING ELSE. It had a
+ * one-pixel rail down each edge at 0.85, which was the loudest thing either
+ * band drew and the reason the highlight read as heavy; asked to take the
+ * opacity down, the rails are what came off. What they bought is written down
+ * rather than lost: at MAX zoom one session is a fraction of a pixel wide, the
+ * band is clamped to BAND_MIN_PX, and the rails were what located it there —
+ * so if a five-pixel tint turns out to be too little to find, widen the clamp
+ * before putting a 0.85 line back over the candles.
  */
 export const FOCUS_BAND_ALPHA = 0.22;
-export const FOCUS_RAIL_ALPHA = 0.85;
-export const FOCUS_RAIL_WIDTH = 1;
 
 export interface MarkStyle {
   readonly color: string;

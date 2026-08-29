@@ -47,6 +47,29 @@ export interface Dataset {
    * nothing on disk is invalidated by this existing.
    */
   window?: 'eth' | 'rth';
+  /**
+   * The newest bar the feed CARRIES but has not closed, when there is one.
+   *
+   * Measured on `ES=F`: Yahoo's `interval=1d` array holds a row for the current
+   * trading period with an open, a high, a low and the day's volume, and
+   * `close: null` until it stamps a settlement. Twelve hours after Friday's
+   * cash close it was still null, and across a weekend it stays that way for
+   * about fifty. `toRows()` drops it on the null-close guard, which is right --
+   * every bar rule tests where the close sits in the range, so a bar without
+   * one is not a bar this chart can read.
+   *
+   * What was not right was dropping it in silence. The RTH daily chart builds
+   * that same session out of the 5-minute series and draws it, so the two
+   * windows sit inches apart, one session apart, with nothing on the page to
+   * say why.
+   *
+   * Optional, and absent means nothing is being held back, so no file on disk
+   * is invalidated by this existing -- the argument `interval` and `window`
+   * both make. It travels WITH the data on purpose: a cache or a published
+   * snapshot pulled inside that window is permanently one session short, and
+   * should keep saying so.
+   */
+  pending?: string;
 }
 
 export interface Bar {

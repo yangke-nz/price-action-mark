@@ -15,11 +15,7 @@
 import type { GeometryMark } from '../../../../shared/marks/types.ts';
 import {
   FILL_ALPHA,
-  FOCUS_BAND_ALPHA,
-  FOCUS_RAIL_ALPHA,
-  FOCUS_RAIL_WIDTH,
   MARK_ALPHA,
-  SELECTED_BAND_ALPHA,
   SELECTED_HALO_ALPHA,
   SELECTED_HALO_WIDTH,
   SELECTED_WIDTH,
@@ -282,61 +278,38 @@ export function paint(
 }
 
 /**
- * The vertical band at the selected mark's anchor session.
+ * A full-height vertical band over one session — the mark the reader selected,
+ * or the session they clicked in the bar reading. ONE painter, because after
+ * the focus band lost its rails the two were the same code with two constants,
+ * and two identical functions drift the day one of them is edited. The colour
+ * and the alpha are the difference and they are arguments: a mark lends its
+ * tone (see SELECTED_BAND_ALPHA), a session has none to lend and takes
+ * `--focus` (see FOCUS_BAND_ALPHA).
  *
  * Deliberately NOT part of `Shape`: the hit test measures against shapes, and
  * a full-height band would make a whole column of the chart report a hit on
  * that one mark. It is decoration for the selection only, so it is painted
  * separately and nothing measures against it.
- */
-export function paintAnchorBand(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  halfWidth: number,
-  height: number,
-  style: MarkStyle,
-  hx: number,
-  hy: number,
-): void {
-  ctx.save();
-  ctx.globalAlpha = SELECTED_BAND_ALPHA;
-  ctx.fillStyle = style.color;
-  ctx.fillRect((x - halfWidth) * hx, 0, halfWidth * 2 * hx, height * hy);
-  ctx.restore();
-}
-
-/**
- * The session the reader clicked in the bar-reading list.
- *
- * Same geometry as the anchor band and a separate function anyway: this one
- * takes a colour rather than a MarkStyle, because a bar has no tone to lend it
- * (see FOCUS_BAND_ALPHA), and it adds the two rails that make one session
- * findable at a zoom where the fill is a few pixels of near-transparent blue.
  *
  * Full height by construction. The primitive's `autoscaleInfo()` returns null,
  * so nothing this draws can reach the price scale however tall it is — which
  * is exactly why the highlight is a band and not a bigger marker: growing a
  * marker re-scaled the pane and shifted every candle.
  */
-export function paintFocusBand(
+export function paintBand(
   ctx: CanvasRenderingContext2D,
   x: number,
   halfWidth: number,
   height: number,
   color: string,
+  alpha: number,
   hx: number,
   hy: number,
 ): void {
-  const left = (x - halfWidth) * hx;
-  const width = halfWidth * 2 * hx;
-  const bottom = height * hy;
   ctx.save();
-  ctx.globalAlpha = FOCUS_BAND_ALPHA;
+  ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
-  ctx.fillRect(left, 0, width, bottom);
-  ctx.globalAlpha = FOCUS_RAIL_ALPHA;
-  ctx.fillRect(left, 0, FOCUS_RAIL_WIDTH * hx, bottom);
-  ctx.fillRect(left + width - FOCUS_RAIL_WIDTH * hx, 0, FOCUS_RAIL_WIDTH * hx, bottom);
+  ctx.fillRect((x - halfWidth) * hx, 0, halfWidth * 2 * hx, height * hy);
   ctx.restore();
 }
 

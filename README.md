@@ -210,8 +210,7 @@ src/renderer/
   lib/chart/numbers.ts        Brooks bar numbers, as their own primitive
   lib/chart/marks/            ONE primitive for all geometry, not one per mark
   lib/components/             Masthead, Controls, Readout, ChartPanel,
-                              MarkPanel, RulesSheet, MarkingPane
-                              (MarkList | ReadingList), …
+                              MarkPanel, RulesSheet, MarkingPane, Tape, …
   styles/                     tokens.css (palette), fonts.css, app.css
 ```
 
@@ -326,9 +325,9 @@ floor and the gutters. Narrower than that and the candles are what suffers,
 which defeats the point of the second column.
 
 The marking column is fluid — `clamp(420px, 34vw, 820px)` — and the page cap
-goes to 2400px, because the rule rows carry a name, a count and a blurb and the
-mark table carries five columns, and both were being squeezed on exactly the
-screens this layout is for:
+goes to 2400px, because the rule rows carry a name, a count and a blurb and a
+tape row carries a date rail, a sentence and its chips, and both were being
+squeezed on exactly the screens this layout is for:
 
 | Viewport | Chart | Marking column |
 | --- | --- | --- |
@@ -371,7 +370,7 @@ has two children: the summary and it. Leave it out of the chain and a bounded
 card **clips instead of scrolling** — a 320px card held a scroll region
 reporting 498px of content and `maxScroll: 0`, with the last rules unreachable.
 Only the rules card needs it now — it is the one `<details>` left in the column,
-since the marking pane became a `<section>` with a tablist and a plain flex
+since the marking pane became a `<section>` with a filter and a plain flex
 chain — and both keep a `max-height` fallback so a browser without the
 pseudo-element still scrolls rather than clipping.
 
@@ -475,14 +474,13 @@ the mirror of the capability rule that says not to render a control that would
 not work. `smoke.cjs` asserts the reveal and the re-fold, in a second
 `executeJavaScript` call, because Svelte flushes on a microtask.
 
-The marking pane declares the container both its views read. The reading rows
-drop their date rail under a 430px pane; the mark table tightens its five
-columns under 780px and again under 660px, which takes the table's minimum
-width from **766px to 535px**. That floor is
-irreducible without shrinking the three things a reader aims at — the date, the
-mark label, and the Keep/Drop pair are ~412px of it — so below roughly a 1700px
-viewport the table still scrolls sideways inside its own container: 57px short
-at 1500, 147px at 1200. Above it, it fits.
+The marking pane declares the container the tape reads, and the tape drops its
+date rail under a 430px pane. It used to declare one for two views, and the mark
+table needed two more tiers of its own — 780px and 660px, tightening five
+columns from a 766px minimum to **535px**, still 147px short at a 1200px
+viewport and scrolling sideways below about 1700px. Those tiers went with the
+table. The tape reaches the same widths without them, because it never had five
+columns to fit: see [One tape, not two tabs](#one-tape-not-two-tabs).
 
 ## The chart
 
@@ -707,7 +705,7 @@ dist/price_action_mark.html         one file, no host, marks included
 
 ### Pointing at one mark
 
-Clicking a mark's label in *Marks in view* highlights it on the chart; clicking
+Clicking a mark's chip in the tape highlights it on the chart; clicking
 a mark on the **canvas** still toggles Keep. Two gestures, two meanings — "show
 me where this is" is not "I stand behind this". The selection is one id, never
 persisted, and it is read through a derived value that resolves it against the
@@ -748,6 +746,25 @@ that one mark.
 Re-measured across all 20 rules with marks in a 6M viewport: 3,285–9,851 changed
 pixels each, all on the primitive's canvas, with the price axis untouched
 everywhere.
+
+### The clicked session is a tint, not a highlight
+
+Clicking a line in the bar reading paints that session on the chart: a
+full-height band in `--focus`, one bar wide, clamped to 5–34px. It used to carry
+a one-pixel rail down each edge at 0.85 opacity — by some distance the loudest
+thing either band drew — and those are gone. The fill alone is the highlight
+now, at 0.22.
+
+The rails were not decoration, so what they bought is recorded rather than
+forgotten: at MAX zoom a session is a fraction of a pixel wide, the band clamps
+to its five-pixel minimum, and the rails were what let a reader find it there.
+If that turns out to be too little, the fix is a wider clamp — not a bright line
+back over the candles.
+
+One consequence worth naming: with the rails gone, the selected-mark band and
+the clicked-session band became the same drawing with different constants, so
+there is one painter for both now. They still read as different things, because
+the mark lends its own tone and the session takes the interface blue.
 
 ### How solid a fill is
 
@@ -897,9 +914,9 @@ did this bar say?*
 
 It shows up in two places. The **readout** above the candles carries the reading
 of whatever session the crosshair is on — the answer to the question nine times
-out of ten, without a glance away from the chart. The **marking pane's second
-tab** lists every session in the viewport, newest first, and clicking a line
-highlights that bar.
+out of ten, without a glance away from the chart. The **marking pane's tape** is
+a row per session in the viewport, newest first, and clicking a line highlights
+that bar.
 
 ```
 28 Aug 2026  small doji, 0.5x ATR — always-in long
@@ -959,33 +976,79 @@ The reading is built from the **unfiltered** marks. A rule toggle changes what i
 drawn; it does not change what a bar did, and a reading that lost its "breakout"
 clause because the reader hid the arrows would be a lie about the session.
 
-### Two views of one pane
+### One tape, not two tabs
 
-The reading is a tab beside *Marks in view*, not a card of its own. The wide
-layout divides the marking column between exactly two panes at measured heights,
-and a reading needs width a third of a column cannot spare; two views cost one
-click and no layout.
+The reading and the mark list used to be two tabs of one pane. They were both
+newest-first lists over the same viewport, so the tab between them was a switch
+the reader paid on every glance — and they overlapped by construction, because a
+reading names the patterns knowable at that close and the mark list was listing
+those same patterns for the same bar. They are one list now: a row per session,
+the reading as the row, its marks hanging off it.
 
-The row format is where the width is won. The obvious narrow-column answer is to
-stack the date above the sentence, and measured at the pane's 647px that puts
-every row on two lines — median 51px, **eight visible**. Keeping the date as a
-7ch **rail** with the sentence hanging beside it leaves 89 of 128 readings on one
-line: median 34px, **eleven visible**. The rail is both the thing the eye runs
-down and the cheaper layout, which is not the trade it looks like. The year
-prints only where it changes, as a sub-label, so the rail never widens to repeat
-a fact that changes once a year.
+**The pattern clause is rendered as the marks.** The reading's last clause is
+left off and the mark chips take its place, so the sentence and the mark list
+stop saying the same words twice and the words become clickable:
 
-Two costs, stated plainly. The pane no longer collapses — two views need a real
-`role="tablist"`, and tabs inside a `<summary>` would put buttons inside a
-button. And *Marks in view* stays the tab that opens, because the readout line
-already puts a reading in front of the reader on every load, so the new surface
-loses nothing by not claiming the slot the marking loop has always had.
+```
+26 Aug  small doji, 0.5x ATR, inside the bar before — trading range — [ib]
+24 Aug  small bear bar, 0.6x ATR — trading range, swing low — [bull channel →27 Aug]
+06 Aug  small bear bar, 0.5x ATR — trading range — [BO▲]
+          bo-pullback · first pullback, 2 bars after the breakout ·
+          entry 7771.00, stop 7724.00, target 7865.00 · stop in 7 bars, -1.00R   Keep Drop
+30 Jul  big bull trend bar, shaved bottom, 1.7x ATR, inside the bar before
+        — trading range — [BO▼] [2BR] [BIG] [ioi] [ib] failed breakout
+```
+
+Three cases fall out of that, and all three are meant. A mark the prose does not
+name is a chip on its own — either the reading already stated it in an earlier
+clause (`ib`, `BIG`) or it was not knowable at that close, like a channel
+confirmed three sessions later, which prints `→27 Aug` because the row's date is
+not the date it was readable. A pattern the prose names with no mark behind it
+stays as **dim text** (`failed breakout` above): that rule is switched off, and
+the tape says so rather than papering over it. And a session with neither is one
+line of prose, which is a little over half of them.
+
+**The tab became a filter, asking a different question.** It asked *which
+list?*; it asks *how much of the tape?* — All / Marked / **Unresolved**. The
+third is new and is the marking loop's missing finish line: it counts sessions
+holding a mark with no verdict, so it empties as the reader works, and an empty
+list under it means done rather than broken. Two caps collapsed into one with
+the two lists: `TAPE_CAP` bounds sessions, and the header says plainly that a
+mark older than the newest 300 in view has no row to sit on.
+
+**The mark table's 535px floor is gone, and not by trimming anything.** Five
+columns — date, label, rule, detail, Keep/Drop — could not be squeezed under
+535px, which is 147px short at a 1200px viewport, and the only moves left were
+the three things the reader aims at. The tape dissolved the row instead: the
+date is the reading's rail, the label is a chip in the sentence, and rule,
+detail and the verdict pair render in a strip under whichever chip is selected —
+one mark at a time rather than every row at once.
+
+The row format is where the rest of the width is won. The obvious narrow-column
+answer is to stack the date above the sentence, and measured at the pane's 647px
+that puts every row on two lines — median 51px, **eight visible**. Keeping the
+date as a 7ch **rail** with the sentence hanging beside it leaves most readings
+on one line: measured on the merged tape at 642px, 127 rows, median 36px, 82 of
+them one line, 59 carrying chips. The year prints only where it changes, as a
+sub-label, so the rail never widens to repeat a fact that changes once a year.
+
+Two things stayed decided. The pane still does not collapse — that was the price
+of the placement when tabs inside a `<summary>` would have put buttons inside a
+button, and the same constraint now keeps the mark chips *beside* the
+sentence-button rather than inside it. And the sentence is `display:
+inline-block`, deliberately not `inline`: a shrink-to-fit box leaves chips on
+the sentence's line when there is room and takes the full width when there is
+not, so they wrap under it rather than into the middle of it. `inline` would
+save about 900px of the 5,751px content height — 16%, and not worth a display
+model Safari has never been dependable about.
 
 ### Clicking a line is a third gesture
 
 The chart now has three: clicking a mark on the canvas means *Keep*, clicking a
-mark in the list means *show me where this is*, and clicking a reading means
-*show me this bar*. Each has its own state and its own colour.
+mark's chip means *show me where this is*, and clicking a reading means *show me
+this bar*. Each has its own state and its own colour. The chip needed no state
+of its own — it opens its detail strip when it is the selected mark, so one
+click both highlights it on the chart and opens it.
 
 The bar highlight is a one-session vertical band drawn by the same primitive as
 the mark band — whose `autoscaleInfo()` returns null, which is why a full-height
@@ -1025,7 +1088,7 @@ from 42px to 81px for its new line, which put the two columns **16px out** —
 because the column's height was `calc(var(--chart-h) + 108px)`, where 108 was a
 measured readout and legend. A grid row that stretches is exact whatever sits
 above the candles, so the constant is gone rather than re-measured. And with the
-pane now below the rules card, an unbounded rules card pushed the reading tab
+pane now below the rules card, an unbounded rules card pushed the tape
 **2,059px** down a 935px viewport in the stacked layout; bounding it moved that
 to 1,211px, and reaching the pane now leaves the chart **249 of 430px** visible
 instead of none.
@@ -1081,7 +1144,7 @@ eye:
 | Up — marks | `#006300` | `#008300` |
 | Down — marks | `#e34948` | `#e66767` |
 | Up — delta text | `#006300` | `#0ca30c` |
-| Down — delta text | `#d03b3b` | `#e66767` |
+| Down — delta text | `#cc3131` | `#e66767` |
 | EMA 20 — the line | `#4338ca` | `#2962ff` |
 | EMA 20 — the figure | `#4338ca` | `#93a5f4` |
 
@@ -1110,7 +1173,11 @@ Light mode needs no split: `#4338ca` is 7.69:1 either way.
 
 Marks need 3:1 contrast against the surface but text needs 4.5:1, which is why
 delta values use separate `--up-text`/`--down-text` tokens on darker steps —
-`#e34948` only reaches 3.85:1 on the light surface.
+`#e34948` only reaches 3.85:1 on the light surface. Light `--down-text` is
+`#cc3131` rather than `#d03b3b` because the ground matters as much as the
+colour: the masthead's session-change figure has no card behind it, and
+`#d03b3b` clears 4.5:1 on the card surface but only reaches 4.27:1 on the page
+plane.
 
 `--muted` is split the same way, and it is the widest of the three. That one
 token drew the roll arrows, the `neutral` and `caution` mark strokes and the

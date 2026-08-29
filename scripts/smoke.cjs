@@ -59,6 +59,7 @@ let verdictRoundTrip = 'was not tested';
 let foldReveal = 'was not tested';
 let rulesSheet = 'was not tested';
 let railsSwitch = 'was not tested';
+let tapeFilter = 'was not tested';
 
 /** Serialised into the page, so it may not close over anything out here. */
 function probe() {
@@ -104,13 +105,19 @@ function probe() {
         .find((g) => g.getAttribute('aria-label') === 'Session');
       return seg ? [...seg.querySelectorAll('button')].map((b) => b.textContent.trim()) : [];
     })(),
-    tabs: [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent.replace(/\s+/g, ' ').trim()),
-    readingRows: (() => {
-      const tab = [...document.querySelectorAll('[role="tab"]')].find((t) => /Bar reading/.test(t.textContent));
-      if (!tab) return -1;
-      tab.click();
-      return document.querySelectorAll('[id="panel-reading"] button[class*="line"]').length;
+    // The marking pane is one tape now, with a filter over it rather than a
+    // tab between two lists. Both are read: a filter that lost a button and a
+    // tape that lost its rows are the same silent failure the tabs had.
+    filters: (() => {
+      const group = [...document.querySelectorAll('[role="radiogroup"]')]
+        .find((g) => g.getAttribute('aria-label') === 'Tape filter');
+      return group ? [...group.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()) : [];
     })(),
+    tapeRows: document.querySelectorAll('section[aria-label="Sessions in view"] ol li').length,
+    // The link the merge is FOR: a mark rendered as a chip at the end of its
+    // session's sentence. A row whose chips silently failed to render looks
+    // exactly like a session that carries no marks.
+    tapeChips: document.querySelectorAll('section[aria-label="Sessions in view"] button[class*="chip"]').length,
   };
 }
 
@@ -288,6 +295,43 @@ app.whenReady().then(async () => {
     return 'listed ' + before + ', unfolded to ' + after + ', restored and closed';
   })()`);
 
+  // The marking pane's filter, which replaced the tab between the mark list
+  // and the bar reading. Narrowing has to actually narrow and has to come back
+  // — a filter that returns the same rows every time looks exactly like a
+  // filter that works. MEASURED IN A SECOND STEP for the reason the fold check
+  // gives: Svelte flushes on a microtask, so counting rows in the expression
+  // that clicked reads the DOM as it was before the click.
+  //
+  // `<=` and not `<` on both narrowing steps: how many sessions carry a mark,
+  // and how many of those are unjudged, are facts about whatever the machine
+  // last looked at. A viewport where every session is marked is a legitimate
+  // state, not a failure — what must never happen is the count going UP.
+  tapeFilter = await win.webContents.executeJavaScript(`(async () => {
+    const pane = document.querySelector('section[aria-label="Sessions in view"]');
+    if (!pane) return 'found no marking pane';
+    const group = [...pane.querySelectorAll('[role="radiogroup"]')]
+      .find((g) => g.getAttribute('aria-label') === 'Tape filter');
+    if (!group) return 'found no filter';
+    const button = (label) => [...group.querySelectorAll('button')]
+      .find((b) => b.textContent.trim().startsWith(label));
+    const rows = () => pane.querySelectorAll('ol li').length;
+    const press = async (label) => {
+      const b = button(label);
+      if (!b) throw new Error('no ' + label + ' filter');
+      b.click();
+      await new Promise((r) => setTimeout(r, 80));
+      return rows();
+    };
+    const all = rows();
+    const marked = await press('Marked');
+    const unresolved = await press('Unresolved');
+    const back = await press('All');
+    if (marked > all) return 'Marked showed ' + marked + ' of ' + all + ' sessions';
+    if (unresolved > marked) return 'Unresolved showed ' + unresolved + ' of ' + marked + ' marked';
+    if (back !== all) return 'All came back with ' + back + ' rows, not ' + all;
+    return 'narrowed ' + all + ' -> ' + marked + ' -> ' + unresolved + ', back to ' + back;
+  })()`);
+
   const r = await win.webContents.executeJavaScript(`(${probe.toString()})()`);
 
   const checks = [
@@ -318,9 +362,11 @@ app.whenReady().then(async () => {
     // and say where it sits: anything shorter means a clause silently dropped.
     [/bar|doji|flat/.test(r.reading ?? '') && (r.reading ?? '').length > 20,
       `the readout's reading reads ${JSON.stringify(r.reading)}`],
-    [r.tabs.length === 2 && /Marks in view/.test(r.tabs[0] ?? ''),
-      `the marking pane's tabs read ${JSON.stringify(r.tabs)}`],
-    [r.readingRows > 0, `the bar reading tab holds ${r.readingRows} rows`],
+    [r.filters.length === 3 && /^All /.test(r.filters[0] ?? ''),
+      `the marking pane's filter reads ${JSON.stringify(r.filters)}`],
+    [r.tapeRows > 0, `the tape holds ${r.tapeRows} rows`],
+    [r.tapeChips > 0, 'the tape drew no mark chips'],
+    [/^narrowed \d+ -> \d+ -> \d+, back to \d+$/.test(tapeFilter), `the tape filter ${tapeFilter}`],
     // The status line names the bar size, and said "Daily bars" on a 5-minute
     // chart until it was told to ask.
     [/^(Daily|5-minute) bars · /.test(r.status ?? ''), `the status line reads ${JSON.stringify(r.status)}`],
@@ -377,7 +423,7 @@ app.whenReady().then(async () => {
       `  ${r.status ?? "?"}` +
       (r.timeframes.length ? `, timeframes ${r.timeframes.join("/")}` : ', no timeframe control') +
       `
-  marks: ${r.marks ?? "?"}, ${r.readingRows} readings, fold ${foldReveal},
+  marks: ${r.marks ?? "?"}, tape ${r.tapeRows} rows / ${r.tapeChips} chips, ${tapeFilter}, fold ${foldReveal},
   sheet: ${rulesSheet},
   stop & target: ${railsSwitch}` +
       (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),

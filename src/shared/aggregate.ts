@@ -69,8 +69,11 @@ export function dailyFrom(ds: Dataset, window?: Session): Dataset {
     v[k] = volume;
   }
 
+  // Not inherited: `pending` is a statement about a DAILY row the feed left
+  // unclosed, and these bars did not come from one.
+  const { pending: _pending, ...rest } = ds;
   return {
-    ...ds,
+    ...rest,
     d, o, h, l, c, v,
     interval: '1d',
     // Rebuilt, not remapped: `rolls` holds positions in `d`, and every one of

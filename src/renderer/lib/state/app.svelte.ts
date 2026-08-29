@@ -13,7 +13,7 @@ import type { Viewport } from '$lib/chart/candles.ts';
 import { EMA_PERIOD, ema } from '$shared/indicators.ts';
 import { DEFAULT_SETTINGS } from '$lib/source/types.ts';
 import { contractStarts } from '$shared/rolls.ts';
-import type { Mark, MarkStore, RuleId, Verdict } from '$shared/marks/types.ts';
+import type { Mark, MarkGroup, MarkStore, RuleId, Verdict } from '$shared/marks/types.ts';
 import { emptyStore } from '$shared/marks/types.ts';
 import { buildCtx, type Ctx } from '$shared/marks/rule.ts';
 import { RULES, detect, ruleFor } from '$shared/marks/registry.ts';
@@ -27,12 +27,43 @@ import { dailyFrom } from '$shared/aggregate.ts';
  *  slice and say so. */
 export const TABLE_CAP = 400;
 
-/** The mark list is viewport-scoped too, and for the same reason. */
-export const MARK_LIST_CAP = 200;
+/**
+ * The tape is viewport-scoped too, and ONE cap covers it because it is one
+ * list. The mark list and the bar reading used to hold two — 200 marks and 300
+ * sessions — which bounded two different things; merged, the row IS a session,
+ * so the sessions are what there can be too many of. A MAX viewport is 6,550
+ * of them on daily and 11,600 on a 60-day 5-minute pull.
+ *
+ * The honest consequence, and the header says it: a mark anchored OLDER than
+ * the newest 300 sessions in view has no row to sit on and is not listed. At
+ * the shipped density that is about where the old 200-mark cap fell anyway
+ * (0.71 marks a bar puts 200 marks roughly 280 sessions back), so what changed
+ * is which of the two is exact, not roughly how much you see.
+ */
+export const TAPE_CAP = 300;
 
-/** So is the bar reading, which unlike the other two has a line for EVERY bar
- *  in view — a MAX viewport is 6,550 of them on daily, 11,600 intraday. */
-export const READING_CAP = 300;
+/**
+ * One row of the tape: a session, what it said, and what was marked on it.
+ *
+ * The reading is never absent — every session gets a line, which is the bar
+ * reading's own premise — and `marks` is very often empty, which is what makes
+ * the merged list affordable: at the shipped density 0.71 marks a bar, a
+ * little over half of the rows carry nothing but their sentence.
+ */
+export interface TapeRow {
+  readonly i: number;
+  readonly at: string;
+  readonly reading: BarReading;
+  /** The marks anchored at this session, entries and lines before bar marks. */
+  readonly marks: readonly Mark[];
+  /** How many of them the reader has not judged yet. */
+  readonly open: number;
+}
+
+export type TapeFilter = 'all' | 'marked' | 'unresolved';
+
+/** Entries read as the conclusion, bar adjectives as the evidence. See `#tape`. */
+const GROUP_ORDER: Record<MarkGroup, number> = { entries: 0, lines: 1, bars: 2 };
 
 /**
  * Every preset, in days. Which are OFFERED is a property of the bar size —
@@ -329,28 +360,6 @@ export class AppState {
     return { from: Math.max(0, Math.min(this.viewport.from, to)), to };
   });
 
-  /** Marks whose anchor is inside the window, newest first, uncapped. */
-  #marksInView = $derived.by((): Mark[] => {
-    const d = this.dataset;
-    const span = this.#span;
-    if (!d || !span) return [];
-    const lo = d.d[span.from];
-    const hi = d.d[span.to];
-    if (lo === undefined || hi === undefined) return [];
-    const inView = this.marks.filter((mk) => mk.at >= lo && mk.at <= hi);
-    inView.reverse();
-    return inView;
-  });
-
-  /**
-   * Marks whose anchor sits inside the current viewport, newest first and
-   * capped the way the data table is. A MAX viewport holds every mark in the
-   * series and nobody scrolls three thousand rows.
-   */
-  visibleMarks = $derived.by((): Mark[] => this.#marksInView.slice(0, MARK_LIST_CAP));
-
-  markListTruncated = $derived(this.#marksInView.length > MARK_LIST_CAP);
-
   /** How many marks each rule contributes right now, for the panel. */
   markCounts = $derived.by((): Map<RuleId, number> => {
     const out = new Map<RuleId, number>();
@@ -358,20 +367,13 @@ export class AppState {
     return out;
   });
 
-  // ---- bar reading -----------------------------------------------------
+  // ---- the tape --------------------------------------------------------
+  //
+  // Newest first, for the same reason the data table is: the reader's question
+  // is almost always "what has just happened", and a list that answers it
+  // without scrolling is worth more than chronological order. It is also what
+  // made the merge possible — both halves were already in this order.
 
-  /**
-   * One line per session in view, newest first — the tape in words.
-   *
-   * Newest first for the same reason the data table is: the reader's question
-   * is almost always "what has just happened", and a list that answers it
-   * without scrolling is worth more than chronological order.
-   *
-   * Deliberately built from the UNFILTERED marks. A rule toggle changes what
-   * is DRAWN; it does not change what a bar did, and a reading that lost its
-   * "breakout" clause because the reader hid the arrows would be a lie about
-   * the session.
-   */
   /**
    * The two lookups every reading needs, built once per dataset rather than
    * per reading. The readout asks for one bar on every crosshair move; without
@@ -382,15 +384,108 @@ export class AppState {
     return ctx ? readingIndex(ctx, this.#allMarks) : null;
   });
 
-  visibleReadings = $derived.by((): BarReading[] => {
+  /**
+   * The tape: one row per session in view, newest first, each carrying its
+   * reading AND the marks anchored on it.
+   *
+   * ONE LIST, not two. "What the rules found" and "what the bars said" were a
+   * tabbed pair over the same viewport in the same order, so the tab was a
+   * switch the reader paid on every glance — and worse, the two lists overlap
+   * by construction: a reading names the patterns that were knowable at that
+   * close, which is most of what the mark list was showing for the same bar.
+   * Merged, that overlap stops being duplication and becomes the link between
+   * a sentence and the thing it names.
+   *
+   * The marks a row carries are the FILTERED ones (`this.marks`), so a rule
+   * toggle, a dismissal and confirmed-only mode all reach the tape. The
+   * READING is built from the unfiltered set and stays that way — see
+   * reading.ts. That is the point of the two living on one row rather than
+   * being one field: hiding a rule changes what is DRAWN and what is listed,
+   * never what a bar did.
+   */
+  #tape = $derived.by((): TapeRow[] => {
     const ctx = this.#ctx;
     const index = this.#readingIndex;
     const span = this.#span;
-    if (!ctx || !index || !span) return [];
-    const from = Math.max(span.from, span.to - READING_CAP + 1);
-    const out: BarReading[] = [];
-    for (let i = span.to; i >= from; i--) out.push(readAt(ctx, index, i));
+    const d = this.dataset;
+    if (!ctx || !index || !span || !d) return [];
+    const from = Math.max(span.from, span.to - TAPE_CAP + 1);
+    const lo = d.d[from];
+    const hi = d.d[span.to];
+    if (lo === undefined || hi === undefined) return [];
+
+    // Grouped by date rather than scanned per row: a MAX viewport holds every
+    // mark in the series, and asking 300 rows to each filter 8,400 of them is
+    // 2.5 million comparisons for a list nobody has scrolled yet.
+    const byDate = new Map<string, Mark[]>();
+    for (const mk of this.marks) {
+      if (mk.at < lo || mk.at > hi) continue;
+      const list = byDate.get(mk.at);
+      if (list) list.push(mk);
+      else byDate.set(mk.at, [mk]);
+    }
+
+    const verdicts = this.markStore.verdicts;
+    const out: TapeRow[] = [];
+    for (let i = span.to; i >= from; i--) {
+      const at = d.d[i]!;
+      const marks = byDate.get(at) ?? [];
+      // Entries, then the lines they sit in, then the bar's own adjectives.
+      // Registry order would lead with `ib` and bury `H2`, and the reading
+      // already puts the composite last where it reads as the conclusion —
+      // this is the same ordering seen from the other end. A stable sort, so
+      // rules within a group keep the order the registry gives them.
+      marks.sort((a, b) => GROUP_ORDER[a.group] - GROUP_ORDER[b.group]);
+      out.push({
+        i,
+        at,
+        reading: readAt(ctx, index, i),
+        marks,
+        open: marks.reduce((n, mk) => n + (verdicts[mk.id] === undefined ? 1 : 0), 0),
+      });
+    }
     return out;
+  });
+
+  /**
+   * How much of the tape each filter would show.
+   *
+   * `unresolved` is the one that is new, and it is the marking loop's missing
+   * finish line: the tabbed pane could say how many marks were in view but
+   * never how many were still waiting on the reader. It counts SESSIONS
+   * holding a mark with no verdict, so it empties as the reader works and an
+   * empty list under that filter means done rather than broken.
+   */
+  tapeCounts = $derived.by((): { all: number; marked: number; unresolved: number } => {
+    let marked = 0;
+    let unresolved = 0;
+    for (const row of this.#tape) {
+      if (row.marks.length === 0) continue;
+      marked++;
+      if (row.open > 0) unresolved++;
+    }
+    return { all: this.#tape.length, marked, unresolved };
+  });
+
+  /**
+   * Which slice of the tape is on screen.
+   *
+   * Transient view state, deliberately not a setting — the same argument the
+   * pane's tab made for itself: `settings.marks` is sparse on purpose, and
+   * freezing today's answer into every settings file to save one click is the
+   * trade that sparseness exists to avoid.
+   */
+  tapeFilter = $state<TapeFilter>('all');
+
+  setTapeFilter(filter: TapeFilter): void {
+    this.tapeFilter = filter;
+  }
+
+  visibleTape = $derived.by((): TapeRow[] => {
+    const rows = this.#tape;
+    if (this.tapeFilter === 'marked') return rows.filter((row) => row.marks.length > 0);
+    if (this.tapeFilter === 'unresolved') return rows.filter((row) => row.open > 0);
+    return rows;
   });
 
   /**
@@ -408,9 +503,9 @@ export class AppState {
     return readAt(ctx, index, i);
   });
 
-  readingTruncated = $derived.by((): boolean => {
+  tapeTruncated = $derived.by((): boolean => {
     const span = this.#span;
-    return span !== null && span.to - span.from + 1 > READING_CAP;
+    return span !== null && span.to - span.from + 1 > TAPE_CAP;
   });
 
   /**
@@ -845,6 +940,16 @@ export class AppState {
    * they were consumed, not dropped. The notes card says what happened instead.
    */
   hiddenBars = $derived(this.aggregated ? 0 : (this.#raw?.d.length ?? 0) - this.count);
+
+  /**
+   * The session the feed has traded but not closed, when it is holding one.
+   *
+   * Naturally absent on the RTH daily chart: `#raw` there is the 5-minute
+   * series, which has that session in full. That asymmetry is the whole
+   * disagreement -- one window a session shorter than the other -- seen from
+   * the side where nothing is missing.
+   */
+  pendingSession = $derived(this.dataset?.pending);
 
   /**
    * Switch the session window.

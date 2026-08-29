@@ -12,7 +12,15 @@
    */
   import type { BarReading } from '$shared/marks/reading.ts';
 
-  let { reading }: { reading: BarReading } = $props();
+  /**
+   * `patterns` is a switch over the LAST clause only, and the tape is why.
+   *
+   * There the pattern names are rendered as the mark chips instead of as text
+   * — the same fact, made clickable — so printing them here as well would say
+   * it twice on one line. The readout has no chips and keeps them. The bar
+   * clause and the context are never optional: they are the reading.
+   */
+  let { reading, patterns = true }: { reading: BarReading; patterns?: boolean } = $props();
 </script>
 
 <!-- The separators are explicit `{' '}` text nodes. A leading space written
@@ -21,7 +29,7 @@
      tags is collapsed by the same pass. This is the form that survives. -->
 <span class="bar {reading.tone}">{reading.bar}</span
 >{#if reading.context}{' '}<span class="ctx">— {reading.context}</span>{/if
-}{#if reading.patterns.length}{' '}<span class="pat">— {reading.patterns.join(', ')}</span>{/if}
+}{#if patterns && reading.patterns.length}{' '}<span class="pat">— {reading.patterns.join(', ')}</span>{/if}
 
 <style>
   .bar.bull { color: var(--up-text); }

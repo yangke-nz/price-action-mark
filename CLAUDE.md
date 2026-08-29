@@ -450,9 +450,9 @@ src/renderer/
   lib/components/                Masthead, Controls, Readout, ChartPanel, …
     MarkPanel.svelte               rule toggles, counts, the publish switch
     RulesSheet.svelte              the fold set as a modal; mounted by App
-    MarkingPane.svelte             the tablist; owns the card both views sit in
-    MarkList.svelte                view 1 - what is marked; keep / drop / highlight
-    ReadingList.svelte             view 2 - one line per session; click to highlight
+    MarkingPane.svelte             the All/Marked/Unresolved filter; owns the card
+    Tape.svelte                    one row per session: the reading, its marks as
+                                     chips, keep / drop in the strip a chip opens
     Reading.svelte                 one reading's three clauses; the colour grammar
   styles/tokens.css              the palette, in three scopes
 ```
@@ -466,9 +466,10 @@ populated table rows, a resolved theme, a well-formed EMA value, >=2 loaded font
 faces, zero console errors, and that the preload bridge exists in the desktop app
 and *not* in the artifact. **`smoke:app` imports the real `out/main/index.js`**, so
 the preload and every IPC handler run on their production path. It also asserts
-the readout's **bar reading** and the marking pane's two tabs, because prose
-fails silently — a dropped clause renders as a shorter sentence, never as an
-error, and an empty reading is an empty element.
+the readout's **bar reading**, the marking pane's **tape** and the mark **chips**
+on it, because prose fails silently — a dropped clause renders as a shorter
+sentence, never as an error, an empty reading is an empty element, and a row
+whose chips failed to render looks exactly like a session carrying no marks.
 
 It also drives the **fold** on both targets: a heading chip has to reveal its
 less-used rules and fold them away again, and the **rules sheet** has to open
@@ -476,6 +477,13 @@ from the card's door, bring a folded rule back into the list, drop that change
 and close. Both are the same class of silent failure — a fold that reveals
 nothing looks exactly like a short list — and both CLICK THEN MEASURE IN A
 SECOND `executeJavaScript`, for the reason the probe note below gives.
+
+The **stop & target** switch is driven the same way, and asserted at DOM level
+rather than against the canvas — it has to toggle and come back. That is a
+deliberate retreat and the marking section says why: a click repaints the whole
+pane, so a canvas poll catches the clear-and-redraw rather than the rails, and
+a version of the check that "passed" was reporting the candles canvas going
+433,556 -> 0 -> 432,424.
 
 **`smoke:app` can print NOTHING and exit 0 — that is a FAILED run, not a pass.**
 [main/index.ts](src/main/index.ts) opens with
@@ -574,7 +582,7 @@ and that nobody classified it.
   script's own blind spot.** It paired every token with `plane` / `surface` /
   `surface-2` and nothing else, so a token painting a background for *text* was
   never a ground and that text was never measured. The marking pane's
-  selected-tab count chip inverts — 10.5px `--surface` on a `--focus` fill —
+  selected-filter count chip inverts — 10.5px `--surface` on a `--focus` fill —
   and measured **4.30:1 in light** while the run printed "every token clears
   the bar it is used at". Even pure white on the old `#2a78d6` is 4.42:1, so
   the fix had to be the blue: `--focus` is now `#2874d0`, the smallest move
@@ -703,9 +711,10 @@ delete that directory first.
   — so `data/es_5m.json` is gitignored and the app fetches it. `1m` is a
   different shape again (8 days a request over a ~30-day archive, pageable) and
   would need chunked fetching to be worth anything; it is a feature, not a gap.
-- **The pane's open tab is not persisted.** `settings.marks` is sparse on
-  purpose (see below), and storing a tab would freeze today's answer into every
-  settings file to save one click.
+- **The pane's filter is not persisted.** `settings.marks` is sparse on
+  purpose (see below), and storing All / Marked / Unresolved would freeze
+  today's answer into every settings file to save one click. Same argument the
+  pane's open TAB was refused on, before the tabs became a filter.
 
 ## Marking
 
@@ -774,7 +783,7 @@ delete that directory first.
     `.scroll` reporting 498px of content and `maxScroll: 0`, with the last
     rules unreachable. **Only the rules card needs this now**: it is the one
     `<details>` left in the column, since the marking pane became a `<section>`
-    with a tablist and a plain flex chain. Both keep a `max-height` fallback
+    with a filter and a plain flex chain. Both keep a `max-height` fallback
     (`--rules-scroll-max`, `--pane-scroll-max`) so a browser without the
     pseudo-element still scrolls rather than clipping.
   - **The column's height comes from the CHART CARD, and by stretching to it.**
@@ -791,10 +800,11 @@ delete that directory first.
     rest and viewport-height when stuck, and with panes there is nothing to
     stick.
   A card's own density is a CONTAINER query on the card, never App's media
-  query repeated: the marking pane declares the container both its views read —
-  the mark table tightens its five columns under 780px and 660px, the reading
-  rows drop the date rail under 430px. The same box is full-width when stacked
-  and a narrow pane when not, and it is that box's width that decides.
+  query repeated: the marking pane declares the container the tape reads, and
+  the tape drops the date rail under 430px. The same box is full-width when
+  stacked and a narrow pane when not, and it is that box's width that decides.
+  **The mark table's two tiers went with the table** — 780px and 660px trimmed
+  the padding of five columns that no longer exist.
   **MarkPanel used to be the other example and is no longer any example at
   all.** Its one query decided the width at which the per-rule blurb line had
   to go; the blurb does not print on the card at any width now — it is the
@@ -807,13 +817,16 @@ delete that directory first.
   where the card is wide enough that the blurbs used to show: 31 rules are
   310px of content in four columns, against the 2,199px one column of blurbs
   measured when that was the layout.
-- **The mark table has an irreducible ~535px floor and scrolls sideways below
-  it.** The container tiers took it from 766px to 535px, which fits from about a
-  1700px viewport up; at 1500 it is 57px short and at 1200, 147px. Closing that
-  last gap means shrinking the date, the mark label, or the Keep/Drop pair —
-  ~412px of the 535 and the three things the reader actually aims at. It scrolls
-  in its own container instead, which is what the container is for. Do not
-  "fix" it by trimming those three.
+- **THE MARK TABLE'S ~535px FLOOR IS GONE, and it is worth knowing how.** Five
+  columns — date, label, rule, detail, Keep/Drop — could not be squeezed below
+  535px, which fits from about a 1700px viewport up and is 147px short at 1200;
+  the note here used to say the only remaining move was to shrink the date, the
+  label or the verdict pair, which are the three things the reader aims at, so
+  it scrolled sideways instead. The tape dissolved the row instead of trimming
+  it: the date is the reading's rail, the label is a chip in the sentence, and
+  Rule / Detail / Keep / Drop render in the strip under whichever chip is
+  selected — one mark at a time rather than every row at once. Nothing was
+  made smaller. **If a future row grows a sixth thing, put it in the strip.**
 - **Clicking a mark in the LIST highlights it on the chart; clicking one on
   the CANVAS still toggles Keep.** Two gestures, two meanings — "show me where
   this is" is not "I stand behind this". Selection is one id in `AppState`,
@@ -829,8 +842,11 @@ delete that directory first.
   measures `lines` and never a fill. The wide mark is what the fill was always
   too strong for: a channel band covers about a third of the pane at the zoom a
   reader marks up at, and the whole of it when they zoom in. Measured on the
-  shipped series before choosing: 433 channel marks spanning 4 to 101 bars,
-  median 6, and one real bull channel covers 36% of the pane zoomed in against
+  shipped series before choosing: 433 channel marks drawn by the shipped
+  defaults, spanning 4 to 101 bars with a median of 6 — `bull-channel` 99,
+  `bear-channel` 96, `micro-channel` 238, and 40 more from
+  `spike-and-channel`, which ships off — and one real bull channel covers 36%
+  of the pane zoomed in against
   13% with room around it — which is why a single flat number reads well on one
   chart and as a slab on the other. Anything that raises it again has to answer
   for the wide case first.
@@ -856,7 +872,8 @@ delete that directory first.
   `hoveredInfo.objectId` (`hoveredObjectId` is deprecated), and `CandleChart`
   checks it against the ids it was given rather than trusting it — markers and
   primitives share that channel. There is no second gesture: the library's click
-  event carries no modifier keys, so Drop stays in the mark list.
+  event carries no modifier keys, so Drop stays in the tape, on the strip a
+  chip opens.
 - **Bar labels need ~24px a bar, not 8.** Three-character labels at 11px mono are
   ~20px wide, so below that adjacent bars' labels overlap into garbage. The test
   is PIXELS PER BAR, not the name of a range: on daily that works out to the 1M
@@ -930,7 +947,7 @@ delete that directory first.
   and the entry line said the same thing twice and nothing was clickable but
   two thin rails. Now the box IS the entry: a band a quarter of the risk thick
   (`BAND_SHARE` in draw.ts), stroked AND filled, ONE BAR WIDE, over the signal
-  bar. Four things in it were decided rather than defaulted:
+  bar. Five things in it were decided rather than defaulted:
   - **The thickness is in PRICE, not pixels** — a quarter of the risk — so it
     means the same thing at every zoom instead of swelling into the candles
     when the reader zooms out. A band on one price with no thickness is a line,
@@ -1068,8 +1085,9 @@ delete that directory first.
   - **Open or closed is component `$state`, and the show-all lives in `.top`,
     not the `<summary>`.** A summary IS a button, so a button inside one is a
     button inside a button — the constraint that stopped the marking pane's
-    tabs going there. Persisting the open state would freeze today's answer
-    into every settings file, the argument the next note makes.
+    tabs going there, and that now keeps the tape's mark chips OUTSIDE the
+    sentence-button beside them. Persisting the open state would freeze today's
+    answer into every settings file, the argument the next note makes.
   It does NOT make the card fit, and should not be described as if it does: at
   1904x1015 the list is 410px in a 211px window, and a row measures ~11px, so
   fitting would mean folding roughly eighteen more — most of what is left.
@@ -1447,9 +1465,10 @@ One line of the intraday chart's furniture, and three decisions in it.
 
 One line per bar, in words — [reading.ts](src/shared/marks/reading.ts), printed by
 `npm run marks -- --read`, and shown in two places: the **readout** carries the
-reading of whatever session the crosshair is on, and the **marking pane's second
-tab** lists every session in view, newest first, clicking one to highlight that
-bar. Every session gets a line.
+reading of whatever session the crosshair is on, and the **marking pane's tape**
+is a row per session in view, newest first, clicking one to highlight that bar.
+Every session gets a line — and on the tape the line's last clause is the marks
+themselves, as chips. See the tape notes above for that half.
 
 - **It names no pattern it did not import.** The adjectives — trend bar, doji,
   shaved, big — read `BIG_ATR`, `DOJI_BODY`, `SHAVED_TAIL`, `PIN_TAIL` and
@@ -1460,8 +1479,8 @@ bar. Every session gets a line.
   moved, and the chart would then draw one thing and read another.
 - **A mark joins a reading only if `knownAt === at`.** A double top is not
   readable on the day of its second peak, and a bar-by-bar reading that names
-  it there claims foresight. Confirmation-lagged patterns stay the mark list's
-  business, which prints the lag. `--check` asserts it: every phrase in a
+  it there claims foresight. Confirmation-lagged patterns stay the TAPE's
+  business, where the chip prints `→27 Aug` and its strip the full lag. `--check` asserts it: every phrase in a
   reading has to be a rule that fired on that bar AND was knowable at its close.
   Verified to have teeth: dropping the `knownAt !== at` filter reports
   *"reading at 2000-10-24 names bear-channel, knowable only at 2000-10-27"* and
@@ -1516,6 +1535,17 @@ bar. Every session gets a line.
   tellable apart. Measured with both probe controls: a click changes 5,814
   pixels on the primitive's canvas and **zero on the price axis** — the band
   cannot move the scale, because `autoscaleInfo()` is null.
+  **It is a FILL AND NOTHING ELSE now: the two 0.85 rails are gone.** They ran
+  down each edge at one pixel and were the loudest thing either band drew, so
+  when the highlight had to come down in opacity they are what came off — the
+  fill stays at `FOCUS_BAND_ALPHA` 0.22. What they bought is written down in
+  palette.ts rather than lost: at MAX zoom a session is a fraction of a pixel,
+  the band is clamped to `BAND_MIN_PX`, and the rails were what located it
+  there. **If a five-pixel tint proves too little to find, widen that clamp —
+  do not put a 0.85 line back over the candles.** With the rails gone the two
+  band painters were the same code with two constants, so there is now ONE,
+  `paintBand`, taking the colour and the alpha as arguments; two identical
+  functions drift the day one of them is edited.
 - **A BAR POSITION MUST NOT OUTLIVE THE DATASET IT INDEXES, and bounds-checking
   it is only half the fix.** `keyIndex`, `hoverIndex` and `selectedBarIndex` are
   positions in a dataset that is DERIVED, so it changes length underneath them
@@ -1545,10 +1575,11 @@ bar. Every session gets a line.
     Measured with the 5-minute feed refused and no 5m cache: with the drop
     hoisted above the `await`, a keyboard crosshair on 18 Sep 2000 landed on
     28 Jul 2026 on a switch that errored and left the chart exactly as it was.
-- **`#span` is the one clamped viewport.** The table, the mark list and the
-  reading all need "what is on screen", and the chart can report a bar past the
-  end mid-refresh. Four copies of `Math.min(viewport.to, n - 1)` are four
-  chances for the three lists to disagree about what is visible.
+- **`#span` is the one clamped viewport.** The data table and the tape both
+  need "what is on screen", and the chart can report a bar past the end
+  mid-refresh. Copies of `Math.min(viewport.to, n - 1)` are chances for the two
+  to disagree about what is visible. The merge removed one of the three readers
+  it used to have, not the reason for it.
 - **`buildCtx` is hoisted to `#ctx`.** The reading needs the same metrics and
   structure the rules do. Two calls would walk 6,550 bars twice and, worse,
   could be handed different structure dials and quietly disagree about what a
@@ -1562,27 +1593,82 @@ bar. Every session gets a line.
   (a MAX viewport of rows) is 0.26 ms, and the old `readings()` call it replaced
   was 0.80 ms *every time* — so the hoist is worth about 0.8 ms per pointer
   move. Re-measure with a throwaway under `scripts/` rather than trusting these.
-- **Both pane views stay MOUNTED; only CSS hides the inactive one.** A tab
-  switch therefore keeps each list's scroll position, which is the thing a
-  reader loses most often and notices most. It is affordable because the hidden
-  view costs 0.26 ms of recompute per viewport settle and no more DOM than the
-  mark list already used.
 - **Measured over the whole series: the longest reading is 176 characters** and
   8 of 6,550 carry nothing but the bar's own body. `--read` prints both figures,
   because a reading that wraps to two lines has stopped being a line.
-- **The pane is a TABLIST, and therefore no longer a `<details>`.** Two views
-  need a real `role="tablist"`, and tabs inside a `<summary>` would put buttons
-  inside a button — the summary *is* one. So the marking pane does not collapse
-  any more. That is the price of the placement, and it is paid down twice: the
-  pane is bounded so it can never run away down the page, and the readout
-  carries the current bar's reading whichever tab is showing.
-- **Marks is the tab that opens.** The reading would otherwise claim the slot
-  the marking loop has always had; the readout already puts a reading in front
-  of the reader on every load, so defaulting to marks costs the new surface
-  nothing. Both tabs carry their own live count — a hidden view that cannot say
-  it has something in it is a view nobody switches to. Not persisted:
-  `settings.marks` is sparse on purpose, and freezing today's answer into every
-  settings file to save one click is the trade that note warns about.
+- **THE PANE IS ONE TAPE, AND THE TABS ARE GONE.** *Marks in view* and *Bar
+  reading* were two newest-first lists over the same viewport, so the tab
+  between them was a switch the reader paid on every glance — and the two
+  overlapped by construction, because a reading names the patterns knowable at
+  that close and the mark list was listing those same patterns for the same
+  bar. [Tape.svelte](src/renderer/lib/components/Tape.svelte) is now the single
+  view: one row per session, newest first, the reading as the row and its marks
+  hanging off it. `MarkList.svelte` and `ReadingList.svelte` are deleted;
+  `Reading.svelte` is untouched apart from one prop, because the colour grammar
+  is still shared with the readout. The pane still does not collapse, and that
+  is still the price of the placement — it is bounded so it can never run away
+  down the page, and the readout carries the current bar's reading whatever the
+  filter says.
+- **THE PATTERN CLAUSE IS RENDERED AS THE MARKS.** `Reading` is asked to leave
+  its last clause off (`patterns={false}` — the switch exists for this and only
+  this) and the chips take its place, so the sentence and the mark list stop
+  saying the same words twice and the words become clickable. Three cases fall
+  out of that and all three are meant:
+  - **a mark the prose does NOT name is a chip on its own.** Either the reading
+    already stated it in an earlier clause — the `STATED` set in reading.ts,
+    which is why `inside` and `big-bar` are chips with no text — or it was not
+    knowable at that close, like a channel confirmed three sessions later.
+    The second kind prints `→27 Aug`, because the row's date is not the date it
+    was readable.
+  - **a pattern the prose names with NO mark behind it stays as dim text.** The
+    rule is switched off, or the mark was dropped. That is rule state made
+    visible in the tape rather than a discrepancy papered over; 12 of 127 rows
+    carry one on the shipped snapshot. Matching is by `phraseOf`, IMPORTED from
+    reading.ts rather than restated — two ideas of what a pattern is called
+    would let one surface disagree with the other.
+  - **a session with neither is one line of prose,** which at the shipped
+    density is a little over half of them.
+- **THE TAB BECAME A FILTER, and it asks a different question.** It asked
+  "which list?"; it asks "how much of the tape?" — All / Marked / Unresolved,
+  a `radiogroup` rather than a `tablist` because there is one panel now and
+  three mutually exclusive settings of it. Arrow keys still move and select, so
+  the handler survived nearly intact. **`Unresolved` is new and is the marking
+  loop's missing finish line**: it counts SESSIONS holding a mark with no
+  verdict, so it empties as the reader works and an empty list under it means
+  done rather than broken — which is why that filter has its own empty copy.
+  All three counts show at all times, for the reason both tabs used to.
+- **ONE CAP, because it is one list.** `MARK_LIST_CAP` 200 and `READING_CAP`
+  300 bounded two different things; the row IS a session now, so `TAPE_CAP` 300
+  bounds sessions. The honest consequence, and the header prints it: **a mark
+  anchored older than the newest 300 sessions in view has no row to sit on and
+  is not listed.** At 0.71 marks a bar the old 200-mark cap fell about 280
+  sessions back anyway, so what changed is which of the two is exact.
+- **Two gestures share a row and they stay two.** The sentence selects the
+  SESSION (`selectedBarDate`, a `--focus` band); a chip selects the MARK
+  (`selectedMarkId`, the mark's own tone). Both bands can show at once and are
+  already tellable apart. **The chip needed no state of its own**: it opens its
+  detail strip when it is the selected mark, so one click both highlights it on
+  the chart and opens it, `selectedMarkId` already toggles on a second click,
+  and the strip already clears itself when the mark stops being drawn.
+- **The strip is where the mark table's Rule, Detail and verdict columns went,
+  and it is what paid off the ~535px floor.** Those three columns now render
+  for one mark at a time instead of for every row, and the Session column
+  became the rail the reading already had. Nothing was trimmed — that note
+  warned against shrinking the date, the label and the Keep/Drop pair, and all
+  four are still full size.
+- **`.say` is `display: inline-block`, deliberately not `inline`.** A
+  shrink-to-fit box leaves the chips on the sentence's line when there is room
+  and takes the full width when the sentence is long, so the chips wrap under
+  it rather than into the middle of it. `display: inline` would flow them into
+  the last line and save about 900px of the 5,751px content height measured at
+  the pane's 642px — worth 16%, and not worth a display model Safari has never
+  been dependable about. Measured there: 127 rows, median 36px, 82 on one line,
+  59 carrying chips.
+- **The chips are BUTTONS BESIDE the sentence, never inside it.** The row is a
+  grid whose prose cell holds the sentence-button and the chips as siblings. A
+  chip inside `.say` is a button inside a button — the same constraint that
+  stopped the tabs going in a `<summary>`, which is how the pane lost its
+  `<details>` in the first place.
 - **The date is a 7ch RAIL, not a line of its own, and that buys three rows.**
   The obvious narrow-column answer is to stack the date above the reading, which
   is what the container-query fallback did. Measured at the pane's 647px:
@@ -1597,10 +1683,12 @@ bar. Every session gets a line.
   compiler, and a space written between the tags is collapsed by the same pass.
   [Reading.svelte](src/renderer/lib/components/Reading.svelte) emits explicit
   `{' '}` text nodes. Nothing warns about this; it shows up as prose with a word
-  glued to a dash.
+  glued to a dash. **It caught the tape too, on the very next clause**: the em
+  dash before the mark chips rendered as `trading range— ib`, found by
+  screenshot rather than by any check, so `Tape.svelte` emits them as well.
 - **The rules card is bounded in the STACKED layout too, which it deliberately
   was not.** Unbounded, 31 rules run to about 1,300px, and with the pane now
-  below it the reading tab landed **2,059px** down an 935px viewport. Bounding
+  below it the tape landed **2,059px** down an 935px viewport. Bounding
   it moved that to 1,211px, and reaching the pane leaves the chart **249 of
   430px** visible instead of 0. The old comment in `MarkPanel` said unbounded
   was "right for the stacked layout" — it was, when that card was the last
@@ -1620,9 +1708,11 @@ a line of Brooks prose for every session in view, clickable back to the bar.
 Shipped since, and equally done: the rules card **folds** its less-used rules
 behind a per-group chip, with a modal **rules sheet** letting the reader move
 any rule off the tier it ships with; the intraday chart carries **Brooks bar
-numbers**, every third bar with the session's first bar dated; and the session
+numbers**, every third bar with the session's first bar dated; the session
 window now reaches the **daily** chart, where RTH bars are aggregated from the
-5-minute series rather than filtered for.
+5-minute series rather than filtered for; and the marking pane's two tabs
+became ONE **tape** — a row per session carrying its reading and its marks as
+chips, filtered All / Marked / **Unresolved**.
 
 **What is left is DRAWING — marks the reader makes by hand.** Everything that
 needs is already in place and was built that way on purpose:

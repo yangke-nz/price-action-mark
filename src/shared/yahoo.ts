@@ -143,6 +143,25 @@ export function toRows(result: ChartResult, interval: Interval = '1d'): Row[] {
   return rows;
 }
 
+/**
+ * The bar the feed has opened and not closed, if it is holding one.
+ *
+ * ONLY the final row, and only when it carries prices. A partial row anywhere
+ * else in the series is dirt, and naming it "pending" would promise a close
+ * that is never coming: measured on the daily series, 6,593 of 6,594 rows
+ * carry a close, and the row that does not is the one whose timestamp IS
+ * `meta.currentTradingPeriod.regular.start`. Trailing ALL-null rows are the
+ * ordinary intraday tail -- the overnight, and the weekend -- and are not this.
+ */
+export function pendingBar(result: ChartResult, interval: Interval = '1d'): string | undefined {
+  const ts = result.timestamp ?? [];
+  const q = result.indicators.quote[0];
+  const i = ts.length - 1;
+  if (!q || i < 0 || q.close[i] != null) return undefined;
+  if (q.open[i] == null && q.high[i] == null && q.low[i] == null) return undefined;
+  return keyOf(ts[i]!, INTERVALS[interval].intraday);
+}
+
 export function toDataset(
   result: ChartResult,
   interval: Interval = '1d',
@@ -153,6 +172,8 @@ export function toDataset(
   const str = (k: string, fallback: string): string =>
     typeof meta[k] === 'string' && meta[k] ? (meta[k] as string) : fallback;
   const num = (k: string): number | null => (typeof meta[k] === 'number' ? (meta[k] as number) : null);
+
+  const pending = pendingBar(result, interval);
 
   const d = rows.map((r) => r.date);
   return {
@@ -171,6 +192,7 @@ export function toDataset(
     v: rows.map((r) => r.volume),
     rolls: rollIndices(d),
     interval,
+    ...(pending === undefined ? {} : { pending }),
   };
 }
 

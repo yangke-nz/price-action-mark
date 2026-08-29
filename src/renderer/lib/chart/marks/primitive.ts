@@ -33,8 +33,8 @@ import type {
 import type { CanvasRenderingTarget2D } from 'fancy-canvas';
 import type { GeometryMark, Mark } from '../../../../shared/marks/types.ts';
 import { isGeometry } from '../../../../shared/marks/types.ts';
-import { styleFor } from './palette.ts';
-import { distanceTo, paint, paintAnchorBand, paintFocusBand, shapeOf, type Shape, type Space } from './draw.ts';
+import { FOCUS_BAND_ALPHA, SELECTED_BAND_ALPHA, styleFor } from './palette.ts';
+import { distanceTo, paint, paintBand, shapeOf, type Shape, type Space } from './draw.ts';
 import { readTokens } from '../tokens.ts';
 
 /** How close the pointer has to get, in CSS pixels, to select a mark. */
@@ -232,18 +232,19 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
 
     target.useBitmapCoordinateSpace(({ context, mediaSize, horizontalPixelRatio, verticalPixelRatio }) => {
       if (picked && bandIndex !== undefined && bandX !== null) {
-        paintAnchorBand(
+        paintBand(
           context, bandX, this.#bandHalfWidth(space, bandIndex), mediaSize.height,
-          styleFor(picked.tone, tokens), horizontalPixelRatio, verticalPixelRatio,
+          styleFor(picked.tone, tokens).color, SELECTED_BAND_ALPHA,
+          horizontalPixelRatio, verticalPixelRatio,
         );
       }
 
       // After the mark band, so that when the reader has picked a mark and the
       // bar under it, the rails still read as the bar selection.
       if (focusIndex !== undefined && focusX !== null) {
-        paintFocusBand(
+        paintBand(
           context, focusX, this.#bandHalfWidth(space, focusIndex), mediaSize.height,
-          tokens.focus, horizontalPixelRatio, verticalPixelRatio,
+          tokens.focus, FOCUS_BAND_ALPHA, horizontalPixelRatio, verticalPixelRatio,
         );
       }
 
