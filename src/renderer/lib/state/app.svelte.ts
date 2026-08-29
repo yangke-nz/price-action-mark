@@ -334,6 +334,85 @@ export class AppState {
     this.selectedMarkId = this.selectedMarkId === id ? null : id;
   }
 
+  /**
+   * Show a mark in the tape — SET, never toggled, and scrolled to.
+   *
+   * The toggling pair above is right for the tape, where the click lands on
+   * the highlight itself and a second click is the obvious way out of it. It
+   * is wrong for the CHART: there the highlight the reader is looking at is
+   * somewhere else on screen, and clicking the same mark twice would clear it
+   * out from under them. Escape still clears both, which is where "a way out"
+   * lives for this direction.
+   */
+  revealMark(id: string): void {
+    this.selectedMarkId = id;
+    const at = this.marks.find((mk) => mk.id === id)?.at;
+    if (at === undefined) return;
+    this.#widenTapeFor(at);
+    this.#reveal(at);
+  }
+
+  /** The same, for a session. See `revealMark` for why it does not toggle. */
+  revealBar(i: number): void {
+    const at = this.dataset?.d[i];
+    if (at === undefined) return;
+    this.selectedBarDate = at;
+    this.#widenTapeFor(at);
+    this.#reveal(at);
+  }
+
+  #reveal(at: string): void {
+    this.revealTarget = at;
+    this.revealNonce++;
+  }
+
+  /**
+   * The session the last explicit reveal was about.
+   *
+   * STATED, not inferred, and that is the whole reason it exists. The tape's
+   * scroll effect used to work it out as "the selected mark's session, or else
+   * the selected bar" — which is right until the two are both set, and they
+   * are the moment a reader clicks a mark and then clicks a bar somewhere else.
+   * The mark selection is still live and would win, so the tape would scroll
+   * back to the mark rather than to the bar just clicked. Both selections are
+   * allowed to coexist — that is the design, two bands the reader can tell
+   * apart — so the reveal has to say which of them it meant.
+   */
+  revealTarget = $state<string | null>(null);
+
+  /**
+   * Bumped by every explicit reveal, and by nothing else.
+   *
+   * The tape scrolls the revealed row into view, and it has to distinguish a
+   * reveal from an incidental recompute: `visibleTape` rebuilds on every
+   * viewport settle, so an effect watching the SELECTION alone would re-scroll
+   * whenever the reader panned the chart with a selection active, fighting
+   * anyone who had scrolled the tape by hand. It also makes clicking the same
+   * bar twice work — the selection is unchanged, so only this says a reveal
+   * happened.
+   */
+  revealNonce = $state(0);
+
+  /**
+   * Widen the tape's filter if that is what stands between the reader and the
+   * row they just asked for.
+   *
+   * Only when the click finds NOTHING: they asked to see a specific session,
+   * and doing nothing silently is the worst answer in exactly the case this
+   * feature exists for. The filter is transient view state with nothing
+   * persisted, so widening it costs no settings file anything.
+   *
+   * Past `TAPE_CAP` there is no row under any filter, so this leaves the
+   * selection set and says nothing rather than switching to `all` for no gain
+   * — the row appears on its own when the viewport narrows.
+   */
+  #widenTapeFor(at: string): void {
+    if (this.tapeFilter === 'all') return;
+    if (this.visibleTape.some((row) => row.at === at)) return;
+    if (!this.#tape.some((row) => row.at === at)) return;
+    this.tapeFilter = 'all';
+  }
+
   clearMarkSelection(): void {
     this.selectedMarkId = null;
   }

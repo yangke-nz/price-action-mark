@@ -153,13 +153,27 @@ export function toRows(result: ChartResult, interval: Interval = '1d'): Row[] {
  * `meta.currentTradingPeriod.regular.start`. Trailing ALL-null rows are the
  * ordinary intraday tail -- the overnight, and the weekend -- and are not this.
  */
-export function pendingBar(result: ChartResult, interval: Interval = '1d'): string | undefined {
+export function pendingBar(
+  result: ChartResult,
+  interval: Interval = '1d',
+  rows?: readonly Row[],
+): string | undefined {
   const ts = result.timestamp ?? [];
   const q = result.indicators.quote[0];
   const i = ts.length - 1;
   if (!q || i < 0 || q.close[i] != null) return undefined;
   if (q.open[i] == null && q.high[i] == null && q.low[i] == null) return undefined;
-  return keyOf(ts[i]!, INTERVALS[interval].intraday);
+  const key = keyOf(ts[i]!, INTERVALS[interval].intraday);
+  // AND ONLY IF THAT BAR IS NOT ALREADY DRAWN. The feed duplicates its live
+  // bar — a closed copy earlier in the array, a null-close copy last — and
+  // `toRows` de-duplicates by keeping the FIRST occurrence, so the closed one
+  // survives under this very key. Without this check the Notes card announces
+  // "there is no bar to draw yet" directly above a chart whose last candle IS
+  // that session. The pending bar is the last timestamp and timestamps ascend,
+  // so its key is the maximum: if it was loaded it is the last row, and this
+  // is one comparison rather than a scan.
+  if (rows !== undefined && rows.length > 0 && rows[rows.length - 1]!.date === key) return undefined;
+  return key;
 }
 
 export function toDataset(
@@ -173,7 +187,9 @@ export function toDataset(
     typeof meta[k] === 'string' && meta[k] ? (meta[k] as string) : fallback;
   const num = (k: string): number | null => (typeof meta[k] === 'number' ? (meta[k] as number) : null);
 
-  const pending = pendingBar(result, interval);
+  // `rows` passed, not recomputed: the caller already has them, and the check
+  // pendingBar makes with them is the whole reason it can be trusted.
+  const pending = pendingBar(result, interval, rows);
 
   const d = rows.map((r) => r.date);
   return {

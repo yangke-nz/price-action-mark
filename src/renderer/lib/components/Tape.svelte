@@ -34,6 +34,7 @@
    * No card of its own: this is the view inside MarkingPane, which owns the
    * chrome, the container and the filter.
    */
+  import { untrack } from 'svelte';
   import { TAPE_CAP, type AppState, type TapeRow } from '$lib/state/app.svelte.ts';
   import { DEFAULT_STRENGTH } from '$shared/marks/structure.ts';
   import { phraseOf } from '$shared/marks/reading.ts';
@@ -44,6 +45,60 @@
   let { app }: { app: AppState } = $props();
 
   const rows = $derived(app.visibleTape);
+
+  let scroller = $state<HTMLDivElement | undefined>();
+
+  /**
+   * Bring a revealed row into view — the chart's half of the gesture.
+   *
+   * Keyed on `revealNonce`, NOT on the selection. `visibleTape` rebuilds on
+   * every viewport settle, so an effect watching the selection alone would
+   * re-scroll whenever the reader panned the chart with a selection active,
+   * fighting anyone who had scrolled the tape by hand. The nonce fires only on
+   * an explicit reveal, which also makes clicking the same bar twice work: the
+   * selection is unchanged, so nothing else would say anything had happened.
+   *
+   * `block: 'nearest'` is the whole of the politeness. It is a no-op when the
+   * row is already visible, so this needs no idea of where the reveal came
+   * from, and it never animates — which is also why there is no
+   * `prefers-reduced-motion` branch to get wrong.
+   */
+  $effect(() => {
+    // `revealNonce` IS THE ONLY TRACKED READ, and everything else is inside
+    // `untrack` for one reason: this effect must fire on a reveal and on
+    // nothing else. `scroller` used to be read here too, and it is `$state`
+    // bound with `bind:this` — so when the tape empties and refills (resolve
+    // the last open mark under `Unresolved`, or pan to a viewport with no
+    // rows) the `{#if}` swaps `.scroll` for the empty paragraph and back, the
+    // binding changes twice, and the effect re-ran and scrolled to a STALE
+    // `revealTarget` with no reveal having happened. That is precisely the
+    // incidental re-scroll the nonce exists to prevent, arriving through the
+    // one door left open.
+    if (app.revealNonce === 0) return;
+    untrack(() => {
+      const box = scroller;
+      // `revealTarget`, not "the selected mark's session, or else the selected
+      // bar". Both selections are allowed to be live at once, so inferring the
+      // target sent the tape back to a mark clicked earlier whenever the reader
+      // then clicked a BAR. The reveal states which one it meant.
+      const at = app.revealTarget;
+      if (!box || at === null) return;
+      const row = box.querySelector(`li[data-at="${CSS.escape(at)}"]`);
+      if (!row) return;
+
+      // `block: 'nearest'` semantics, computed by hand against THIS container.
+      // `scrollIntoView` cannot be used: it scrolls every scrollable ancestor,
+      // the DOCUMENT included, so in the stacked layout a chart click scrolled
+      // the page away from the chart that was just clicked — measured at
+      // 900x900, one click took the page from 0 to 724 and the candles from
+      // y 236..592 to y -488..-132, entirely off screen. The wide layout never
+      // showed it, because there the page does not scroll at all.
+      const r = row.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      if (r.top < b.top) box.scrollTop -= b.top - r.top;
+      else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+    });
+  });
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -134,12 +189,16 @@
     is the chart as it now stands, confirmed {DEFAULT_STRENGTH} bars later.
     {#if app.tapeTruncated}<span class="cap">Newest {integer(TAPE_CAP)} sessions listed; an older mark in view is not.</span>{/if}
   </p>
-  <div class="scroll">
+  <div class="scroll" bind:this={scroller}>
     <ol>
       {#each rows as row, i (row.at)}
         {@const open = openMark(row)}
         {@const dim = unnamed(row)}
-        <li class:picked={app.selectedBarIndex === row.i}>
+        <!-- `data-at` is the handle the reveal effect finds this row by. The
+             keyed `{#each}` already tracks it, but a keyed block gives no way
+             to ASK for one row's element, and holding a Map of 300 bindings to
+             answer one query per click is more machinery than a selector. -->
+        <li data-at={row.at} class:picked={app.selectedBarIndex === row.i}>
           <!-- A grid, and the sentence is the only button in it. The chips are
                siblings, not children: a button inside a button is the same
                constraint that stopped the tabs going in a <summary>. -->

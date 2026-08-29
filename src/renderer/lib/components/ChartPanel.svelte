@@ -28,8 +28,29 @@
       onViewport: (viewport) => { app.viewport = viewport; },
       // Keep is the action you take constantly while marking up; Drop is rarer
       // and stays in the list. The library's click event carries no modifier
-      // keys, so there is no second gesture to give it anyway.
-      onMarkClick: (id) => app.setVerdict(id, 'confirmed'),
+      // keys — v5's `TouchMouseEventData` is coordinates and nothing else — so
+      // there is no second gesture to give it anyway.
+      //
+      // The reveal is not a second gesture, it is the FEEDBACK for this one:
+      // the tape scrolls to the mark and opens its strip, so the verdict is
+      // something the reader watches land rather than something they have to
+      // go and find.
+      //
+      // REVEAL BEFORE THE VERDICT, and the order is load-bearing. Written the
+      // other way round, `revealMark` asked whether the tape could show the
+      // row AFTER the Keep had already taken it out of the `Unresolved`
+      // filter — so it widened to `All` every time, and the unresolved queue
+      // could not be worked from the chart at all: measured, `Unresolved 60`
+      // became `All 128` on a single click. Revealing first asks the question
+      // about the tape the reader is actually looking at; the verdict then
+      // lands and the row leaves the queue, which is what working a queue
+      // looks like. The strip shows the Keep either way — it re-renders.
+      onMarkClick: (id) => { app.revealMark(id); app.setVerdict(id, 'confirmed'); },
+      // A click with no mark under it is about the bar: show that session in
+      // the tape. The readout deliberately does NOT follow — `focusIndex` puts
+      // the pointer above a clicked line, and the crosshair is already on this
+      // bar, so the hover is the right answer while the pointer is here.
+      onBarClick: (index) => app.revealBar(index),
     });
     chart = instance;
     applied = dataset;

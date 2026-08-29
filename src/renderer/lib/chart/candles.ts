@@ -133,6 +133,14 @@ export interface CandleChartOptions {
   /** A mark was clicked on the canvas. Fires for geometry and for bar labels
    *  alike: the primitive's hit test and the marker ids both report a mark id. */
   onMarkClick(id: string): void;
+  /**
+   * A bar was clicked with no mark under the cursor.
+   *
+   * Mutually exclusive with `onMarkClick` — a click reports one thing or the
+   * other, never both, because selecting the bar AND the mark would draw two
+   * bands for one click and leave the reader to work out which was which.
+   */
+  onBarClick(index: number): void;
 }
 
 /** Only the sessions the average is actually defined for. Sending the warm-up
@@ -268,7 +276,21 @@ export class CandleChart {
     this.#chart.subscribeClick((param) => {
       const info = param as { hoveredInfo?: { objectId?: unknown; objectKind?: string; sourceKind?: string }; hoveredObjectId?: unknown };
       const id = info.hoveredInfo?.objectId ?? info.hoveredObjectId;
-      if (typeof id === 'string' && this.#marksById.has(id)) this.#opts.onMarkClick(id);
+      if (typeof id === 'string' && this.#marksById.has(id)) {
+        this.#opts.onMarkClick(id);
+        return;
+      }
+      // No mark under the cursor, so the click is about the BAR. Measured on
+      // v5.2.1 with sendInputEvent before this was written, because one answer
+      // decided whether the feature was worth having: a 200px pan fires NO
+      // click at all, so this cannot yank the tape on every drag. A 3px jitter
+      // drag does fire one, landing on whatever bar the nudge left under the
+      // cursor — the same as any chart, and not worth a guard. A click past
+      // the last bar arrives with `time` undefined, which is what makes
+      // "click empty space, nothing happens" free rather than a special case.
+      const time = param.time as string | number | undefined;
+      const hit = time === undefined ? undefined : this.#indexOfTime.get(time);
+      if (hit !== undefined) this.#opts.onBarClick(hit);
     });
 
     // Pan and zoom fire continuously; the table and the marker pass are only

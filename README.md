@@ -413,23 +413,35 @@ was the layout. In the side column, at a 647px card, nothing moved — that widt
 was already below the query's 700px and already compact.
 
 Two columns were not enough on their own, so the card also **folds the rules a
-reader rarely reaches for**. Nine carry `tier: 'extra'` — `trend-bar`, `doji`,
-`shaved`, `pin-bar`, `gap-bar`, `spike-and-channel`, `pullback-entry`,
-`failed-bo` and `final-flag` — and each group heading grows a `+5 ▾` chip that
+reader rarely reaches for**. Ten carry `tier: 'extra'` — `trend-bar`, `doji`,
+`shaved`, `pin-bar`, `gap-bar`, `climax`, `spike-and-channel`, `pullback-entry`,
+`failed-bo` and `final-flag` — and each group heading grows a `+6 ▾` chip that
 reveals them in place. The chip rides the heading rather than taking a row of
 its own, because the heading already spans the list and already carries the
 group's name: a `▸ 5 less used` row per group was tried first and spent ~16px
 each to say what the heading says for free. Measured on the artifact at a 647px
 card, the list goes from **510px to 410px**, and the top row carries one
-`Show all 9` for the whole card.
+`Show all 10` for the whole card.
 
 That is a 100px saving, not a fix: at 1904x1015 the list is 410px inside a
-211px window, so it still scrolls, and at ~11px a row roughly eighteen more
-folded rules is what "fits" would cost. The fold is also **not** a second `defaultOn`. That flag is about
-density — a rule firing on a third of all sessions makes a chart less readable
-than no marks at all — where `tier` is about how often the reader consults it.
-`climax` fires once a year and is worth a glance; `shaved` fires 38 times and
-may never be switched on. The two lists coincide today, and are free to diverge.
+211px window, so it still scrolls, and roughly eighteen more folded rules is
+what "fits" would cost. **The card is left scrolling on purpose**, and the
+alternative was measured rather than argued: the list only fits with the card
+at 524px, and in a fold-height column that money comes straight out of the
+tape — 470px of rules leaves the tape 3 visible rows, 499px leaves 2, and at
+the 524px that finally kills the scrollbar the tape is down to **one**. Letting
+the column grow instead makes it the tallest item in the grid row, so the chart
+card stretches with it and the marking pane's bottom edge drops from 29px below
+the fold to 200px. Scrolling a card the reader visits occasionally is the
+cheapest of those.
+
+The fold is **not** a second `defaultOn`, though the two have to move together
+for a rule to actually leave the list — a folded rule that is switched on is
+promoted back in, so `tier` alone only buys the quieter name. `defaultOn` is
+about density: a rule firing on a third of all sessions makes a chart less
+readable than no marks at all. `tier` is about how often the reader consults
+the toggle. `climax` is where they part company — 38 marks in 6,550 sessions,
+nowhere near dense, and shipped off purely because nobody reaches for it.
 
 ### Choosing what folds
 
@@ -1049,6 +1061,51 @@ mark's chip means *show me where this is*, and clicking a reading means *show me
 this bar*. Each has its own state and its own colour. The chip needed no state
 of its own — it opens its detail strip when it is the selected mark, so one
 click both highlights it on the chart and opens it.
+
+### And the chart points back
+
+The tape pointed at the chart; nothing pointed back. Now a click on the canvas
+**reveals what you clicked in the tape**, highlighted and scrolled into view — a
+mark opens its strip with the Keep it just received, a bar highlights its
+session. A click reports one or the other, never both: selecting a mark *and*
+its session would draw two bands for one click.
+
+Four things were measured with `sendInputEvent` before any of it was written,
+because one of them decided whether the feature was worth having:
+
+| Gesture | Result |
+| --- | --- |
+| A plain click | one event, carrying the bar's own key |
+| **A 200px pan** | **no click at all** — this cannot yank the tape on every drag |
+| A 3px jitter drag | fires, landing on whatever bar the nudge left under the cursor |
+| A click past the last bar | fires with `time` undefined, so "click empty space, nothing happens" is free |
+
+A fifth is a warning for whoever tests this next: **a synthetic `MouseEvent`
+does not reach Lightweight Charts at all.** Dispatching
+pointerdown/mousedown/pointerup/mouseup/click on the canvas changes nothing, so
+an in-page check would pass by asserting on a click that never happened. The
+smoke drives `sendInputEvent`, which works on a hidden window.
+
+Two traps were paid for on the way, and both are worth knowing. `scrollIntoView`
+**scrolls the document too** — it walks every scrollable ancestor — so in the
+stacked layout revealing a row scrolled the page away from the chart just
+clicked: measured at 900x900, one click took the page from 0 to 724 and the
+candles entirely off screen. The wide layout never showed it, because there the
+page does not scroll at all. And the reveal has to happen **before** the
+verdict: written the other way round, the widen-the-filter rule asked whether
+the tape could show the row after the Keep had already removed it from
+*Unresolved*, so every Keep from the chart threw the reader back to the full
+tape.
+
+Two details carry the behaviour. `revealBar` and `revealMark` **set** where
+`selectBar` and `selectMark` toggle — toggling is right for the tape, where the
+click lands on the highlight itself, and wrong for the chart, where clicking the
+same bar twice would clear a highlight the reader is looking at somewhere else.
+And the reveal **states its target** rather than letting the tape infer it: both
+selections are allowed to be live at once, so "the selected mark's session, or
+else the selected bar" sent the tape back to a mark clicked earlier whenever the
+reader then clicked a bar. The scroll is `block: 'nearest'` — a no-op when the
+row is already visible, and never animated.
 
 The bar highlight is a one-session vertical band drawn by the same primitive as
 the mark band — whose `autoscaleInfo()` returns null, which is why a full-height

@@ -295,7 +295,17 @@ export const BAR_RULES: readonly Rule[] = [
     group: 'bars',
     label: 'Climax',
     blurb: `A bar of at least ${CLIMAX_ATR} x ATR ending a run of ${CLIMAX_RUN} or more in one direction.`,
-    defaultOn: true,
+    // OFF AND FOLDED, AND IT IS THE FIRST RULE TO SHIP OFF ON USAGE RATHER
+    // THAN DENSITY. It fires 38 times in 6,550 sessions — 0.6%, nowhere near
+    // the density that put `trend-bar` (34.5%) or `doji` (27.2%) behind the
+    // fold. It ships off because a folded rule that is switched ON is never
+    // hidden: it is promoted back into the list, so `tier: 'extra'` alone
+    // would have left it listed under a quieter name and folded nothing. The
+    // two flags therefore have to move together for a rule to actually leave
+    // the list, and this is the first case where the reason was "nobody
+    // reaches for this toggle" rather than "this would paint the chart".
+    defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];

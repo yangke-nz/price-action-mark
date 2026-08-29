@@ -20,21 +20,6 @@
          bars" over five-minute candles until the timeframe switch existed. The
          PRODUCT name lives in <title>, the window title and the footer. -->
     <h1>E-Mini S&amp;P 500 futures, {app.subjectLabel}</h1>
-    <p class="sub">
-      Front-month continuous series.
-      <!-- Three cases, not two. An AGGREGATED daily bar is neither of the
-           other two: it is built here from the 5-minute series and has no
-           settlement price, so "one CME session — open, high, low, settle" was
-           a description of exactly what it is not. -->
-      {#if app.intraday}
-        Every candle is five minutes of the Globex session, timed in UTC.
-      {:else if app.aggregated}
-        Every candle is one {app.sessionLabel} session, built here from the 5-minute series.
-      {:else}
-        Every candle is one CME session &mdash; open, high, low, settle.
-      {/if}
-      Scroll to zoom, drag to pan, arrow keys step the crosshair.
-    </p>
   </div>
 
   <div class="quote">
@@ -82,8 +67,6 @@
     line-height: 1.14;
     text-wrap: balance;
   }
-
-  .sub { margin: 0; font-size: 13.5px; color: var(--ink-2); max-width: 58ch; }
 
   .quote { display: flex; align-items: flex-end; gap: 16px; flex: none; }
 

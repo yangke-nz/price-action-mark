@@ -60,6 +60,7 @@ let foldReveal = 'was not tested';
 let rulesSheet = 'was not tested';
 let railsSwitch = 'was not tested';
 let tapeFilter = 'was not tested';
+let chartReveal = 'was not tested';
 
 /** Serialised into the page, so it may not close over anything out here. */
 function probe() {
@@ -295,6 +296,89 @@ app.whenReady().then(async () => {
     return 'listed ' + before + ', unfolded to ' + after + ', restored and closed';
   })()`);
 
+  // The chart's half of the selection gesture: clicking a bar or a mark on the
+  // canvas reveals it in the tape, highlighted and scrolled into view.
+  //
+  // DRIVEN WITH sendInputEvent, NOT A SYNTHETIC MouseEvent. Measured:
+  // dispatching pointerdown/mousedown/pointerup/mouseup/click on the chart
+  // canvas changes nothing at all — lightweight-charts does not see them — so
+  // an in-page version of this check would pass by asserting on a click that
+  // never happened. sendInputEvent works on a hidden window, so the smoke's
+  // own `show: false` needs no change. Measured in a SECOND step, because
+  // Svelte flushes on a microtask.
+  chartReveal = await (async () => {
+    const read = () => win.webContents.executeJavaScript(`(() => {
+      const pane = document.querySelector('section[aria-label="Sessions in view"]');
+      if (!pane) return null;
+      const sc = pane.querySelector('[class*="scroll"]');
+      const li = pane.querySelector('li[class*="picked"]');
+      const chip = pane.querySelector('button[class*="chip"][aria-expanded="true"]');
+      const inView = li && sc
+        ? li.getBoundingClientRect().top >= sc.getBoundingClientRect().top - 1 &&
+          li.getBoundingClientRect().bottom <= sc.getBoundingClientRect().bottom + 1
+        : null;
+      return {
+        at: li ? li.dataset.at : null,
+        chip: chip ? chip.textContent.trim() : null,
+        inView,
+        // Verdicts are what a smoke run must not leave behind, so they are
+        // COUNTED rather than assumed: smoke:app writes to the developer's
+        // real marks file. A count, not a boolean, because that file may
+        // already hold verdicts this run knows nothing about.
+        kept: pane.querySelectorAll('button[class*="kept"]').length,
+      };
+    })()`);
+
+    // Re-read per click rather than captured once. The coordinates are only
+    // valid for the layout that produced them, and a click that moved the page
+    // would send the next one somewhere else entirely — which is how the undo
+    // below could silently miss and leave a real verdict on disk.
+    const pointOf = () => win.webContents.executeJavaScript(`(() => {
+      const c = [...document.querySelectorAll('canvas')]
+        .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+      if (!c || !c.width || !c.height) return null;
+      const b = c.getBoundingClientRect();
+      return { x: Math.round(b.x + b.width * 0.3), y: Math.round(b.y + b.height * 0.5) };
+    })()`);
+
+    const click = async () => {
+      const point = await pointOf();
+      if (!point) return false;
+      win.webContents.sendInputEvent({ ...point, type: 'mouseDown', button: 'left', clickCount: 1 });
+      await new Promise((r) => setTimeout(r, 60));
+      win.webContents.sendInputEvent({ ...point, type: 'mouseUp', button: 'left', clickCount: 1 });
+      await new Promise((r) => setTimeout(r, 450));
+      return true;
+    };
+
+    const before = await read();
+    if (!before) return 'found no marking pane';
+    if (!(await click())) return 'found no chart canvas';
+    const after = await read();
+
+    // A click lands on a mark or on a bar, never both, and either is a pass —
+    // which of the two depends on where the marks happen to be on whatever
+    // chart the machine last looked at.
+    if (after.chip) {
+      // It hit a mark, so a verdict was written. `setVerdict` toggles, so
+      // clicking again takes it straight back off — the desktop app persists
+      // verdicts to a real file and a smoke run must not leave one behind.
+      // VERIFIED, not assumed: an undo that missed used to leave a confirmed
+      // verdict in the developer's marks file while this still reported a
+      // pass, which is a check that hides the thing it exists to catch.
+      await click();
+      const undone = await read();
+      if (undone.kept !== before.kept) {
+        return 'left a verdict behind: kept went ' + before.kept + ' -> ' + undone.kept;
+      }
+      return 'revealed mark ' + after.chip;
+    }
+    if (after.at === null) return 'clicking the chart revealed nothing';
+    if (after.inView === false) return 'revealed ' + after.at + ' without scrolling it into view';
+    if (after.at === before.at) return 'the tape was already on ' + after.at;
+    return 'revealed session ' + after.at;
+  })();
+
   // The marking pane's filter, which replaced the tab between the mark list
   // and the bar reading. Narrowing has to actually narrow and has to come back
   // — a filter that returns the same rows every time looks exactly like a
@@ -367,6 +451,7 @@ app.whenReady().then(async () => {
     [r.tapeRows > 0, `the tape holds ${r.tapeRows} rows`],
     [r.tapeChips > 0, 'the tape drew no mark chips'],
     [/^narrowed \d+ -> \d+ -> \d+, back to \d+$/.test(tapeFilter), `the tape filter ${tapeFilter}`],
+    [/^revealed (session \S+|mark .+)$/.test(chartReveal), `a click on the chart ${chartReveal}`],
     // The status line names the bar size, and said "Daily bars" on a 5-minute
     // chart until it was told to ask.
     [/^(Daily|5-minute) bars · /.test(r.status ?? ''), `the status line reads ${JSON.stringify(r.status)}`],
@@ -423,7 +508,8 @@ app.whenReady().then(async () => {
       `  ${r.status ?? "?"}` +
       (r.timeframes.length ? `, timeframes ${r.timeframes.join("/")}` : ', no timeframe control') +
       `
-  marks: ${r.marks ?? "?"}, tape ${r.tapeRows} rows / ${r.tapeChips} chips, ${tapeFilter}, fold ${foldReveal},
+  marks: ${r.marks ?? "?"}, tape ${r.tapeRows} rows / ${r.tapeChips} chips, ${tapeFilter},
+  chart click: ${chartReveal}, fold ${foldReveal},
   sheet: ${rulesSheet},
   stop & target: ${railsSwitch}` +
       (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),

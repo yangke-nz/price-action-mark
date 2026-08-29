@@ -346,6 +346,24 @@ Break one of these and it fails quietly, not loudly.
   never `data.h` / `data.l`**, so the correction cannot be skipped.
 - **The feed is dirty**: null OHLC on holidays, `volume: 0` sessions, duplicated
   live bars. ~43 dropped per pull. `toRows()` handles it; don't bypass it.
+- **`pendingBar` MUST BE ASKED WITH THE ROWS, and it was not.** It names the
+  bar the feed has opened and not closed — the last timestamp, prices but no
+  close — and `toDataset` turns that into `Dataset.pending` for the Notes card.
+  On its own it cannot tell that bar apart from one that is ALREADY DRAWN: the
+  feed duplicates its live bar (a closed copy earlier in the array, a
+  null-close copy last) and `toRows` de-duplicates by keeping the FIRST
+  occurrence, so the closed copy survives under exactly that key. The card then
+  announces *"there is no bar to draw yet"* directly above a chart whose last
+  candle is that session. It now takes `rows` and returns `undefined` when the
+  key is already the last one; the pending bar is the last timestamp and
+  timestamps ascend, so its key is the maximum and that is one comparison, not
+  a scan.
+- **`Dataset.pending` is set for EVERY interval, so copy about it cannot assume
+  daily.** The Notes sentence described a daily row with *"no settlement
+  close"*, ran the key through `day()` — which drops the time, so an intraday
+  key read as a whole date — and offered RTH as the remedy on a chart that
+  already IS the 5-minute series. A partial intraday bar is a different fact
+  and gets its own sentence, keyed on `app.intraday`.
 
 ### lightweight-charts v5
 - `addSeries(CandlestickSeries, …)` takes the **type object** — v4's
@@ -484,6 +502,18 @@ deliberate retreat and the marking section says why: a click repaints the whole
 pane, so a canvas poll catches the clear-and-redraw rather than the rails, and
 a version of the check that "passed" was reporting the candles canvas going
 433,556 -> 0 -> 432,424.
+
+**A SMOKE CHECK THAT CLEANS UP AFTER ITSELF MUST VERIFY THE CLEANUP.** The
+chart-click check can land on a mark, which writes a Keep, so it clicks again
+to toggle it off — and `smoke:app` writes to the developer's REAL
+`marks/<symbol>.json`. It reused the coordinates captured before the first
+click, which are only valid for the layout that produced them: a first click
+that scrolled the page sent the undo somewhere else, leaving a genuine verdict
+on disk while the run still printed `smoke: ok`. It now re-reads the point per
+click and COUNTS the kept chips either side, failing with *"left a verdict
+behind"* rather than reporting a pass. Same lesson as the bare `catch {}` on a
+persistence path: a check that can hide the thing it exists to catch is worse
+than no check.
 
 **`smoke:app` can print NOTHING and exit 0 — that is a FAILED run, not a pass.**
 [main/index.ts](src/main/index.ts) opens with
@@ -692,11 +722,24 @@ delete that directory first.
   daily interval"* on every target — wrong on a 5-minute chart and wrong twice
   over on RTH daily, whose bars come from an `interval=5m` pull; it now prints
   `interval={sourceIntervalFor(app.interval, app.session)}` and says so when
-  they were aggregated here. The masthead's sub-line had two branches for three
-  cases, so an aggregated RTH daily bar was described as *"one CME session —
-  open, high, low, settle"*, which is the one thing it is not. Confirmed on the
-  desktop app AND on an artifact built from `data/es_5m.json`: a factual claim
-  about the API that travels with the published page.
+  they were aggregated here. Confirmed on the desktop app AND on an artifact
+  built from `data/es_5m.json`: a factual claim about the API that travels with
+  the published page.
+  **The masthead's SUB-LINE is gone** (removed on request) — *"Front-month
+  continuous series. Every candle is one CME session … Scroll to zoom, drag to
+  pan, arrow keys step the crosshair."* It had carried the same fault in a third
+  place: two branches for three cases, so an aggregated RTH daily bar was
+  described as *"one CME session — open, high, low, settle"*, which is the one
+  thing it is not. That was fixed and then the line was dropped, so the fix is
+  history rather than something to preserve. Nothing was orphaned by the
+  removal: `app.intraday`, `app.aggregated` and `app.sessionLabel` all have
+  other readers, and its keyboard hint was already on the page twice over —
+  [Legend.svelte](src/renderer/lib/components/Legend.svelte) prints *"Arrow keys
+  step the crosshair"* and `ChartPanel`'s `aria-label` describes every chart key
+  for a screen reader. Do not re-add the sentence to restore a hint that never
+  left. **The `.sub` CSS rule had to go with it** — `--threshold
+  warning` means an unused selector is a FAILING build, which is the next note
+  and is exactly the check that caught it.
 - **`--threshold warning` on svelte-check is intentional.** Do not relax it to
   make a warning go away.
 - **There is no full-width bar-reading card below the chart.** It shipped that
@@ -872,8 +915,89 @@ delete that directory first.
   `hoveredInfo.objectId` (`hoveredObjectId` is deprecated), and `CandleChart`
   checks it against the ids it was given rather than trusting it — markers and
   primitives share that channel. There is no second gesture: the library's click
-  event carries no modifier keys, so Drop stays in the tape, on the strip a
-  chip opens.
+  event carries no modifier keys — v5's `TouchMouseEventData` is coordinates
+  and nothing else, checked in the typings — so Drop stays in the tape, on the
+  strip a chip opens.
+- **A CHART CLICK ALSO REVEALS THE THING IN THE TAPE**, scrolled into view.
+  That closes the loop: the tape pointed at the chart and nothing pointed back.
+  A click reports a mark OR a bar, never both — selecting the mark AND its
+  session would draw two bands for one click — so `onMarkClick` keeps meaning
+  Keep and adds the reveal as its FEEDBACK (the chip opens its strip already
+  showing the verdict), while `onBarClick` reveals the session. Four things
+  were measured with `sendInputEvent` before any of it was written, because one
+  of them decided whether the feature was worth having:
+  - **a 200px pan fires NO click**, so this cannot yank the tape on every drag.
+    That was the risk; the library already separates drag from click.
+  - a 3px jitter drag DOES fire one, landing on whatever bar the nudge left
+    under the cursor. The same as any chart, and not worth a guard.
+  - a click past the last bar arrives with `time` undefined, which is what
+    makes "click empty space, nothing happens" free rather than a special case.
+  - **a synthetic `MouseEvent` does not reach lightweight-charts AT ALL** —
+    dispatching pointerdown/mousedown/pointerup/mouseup/click on the canvas
+    changes nothing. Anything testing this must use `sendInputEvent`, which
+    works on a `show: false` window, so the smoke needed no window change.
+- **`revealBar` / `revealMark` SET; `selectBar` / `selectMark` toggle.** The
+  toggling pair is right for the tape, where the click lands on the highlight
+  itself and a second click is the obvious way out. It is wrong for the chart,
+  where the highlight is somewhere else on screen and clicking the same bar
+  twice would clear it out from under the reader. Escape still clears both.
+- **The reveal states its TARGET; it must not be inferred.** The tape's scroll
+  effect first worked it out as "the selected mark's session, or else the
+  selected bar" — right until both are set, which happens the moment a reader
+  clicks a mark and then clicks a bar somewhere else. The mark selection is
+  still live and won, so the tape scrolled back to the mark instead of to the
+  bar just clicked. Both selections are ALLOWED to coexist — that is the
+  design, two bands the reader can tell apart — so `revealTarget` says which
+  one the reveal meant. Measured after the fix: mark on `2026-06-01`, then a
+  bar click, and the tape goes to `2026-08-06` with the mark still selected.
+- **The scroll is keyed on `revealNonce`, and `revealNonce` IS THE ONLY
+  TRACKED READ in that effect.** `visibleTape` rebuilds on every viewport
+  settle, so an effect watching the selection would re-scroll whenever the
+  reader panned with a selection active, fighting anyone who had scrolled the
+  tape by hand. The nonce also makes clicking the same bar twice work — the
+  selection is unchanged, so nothing else would say a reveal had happened.
+  **Reading `scroller` there defeated it**, and that shipped for an hour: it is
+  `$state` bound with `bind:this`, so emptying and refilling the tape (resolve
+  the last open mark under `Unresolved`, or pan to a viewport with no rows)
+  swaps `.scroll` for the empty paragraph and back, the binding changes twice,
+  and the effect re-ran against a STALE `revealTarget`. Everything but the
+  nonce goes inside `untrack`.
+- **DO NOT USE `scrollIntoView` HERE. It scrolls the DOCUMENT too.** It walks
+  every scrollable ancestor, so in the stacked layout revealing a row scrolled
+  the page away from the chart the reader had just clicked: measured at
+  900x900, one click took the page from 0 to 724 and the candles from y 236..592
+  to **y -488..-132**, entirely off screen. The wide layout never showed it —
+  there the page does not scroll at all, which is why it survived the first
+  round of probes. `block: 'nearest'` semantics are eight lines of
+  `getBoundingClientRect` arithmetic against the scroll container alone, and
+  they never animate, which is also why there is no `prefers-reduced-motion`
+  branch to get wrong. Measured after: tape 0 -> 1892 with the row in view,
+  page 0 -> 0, canvas top 236 -> 236.
+- **THE REVEAL COMES BEFORE THE VERDICT, and the order is load-bearing.**
+  `onMarkClick` written as `setVerdict` then `revealMark` asked whether the
+  tape could show the row AFTER the Keep had already taken it out of the
+  `Unresolved` filter — so it widened to `all` every time and the unresolved
+  queue could not be worked from the chart at all: measured, `Unresolved 60`
+  became `All 128` on one click. Revealing first asks the question about the
+  tape the reader is actually looking at. Measured after: the filter stays on
+  `Unresolved` and its count drops 60 -> 59 as the resolved row leaves the
+  queue, which is what working a queue looks like; switching to `All` shows
+  the Keep landed. The strip renders the verdict either way — it is reactive,
+  so the ordering buys nothing there.
+- **A reveal may WIDEN the tape's filter, and only when the click finds
+  nothing.** Clicking a session with no marks while on `Marked` or
+  `Unresolved` has no row to land on, and doing nothing silently is the worst
+  answer in exactly the case the feature exists for — so `#widenTapeFor` drops
+  to `all`. It is transient view state with nothing persisted, so it costs no
+  settings file anything. Past `TAPE_CAP` there is no row under ANY filter, so
+  it leaves the selection set and says nothing rather than widening for no
+  gain; the row appears on its own when the viewport narrows.
+- **The readout deliberately does NOT follow a chart click.** `focusIndex` is
+  keyboard -> pointer -> clicked line -> last session, so while the pointer is
+  over the chart the hover wins — which is right, because the crosshair is
+  already on that bar. Do not "fix" the precedence to make the click visible.
+  (Headless it looks different: with no pointer, the clicked bar does win, and
+  that is why the smoke's EMA readout changes after its chart click.)
 - **Bar labels need ~24px a bar, not 8.** Three-character labels at 11px mono are
   ~20px wide, so below that adjacent bars' labels overlap into garbage. The test
   is PIXELS PER BAR, not the name of a range: on daily that works out to the 1M
@@ -1059,10 +1183,10 @@ delete that directory first.
   through a trendline is what trendlines are for; counting those as breaks
   rejects every real channel on the chart.
 - **The rules card FOLDS its less-used rules, and `Rule.tier` is the only thing
-  that decides which.** Nine carry `tier: 'extra'` today — `trend-bar`,
-  `doji`, `shaved`, `pin-bar`, `gap-bar`, `spike-and-channel`,
+  that decides which.** Ten carry `tier: 'extra'` today — `trend-bar`,
+  `doji`, `shaved`, `pin-bar`, `gap-bar`, `climax`, `spike-and-channel`,
   `pullback-entry`, `failed-bo` and `final-flag`. Absent means core, so a rule
-  opts IN to being quiet and the other twenty-two need no line; nothing in the marking layer
+  opts IN to being quiet and the other twenty-one need no line; nothing in the marking layer
   reads it, so detection, the counts, `--catalogue` and `marks:check` are
   untouched. Four things are load-bearing, and each was decided by measuring
   the alternative in a mock first:
@@ -1076,12 +1200,24 @@ delete that directory first.
     signal rather than two — its ticked box says the rest. Without this the
     chart wears marks whose toggle is nowhere on the page, which is the mirror
     of not rendering a control that would not work.
-  - **`tier` is a USAGE decision and `defaultOn` is a DENSITY one, and the two
-    lists are not the same.** `climax` fires once a year and is worth a glance;
-    `shaved` fires 38 times and may never be switched on. They happen to
-    coincide today — every rule that is off is also folded — but no longer
-    because density decides both: `gap-bar` fires 42 times and `final-flag` 44,
-    and both are off and folded on usage alone.
+  - **`tier` is a USAGE decision and `defaultOn` is a DENSITY one, and they
+    have to MOVE TOGETHER for a rule to actually leave the list.** That follows
+    from the note above: a folded rule that is switched on is promoted back in,
+    so `tier: 'extra'` on its own only gives a rule the quieter name. `climax`
+    is the case that proves it — it was folded and left ON, which changed
+    nothing visible, and folding it for real meant shipping it off as well.
+    The two flags still MEAN different things: `gap-bar` fires 42 times and
+    `final-flag` 44, so neither is off for density either. **`climax` is the
+    first rule to ship off on usage ALONE** — 38 marks, 0.6%, nowhere near the
+    density that put `trend-bar` (34.5%) or `doji` (27.2%) behind the fold. So
+    "every rule that is off is also folded" still holds, and the reason a rule
+    is off is no longer always density.
+  - **Folding one rule of an even list saves NO height, and that is worth
+    knowing before folding for space.** The list is a two-column `auto-fit`
+    grid, so 22 rules and 21 rules are both 11 grid rows: measured after
+    folding `climax`, the content stayed at exactly 410px and the card still
+    scrolled. Folding to make the card fit is a matter of grid ROWS, not of
+    rules — and the card was left scrolling on purpose, see the note below.
   - **Open or closed is component `$state`, and the show-all lives in `.top`,
     not the `<summary>`.** A summary IS a button, so a button inside one is a
     button inside a button — the constraint that stopped the marking pane's
@@ -1091,7 +1227,30 @@ delete that directory first.
   It does NOT make the card fit, and should not be described as if it does: at
   1904x1015 the list is 410px in a 211px window, and a row measures ~11px, so
   fitting would mean folding roughly eighteen more — most of what is left.
-  (An earlier note said eight, from the arithmetic rather than from the rows.) `smoke.cjs` asserts the fold reveals and
+  (An earlier note said eight, from the arithmetic rather than from the rows.)
+  **THE CARD IS LEFT SCROLLING ON PURPOSE, and the alternative was measured
+  rather than argued.** Making the list fit needs the card at 524px, and in a
+  fold-height column there is nowhere for that to come from. Measured at
+  1904x1015, raising the card's share of the column:
+
+  | rules card | tape window | tape rows visible |
+  | --- | --- | --- |
+  | 470px (64%) | 143px | 3 |
+  | 499px (68%) | 113px | 2 |
+  | **524px (72%)** | **88px** | **1** |
+
+  The list stops scrolling at exactly the point the tape stops being a list.
+  Letting the COLUMN grow instead is worse in a different way: `align-items:
+  stretch` sizes the row to its tallest item and a grid row's automatic height
+  uses max-content, so the column becomes the taller of the two and the chart
+  card stretches to match it — the row went 824px -> 995px, the page 1,376px ->
+  1,547px, and the marking pane's bottom edge fell from 29px below the fold to
+  200px. (`min-height: 0` does not prevent that; it bounds the automatic
+  minimum, not the max-content contribution. `contain: size` does, and then the
+  column is the chart's own 734px and the tape is thinner still.) So the three
+  ways out are: fold about eight more rules, give the tape away, or push the
+  pane below the fold. Scrolling a card the reader visits occasionally is the
+  cheapest of the four, which is why it is still what ships. `smoke.cjs` asserts the fold reveals and
   re-folds — measured in a SECOND `executeJavaScript`, because Svelte flushes
   on a microtask and counting rows in the same expression reports every fold as
   broken.

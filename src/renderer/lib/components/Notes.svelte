@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppState } from '$lib/state/app.svelte.ts';
-  import { day, integer } from '$shared/format.ts';
+  import { clock, day, integer } from '$shared/format.ts';
 
   let { app }: { app: AppState } = $props();
 </script>
@@ -54,12 +54,25 @@
              carries no close. Same class of fault as "no aggregation" sitting
              over aggregated bars, one field narrower. -->
         No aggregation and no downsampling &mdash; every bar the feed has
-        <b>closed</b> is loaded. {day(app.pendingSession)} has traded, but its daily
-        row carries an open, a high and a low and <b>no settlement close</b>, so
-        there is no bar to draw yet.
-        {#if app.can.timeframes}
-          <b>RTH</b> has it: those bars are built from the 5-minute series, which
-          does not wait for a settlement.
+        <b>closed</b> is loaded.
+        <!-- `pendingSession` is computed for EVERY interval, and this sentence
+             used not to be: it named a "daily row" and a "settlement close"
+             over a five-minute chart, ran the intraday key through `day()`
+             (which drops the time, so it read as a whole date), and then
+             offered RTH as the remedy on a chart that already IS the 5-minute
+             series. A partial intraday bar is a different fact and gets its
+             own sentence. -->
+        {#if app.intraday}
+          The {clock(app.pendingSession)} UTC bar has opened and carries
+          <b>no close</b> yet, so it is not drawn. It appears when the feed closes it.
+        {:else}
+          {day(app.pendingSession)} has traded, but its daily
+          row carries an open, a high and a low and <b>no settlement close</b>, so
+          there is no bar to draw yet.
+          {#if app.can.timeframes}
+            <b>RTH</b> has it: those bars are built from the 5-minute series, which
+            does not wait for a settlement.
+          {/if}
         {/if}
       {:else}
         No aggregation and no downsampling &mdash; every bar the feed has is loaded and the
