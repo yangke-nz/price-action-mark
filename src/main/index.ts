@@ -62,6 +62,12 @@ function createWindow(settings: Settings): BrowserWindow {
   });
 
   win.on('close', () => persistBounds(win));
+  // `close` fires first and still has bounds to persist; `closed` fires after
+  // destruction. Without this the module reference outlives the window, and a
+  // truthy check passes on a destroyed wrapper -- every call on it then throws
+  // `Object has been destroyed`. On macOS the app stays alive with no window,
+  // so that stale state is a normal state, not an edge case.
+  win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
 
   // The two gesture buttons label themselves from a renderer flag, and main is
   // the only thing that knows the truth: the accelerators act here without
@@ -82,6 +88,26 @@ function createWindow(settings: Settings): BrowserWindow {
   else void win.loadFile(join(dir, '../renderer/index.html'));
 
   return win;
+}
+
+/**
+ * Raise the window, opening one if there is none.
+ *
+ * Both callers can arrive with every window closed, because `window-all-closed`
+ * deliberately does not quit on macOS: clicking the Dock icon (`activate`), and
+ * a second launch of the app (`second-instance`), which the single-instance
+ * lock turns into a request to show the instance already running.
+ */
+function showWindow(): void {
+  // `second-instance` is registered before `whenReady`, and a BrowserWindow
+  // constructed before the app is ready throws.
+  if (!app.isReady()) return;
+  if (!mainWindow) {
+    mainWindow = createWindow(settingsStore.load());
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
 }
 
 function protocolOf(url: string): string {
@@ -286,16 +312,10 @@ void app.whenReady().then(() => {
     })
     .catch(() => undefined);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow(settingsStore.load());
-  });
+  app.on('activate', showWindow);
 });
 
-app.on('second-instance', () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
-});
+app.on('second-instance', showWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
