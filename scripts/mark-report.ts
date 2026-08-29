@@ -35,7 +35,7 @@ import { structure, type Structure } from '../src/shared/marks/structure.ts';
 import { buildCtx } from '../src/shared/marks/rule.ts';
 import { RULES, defaultEnabled, detect } from '../src/shared/marks/registry.ts';
 import { phraseOf, readAt, readingIndex, readings } from '../src/shared/marks/reading.ts';
-import { intervalOf, specOf } from '../src/shared/interval.ts';
+import { intervalOf } from '../src/shared/interval.ts';
 import { walkForward, type TradePlan } from '../src/shared/marks/trade.ts';
 import type { Dataset } from '../src/shared/types.ts';
 
@@ -245,6 +245,48 @@ async function check(): Promise<number> {
         seen.set(mark.id, mark.rule);
       }
       if (fails.length > 0) break;
+    }
+  }
+
+  // ---- entries ---------------------------------------------------------
+
+  // An entry mark's note quotes an OUTCOME, and that outcome must be the one
+  // an order placed at `knownAt` would have had. The three pivot-anchored
+  // rules confirm `strength` (3) bars after their signal, so their order is
+  // live two bars LATER than the fill they used to report — they walked
+  // forward from the signal anyway. 257 marks quoting a trade nobody could
+  // have placed, and an edge (`dt-short` +0.873 R a mark) that was mostly the
+  // head start. Re-derive the walk from the mark's own dates and require the
+  // note to agree.
+  {
+    const ctx = buildCtx(data, structOpts);
+    const indexOf = new Map(data.d.map((d, i) => [d, i]));
+    for (const mark of detect(ctx)) {
+      if (mark.kind !== 'trade') continue;
+      const order = indexOf.get(mark.knownAt);
+      const signal = indexOf.get(mark.at);
+      if (order === undefined || signal === undefined) {
+        fails.push(`trade mark ${mark.id} names a date the series does not have`);
+        break;
+      }
+      if (order < signal) {
+        fails.push(`${mark.id} says it was knowable at ${mark.knownAt}, before its own bar ${mark.at}`);
+        break;
+      }
+      const res = walkForward(ctx, {
+        dir: mark.dir, entry: mark.entry, stop: mark.stop, target: mark.target,
+        risk: Math.abs(mark.entry - mark.stop),
+      }, order);
+      const quoted = res.outcome === 'no fill'
+        ? 'never filled'
+        : `${res.outcome} in ${res.bars} bars, ${res.r >= 0 ? '+' : ''}${res.r.toFixed(2)}R`;
+      if (!(mark.note ?? '').includes(quoted)) {
+        fails.push(
+          `${mark.id} quotes an outcome an order placed at ${mark.knownAt} did not have: ` +
+          `expected "${quoted}" in "${mark.note ?? ''}"`,
+        );
+        break;
+      }
     }
   }
 
@@ -604,7 +646,11 @@ function trades(rows: number[]): void {
       dir: mk.dir, entry: mk.entry, stop: mk.stop, target: mk.target,
       risk: Math.abs(mk.entry - mk.stop),
     };
-    const res = walkForward(ctx, plan, indexOf.get(mk.at)!);
+    // From `knownAt`, not `at`: that is the close at which the order could
+    // have been placed, and for the three pivot-anchored rules it is three
+    // bars after the signal. Walking from `at` here reproduced the rule's own
+    // lookahead and made the table agree with a wrong note.
+    const res = walkForward(ctx, plan, indexOf.get(mk.knownAt) ?? indexOf.get(mk.at)!);
     lines.push([
       padr(mk.at, 12), padr(mk.rule, 16), padr(mk.dir, 6),
       pad(f2(mk.entry), 9), pad(f2(mk.stop), 9), pad(f2(mk.target), 9),

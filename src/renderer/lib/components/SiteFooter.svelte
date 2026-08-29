@@ -4,8 +4,22 @@
   import type { AppState } from '$lib/state/app.svelte.ts';
   import { barLabel, integer, price, relative, stamp } from '$shared/format.ts';
   import { specOf } from '$shared/interval.ts';
+  import { sourceIntervalFor } from '$shared/session.ts';
 
   let { app }: { app: AppState } = $props();
+
+  /**
+   * The `interval=` this page's bars were actually requested with.
+   *
+   * Hard-coded to "daily" until now, which was wrong on a 5-minute chart and
+   * wrong twice over on RTH daily — those bars are aggregated here from an
+   * `interval=5m` pull, so the endpoint named in this sentence was never asked
+   * for daily at all. Same fault the masthead H1 had before the timeframe
+   * switch existed, in the one line that names the API. `sourceIntervalFor` is
+   * the same answer `boot`, `setSession`, `setInterval` and main's boot refresh
+   * use, so this cannot drift from what was fetched.
+   */
+  const requested = $derived(sourceIntervalFor(app.interval, app.session));
 
   let info = $state<AppInfo | null>(null);
   $effect(() => { void source.appInfo().then((i) => { info = i; }); });
@@ -37,8 +51,9 @@
 
 <footer>
   <div>
-    Source: Yahoo Finance <code>v8/finance/chart/{app.dataset?.symbol ?? 'ES=F'}</code>, daily
-    interval &mdash; free, no API key. {provenance}
+    Source: Yahoo Finance <code>v8/finance/chart/{app.dataset?.symbol ?? 'ES=F'}</code>,
+    <code>interval={requested}</code>{#if app.aggregated}, aggregated here into
+    {app.sessionLabel} daily bars{/if} &mdash; free, no API key. {provenance}
   </div>
   <div>{coverage}</div>
   <div>

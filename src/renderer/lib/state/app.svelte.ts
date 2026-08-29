@@ -18,7 +18,7 @@ import { emptyStore } from '$shared/marks/types.ts';
 import { buildCtx, type Ctx } from '$shared/marks/rule.ts';
 import { RULES, detect, ruleFor } from '$shared/marks/registry.ts';
 import { readAt, readingIndex, type BarReading } from '$shared/marks/reading.ts';
-import { INTERVALS, RTH_DAILY_SOURCE, intervalOf, rangeFor, specOf, type Interval } from '$shared/interval.ts';
+import { INTERVALS, intervalOf, rangeFor, specOf, type Interval } from '$shared/interval.ts';
 import { SESSIONS, applySession, markScope, sourceIntervalFor, type Session } from '$shared/session.ts';
 import { dailyFrom } from '$shared/aggregate.ts';
 
@@ -58,6 +58,15 @@ export function rangesFor(interval: Interval): { id: RangeId; days: number; labe
   const offered = INTERVALS[interval].ranges;
   return RANGES.filter((r) => offered.includes(r.id));
 }
+
+/**
+ * Bars a Page Up / Page Down jumps.
+ *
+ * A COUNT of bars, and named so the chart's accessible description can quote
+ * it. It used to be an inline 21 described as "about a month", which is true
+ * of daily sessions and is 105 minutes of a five-minute chart.
+ */
+export const PAGE_STEP = 21;
 
 export type Status = 'loading' | 'ready' | 'refreshing';
 
@@ -404,30 +413,45 @@ export class AppState {
   });
 
   /**
-   * The session the reader clicked in the reading list, as a bar index.
+   * The session the reader clicked in the reading list, held as its DATE.
    *
    * Its own state rather than a reuse of `keyIndex`: the keyboard crosshair
    * takes precedence over the pointer, so driving this through it would freeze
    * the readout and stop the chart's own hover from updating it. Transient
    * view state, never persisted — the same contract `selectedMarkId` holds.
+   *
+   * A DATE, not an index, for the same reason `selectedMarkId` is an id: this
+   * survives into a dataset it was not measured against. `dataset` is DERIVED,
+   * so it changes length with nothing loaded and `#apply` never called — 5m
+   * RTH to daily RTH is a pure re-derive of the bars in hand. An index then
+   * stays perfectly in range and names a different bar: measured, a line
+   * clicked at 21 Aug 2026 on the RTH daily chart moved the readout and the
+   * highlight to 01 Jul 2026 16:30 UTC on the switch to 5-minute bars, seven
+   * weeks from the session the reader picked. Bounds-checking `focusIndex`
+   * catches only the out-of-range half of that. A date either finds its bar or
+   * finds nothing, and the highlight clears itself BY CONSTRUCTION — exactly
+   * what `selectedMark` does when its mark stops being drawn.
    */
-  selectedBarIndex = $state<number | null>(null);
+  selectedBarDate = $state<string | null>(null);
 
-  /** The chart anchors on dates, not indices; resolved here so a dataset that
-   *  grew under the selection cannot shift the band onto another session. */
-  selectedBarDate = $derived.by((): string | null => {
-    const i = this.selectedBarIndex;
-    return i === null ? null : this.dataset?.d[i] ?? null;
+  /** The selection resolved against the series actually on screen; null when
+   *  this window does not contain that bar. */
+  selectedBarIndex = $derived.by((): number | null => {
+    const at = this.selectedBarDate;
+    if (at === null) return null;
+    const i = this.dataset?.d.indexOf(at) ?? -1;
+    return i < 0 ? null : i;
   });
 
   /** Clicking the selected line again clears it, so the highlight is never a
    *  state the reader has to hunt for a way out of. */
   selectBar(i: number): void {
-    this.selectedBarIndex = this.selectedBarIndex === i ? null : i;
+    const at = this.dataset?.d[i] ?? null;
+    this.selectedBarDate = at !== null && at === this.selectedBarDate ? null : at;
   }
 
   clearBarSelection(): void {
-    this.selectedBarIndex = null;
+    this.selectedBarDate = null;
   }
 
   readonly can = source.can;
@@ -444,18 +468,22 @@ export class AppState {
    * candles has to take the readout with it, or the reader is left with a
    * readout stuck on a bar they have finished with.
    *
-   * ALL THREE ARE BOUNDS-CHECKED, and that is not belt and braces. They are
-   * positions in a dataset that is DERIVED, so it can change length underneath
-   * them without any of the three being touched: RTH/ETH intraday is a pure
-   * re-derive (11,609 bars to 3,402) and so is 5-minute RTH to daily RTH
-   * (3,402 to 42). `#apply` clears them when a dataset is LOADED, which covers
-   * nothing here. Unchecked, a line clicked deep in the intraday series left
-   * the readout on dashes after the switch and `focusReading` reading a bar
-   * that does not exist — it renders as prose, so it came out as
-   * "flat bar — trading range, LNaN" rather than as an error. Checking at the
-   * one place all three are consumed fixes every path, including the ones
-   * nobody has added yet; out of range simply falls through to the last
-   * session, which is what an empty readout should have said anyway.
+   * ALL THREE ARE BOUNDS-CHECKED, and that is the SECOND of two guards, not
+   * the only one. They are positions in a dataset that is DERIVED, so it can
+   * change length underneath them: RTH/ETH intraday is a pure re-derive
+   * (11,609 bars to 3,402) and so is 5-minute RTH to daily RTH (3,402 to 42).
+   * Unchecked, an index past the end left the readout on dashes and
+   * `focusReading` reading a bar that does not exist — prose, so it came out
+   * as "flat bar — trading range, LNaN" rather than as an error.
+   *
+   * Bounds are only half of it, and treating them as the whole fix is what
+   * shipped: an index can stay perfectly IN range and name a different
+   * session. Measured — a reading line clicked at 21 Aug 2026 on the RTH
+   * daily chart put the readout on 01 Jul 2026 16:30 UTC after the switch to
+   * 5-minute bars. So the reading selection is held as a DATE
+   * (`selectedBarDate`) and the two positional crosshairs are dropped by
+   * `#dropCrosshair()` on every path that changes the bars, load or re-derive.
+   * This check is what catches whatever those two miss.
    */
   focusIndex = $derived.by((): number | null => {
     const n = this.count;
@@ -629,11 +657,24 @@ export class AppState {
   #apply(dataset: Dataset, origin: DatasetOrigin): void {
     this.#raw = dataset;
     this.origin = origin;
-    // Indices are positional, so a longer series would leave the crosshair —
-    // and the reading list's highlight — pointing at the wrong session.
+    this.#dropCrosshair();
+  }
+
+  /**
+   * Forget the two POSITIONAL crosshairs.
+   *
+   * `keyIndex` and `hoverIndex` are bar positions, so they mean nothing once
+   * the bars change — and the bars change on a re-derive as well as on a load:
+   * RTH/ETH intraday is 11,609 bars to 3,402, and 5-minute RTH to daily RTH is
+   * 3,402 to 42, neither of which goes anywhere near `#apply`. In range but
+   * naming a different session is the failure mode, and `focusIndex`'s bounds
+   * check cannot see it. The reading-list selection is NOT cleared here: it is
+   * held as a date and resolves itself, so it survives a switch that still
+   * contains that bar and vanishes on one that does not.
+   */
+  #dropCrosshair(): void {
     this.keyIndex = null;
     this.hoverIndex = null;
-    this.selectedBarIndex = null;
   }
 
   // ---- settings --------------------------------------------------------
@@ -816,6 +857,10 @@ export class AppState {
   async setSession(session: Session): Promise<void> {
     if (session === this.session) return;
     if (this.interval !== '1d') {
+      // A re-derive, not a load, so `#apply` never runs — and 11,609 bars
+      // become 3,402, which leaves both positional crosshairs on a different
+      // session than the one they were put on.
+      this.#dropCrosshair();
       await this.patch({ session });
       return;
     }
@@ -823,6 +868,7 @@ export class AppState {
 
     const need = sourceIntervalFor('1d', session);
     if (need === this.#sourceInterval) {
+      this.#dropCrosshair();
       await this.patch({ session });
       await this.#adoptMarks();
       return;
@@ -872,8 +918,7 @@ export class AppState {
       // ...and the one case where the series in hand is ALREADY the right one:
       // 5-minute RTH -> daily RTH is a re-derive of the bars on screen, not a
       // load. It went round the source anyway, which meant an IPC round trip
-      // carrying 11,600 bars back and a `#apply` that drops the crosshair and
-      // the reader's clicked session for nothing. `setSession` has always had
+      // carrying 11,600 bars back for nothing. `setSession` has always had
       // this guard; this is the same one.
       if (want !== this.#sourceInterval) {
         const result = await source.load(want);
@@ -882,6 +927,13 @@ export class AppState {
         }
         this.#apply(result.dataset, result.origin);
         if (result.error) this.notice = { tone: 'error', text: result.error };
+      } else {
+        // The bars underneath still change — this is the re-derive path, 3,402
+        // five-minute bars to 42 daily ones — so the positional crosshairs go.
+        // On the branch above `#apply` does it, and AFTER a successful load:
+        // dropping them before would move the readout off the reader's bar on
+        // a switch that then failed and changed nothing.
+        this.#dropCrosshair();
       }
       await this.patch({ interval: next, range: rangeFor(next, this.settings.range) });
       // Daily and intraday do not share a verdict store on the same window —
@@ -1093,8 +1145,8 @@ export class AppState {
     switch (key) {
       case 'ArrowLeft':  return (this.keyIndex = Math.max(0, current - 1));
       case 'ArrowRight': return (this.keyIndex = Math.min(n - 1, current + 1));
-      case 'PageUp':     return (this.keyIndex = Math.max(0, current - 21));
-      case 'PageDown':   return (this.keyIndex = Math.min(n - 1, current + 21));
+      case 'PageUp':     return (this.keyIndex = Math.max(0, current - PAGE_STEP));
+      case 'PageDown':   return (this.keyIndex = Math.min(n - 1, current + PAGE_STEP));
       case 'Home':       return (this.keyIndex = 0);
       case 'End':        return (this.keyIndex = n - 1);
       default:           return null;

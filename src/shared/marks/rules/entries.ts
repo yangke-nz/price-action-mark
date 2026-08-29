@@ -36,14 +36,30 @@ const FAILED_BO_WINDOW = 2;
  * `through`: nothing here lets it decide whether the mark exists. `knownAt`
  * still says when the setup was readable, so the two dates together tell the
  * reader exactly how much of this they could have known at the time.
+ *
+ * THE ORDER GOES IN AT `knownAt`, WHICH IS NOT ALWAYS THE SIGNAL BAR. The
+ * prices come from the signal bar — one tick beyond it, both ends — but a
+ * pattern anchored on a swing PIVOT is not readable until that pivot confirms
+ * `strength` bars later, and an order cannot be placed before the setup can be
+ * seen. Five of the eight rules here sign their signal bar's own close and
+ * `orderAt` is simply `signal`; the three pivot-anchored ones (`dt-short`,
+ * `db-long`, `wedge-reversal`) pass the confirmation bar.
+ *
+ * That was the bug. All 257 of their marks reported a fill on the bar after
+ * the second peak — TWO SESSIONS before the mark's own `knownAt` — and the
+ * edge those notes showed was almost entirely that head start: measured over
+ * the whole series, `dt-short` +0.873 R a mark became +0.114, `db-long`
+ * +0.601 became +0.079, and `wedge-reversal` +0.345 became -0.160. A review
+ * tool that quotes an outcome for an order nobody could have placed is worse
+ * than one that quotes nothing. `--check` now asserts it per mark.
  */
 function trade(
   ctx: Ctx, rule: RuleId, label: string, signal: number,
-  dir: 'long' | 'short', target?: number, extra = '',
+  dir: 'long' | 'short', target?: number, extra = '', orderAt = signal,
 ): TradeMark | null {
   const plan = planFor(ctx, signal, dir, target);
   if (plan === null) return null;
-  const r = walkForward(ctx, plan, signal);
+  const r = walkForward(ctx, plan, orderAt);
   const at = ctx.data.d[signal]!;
   const through = ctx.data.d[Math.max(r.at, signal)]!;
   const detail = r.outcome === 'no fill'
@@ -56,7 +72,7 @@ function trade(
     note: `${extra}${extra ? ' · ' : ''}entry ${plan.entry.toFixed(2)}, stop ${plan.stop.toFixed(2)}, ` +
       `target ${plan.target.toFixed(2)} · ${detail}`,
     tone: dir === 'long' ? 'bull' : 'bear',
-    at, knownAt: at, source: 'rule',
+    at, knownAt: ctx.data.d[orderAt]!, source: 'rule',
     kind: 'trade',
     dir, entry: plan.entry, stop: plan.stop, target: plan.target, through,
   };
@@ -126,13 +142,15 @@ function doubleEntry(id: RuleId, kind: 'high' | 'low'): Rule {
       for (const { middle, b } of findDoubles(ctx, kind)) {
         // The second peak IS the signal bar: it is the swing extreme, so the
         // order sits one tick the other side of it. Readable only once that
-        // pivot confirms, which is what `knownAt` has to say.
-        const confirmed = ctx.data.d[Math.min(b.confirmedAt, ctx.m.n - 1)]!;
+        // pivot confirms — which is both what `knownAt` says and, since the
+        // order cannot go in before the setup can be seen, the bar the
+        // walk-forward starts from.
+        const confirmed = Math.min(b.confirmedAt, ctx.m.n - 1);
         const height = Math.abs(b.price - middle.price);
         const target = top ? middle.price - height : middle.price + height;
         const mark = trade(ctx, id, top ? 'DT' : 'DB', b.i, top ? 'short' : 'long', target,
-          `measured move ${height.toFixed(0)} from ${middle.price.toFixed(2)}`);
-        if (mark) out.push({ ...mark, knownAt: confirmed });
+          `measured move ${height.toFixed(0)} from ${middle.price.toFixed(2)}`, confirmed);
+        if (mark) out.push(mark);
       }
       return out;
     },
@@ -152,13 +170,15 @@ export const WEDGE_REVERSAL: Rule = {
     const out: Mark[] = [];
     for (const w of findWedges(ctx)) {
       const third = w.pushes[2]!;
-      const confirmed = ctx.data.d[Math.min(third.confirmedAt, ctx.m.n - 1)]!;
+      // The third push is a pivot, so it is not readable — and the order is
+      // not placeable — until it confirms. See `trade`.
+      const confirmed = Math.min(third.confirmedAt, ctx.m.n - 1);
       // A wedge usually unwinds to where it began, which is a longer target
       // than 2R and the reason the setup is worth taking at all.
       const target = w.window[0]!.price;
       const mark = trade(ctx, 'wedge-reversal', w.up ? 'W▼' : 'W▲', third.i,
-        w.up ? 'short' : 'long', target, `third push, back to ${target.toFixed(2)}`);
-      if (mark) out.push({ ...mark, knownAt: confirmed });
+        w.up ? 'short' : 'long', target, `third push, back to ${target.toFixed(2)}`, confirmed);
+      if (mark) out.push(mark);
     }
     return out;
   },

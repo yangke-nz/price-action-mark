@@ -82,7 +82,11 @@ npm run smoke:app      # headless render check of the desktop app
 ```
 
 `npm run typecheck` must be clean before you call anything done — `typecheck:web`
-runs with `--threshold warning`, so **warnings fail**. Two justified a11y warnings
+runs with `--threshold warning`, so **warnings fail**. Both tsconfigs also set
+`noUnusedLocals` and `noUnusedParameters`, so **a dead import or a dead local
+fails the build**, in `.ts` and in `.svelte` alike — verified in both paths.
+That is a tidy that stays tidy: three had already accumulated where nothing was
+looking. Name a genuinely unused parameter `_x` rather than relaxing the flag. Two justified a11y warnings
 on the chart surface are silenced inline with `svelte-ignore` and a reason; do not
 add more without one.
 
@@ -425,6 +429,21 @@ and that nobody classified it.
   and the masthead's session-change figure has no card behind it. It only
   renders on a DOWN session, and the shipped snapshot's last bar closed up — so
   neither the eye nor a screenshot would have found it. Now `#cc3131`.
+- **A GROUND IS NOT ONLY ONE OF THE THREE PAGE GROUNDS, and that was this
+  script's own blind spot.** It paired every token with `plane` / `surface` /
+  `surface-2` and nothing else, so a token painting a background for *text* was
+  never a ground and that text was never measured. The marking pane's
+  selected-tab count chip inverts — 10.5px `--surface` on a `--focus` fill —
+  and measured **4.30:1 in light** while the run printed "every token clears
+  the bar it is used at". Even pure white on the old `#2a78d6` is 4.42:1, so
+  the fix had to be the blue: `--focus` is now `#2874d0`, the smallest move
+  along LIGHTNESS with hue and saturation held (HSL 212.8 / 67.7%, 50.2% ->
+  48.6%), which puts the chip at 4.54:1 and improves `--focus` as a MARK from
+  3.92:1 to 4.15:1 on the plane. Light only — in dark the chip is near-black on
+  bright blue at 4.89:1. `Ground` now includes `focus` and `--surface` is
+  classified as text on it; re-derive the pairings the way the note above says
+  if a component moves, and **add any token that paints a background for text
+  to `Ground`**, not just the page's own.
 
 **`npm run marks:check` is the regression guard.** It holds per-rule mark counts,
 those hand-picked dates, and the STRUCTURE DIALS, and `--golden` rewrites it —
@@ -518,6 +537,16 @@ delete that directory first.
   the footer. It was hard-coded to *"daily bars"* and said so over five-minute
   candles until the switch existed, which is why the smoke now asserts the
   heading and the status line agree about the bar size.
+  **The same fault outlived that fix in two lines nothing asserts on, and both
+  are now derived.** The FOOTER named the endpoint as *"`v8/finance/chart/ES=F`,
+  daily interval"* on every target — wrong on a 5-minute chart and wrong twice
+  over on RTH daily, whose bars come from an `interval=5m` pull; it now prints
+  `interval={sourceIntervalFor(app.interval, app.session)}` and says so when
+  they were aggregated here. The masthead's sub-line had two branches for three
+  cases, so an aggregated RTH daily bar was described as *"one CME session —
+  open, high, low, settle"*, which is the one thing it is not. Confirmed on the
+  desktop app AND on an artifact built from `data/es_5m.json`: a factual claim
+  about the API that travels with the published page.
 - **`--threshold warning` on svelte-check is intentional.** Do not relax it to
   make a warning go away.
 - **There is no full-width bar-reading card below the chart.** It shipped that
@@ -740,13 +769,27 @@ delete that directory first.
   that gapped through the entry fills at the OPEN, not the order price. And the
   entry order is live for exactly one bar: leaving it working turns every failed
   setup into a different, later trade nobody took.
+- **THE ORDER GOES IN AT `knownAt`, WHICH IS NOT ALWAYS THE SIGNAL BAR — and
+  for a whole release it did not.** `dt-short`, `db-long` and `wedge-reversal`
+  anchor on a swing PIVOT, which needs `strength` bars to its right, so their
+  own `knownAt` is three sessions after their signal bar; the walk-forward ran
+  from the signal anyway. All 257 of their marks quoted the outcome of an order
+  nobody could have placed, two sessions early. Almost the entire edge was that
+  head start: measured over the whole series, `dt-short` +0.873 R a mark became
+  **+0.114**, `db-long` +0.601 became **+0.079**, and `wedge-reversal` +0.345
+  became **-0.160**, which changes its sign. `trade()` now takes an `orderAt`
+  and `--check` re-derives every entry's walk from the mark's own dates,
+  failing if the note disagrees — verified to have teeth: putting the walk back
+  on the signal bar reports *"wedge-reversal:2000-11-30 quotes an outcome an
+  order placed at 2000-12-05 did not have"*.
 - **Measured `--trades` over 3,000 sessions: the mechanical 2R target loses.**
   `second-entry` fills 75/75 and wins 28%, which at 2R is -0.085R a trade; a 2R
-  exit needs better than 33%. The measured-move rules are the positive ones
-  (`dt-short` +1.65R average, `db-long` +1.10R) because their targets are the
-  pattern's own projection. **Do not tune `DEFAULT_TARGET_R` until the table
-  looks better** — that is curve-fitting a review tool. The number is a finding
-  about these setups on daily ES, and it is supposed to be visible.
+  exit needs better than 33%. With the lookahead above gone, the measured-move
+  rules are only just positive — `dt-short` +0.21R average, `db-long` +0.19R —
+  and `wedge-reversal` is **negative** at -0.21R. **Do not tune
+  `DEFAULT_TARGET_R` until the table looks better** — that is curve-fitting a
+  review tool. The numbers are a finding about these setups on daily ES, and
+  they are supposed to be visible.
 - **Two rules can contradict on the same bar, and that is not a bug.**
   `failed-bo` and `bo-pullback` fired opposite directions on 2026-07-30: one
   reads the breakout as real, the other as failed. The outcome column
@@ -1047,7 +1090,15 @@ One line of the intraday chart's furniture, and three decisions in it.
   offset without shipping a timezone table, and it is slow enough to matter
   11,609 times. Note the shipped window sits entirely inside EDT (-240
   everywhere), so nothing in the current data would catch a hard-coded offset:
-  the per-day cache is right by construction, not by test.
+  the per-day cache is untested, not proven.
+  **And it is keyed on the UTC day, which is coarser than a DST transition.**
+  Both US transitions land at 06:00 / 07:00 UTC, so on that one UTC day the
+  bars either side of the change would all take the offset the day's FIRST bar
+  resolved. It is harmless only because ES is shut across both: the transitions
+  fall on a Sunday, and Globex does not reopen until 22:00 / 23:00 UTC that
+  evening, after the change. Right by the exchange's calendar, then — not by
+  construction. A market that trades through a transition needs the cache keyed
+  on the offset's own validity, not on `dayOf(key)`.
 - **It FILTERS the dataset; it does not hide bars on the chart.** `applySession`
   returns a new `Dataset`, so metrics, structure, ATR, the rules and the
   readings all see RTH bars only — an RTH chart whose ATR was computed over the
@@ -1217,16 +1268,35 @@ bar. Every session gets a line.
   tellable apart. Measured with both probe controls: a click changes 5,814
   pixels on the primitive's canvas and **zero on the price axis** — the band
   cannot move the scale, because `autoscaleInfo()` is null.
-- **`focusIndex` BOUNDS-CHECKS all three of its inputs.** `keyIndex`,
-  `hoverIndex` and `selectedBarIndex` are positions in a dataset that is
-  DERIVED, so it changes length underneath them with nothing loaded and
-  `#apply` never called: RTH/ETH intraday is a pure re-derive (11,609 bars to
-  3,402) and so is 5-minute RTH to daily RTH (3,402 to 42). Click a reading
-  line deep in the intraday list, switch, and the readout went to dashes while
-  the reading named a bar that does not exist — it is prose, so it printed
-  *"flat bar — trading range, LNaN"* rather than throwing. Checked at the one
-  place all three are consumed, so every path is covered including the ones not
-  written yet; out of range falls through to the last session.
+- **A BAR POSITION MUST NOT OUTLIVE THE DATASET IT INDEXES, and bounds-checking
+  it is only half the fix.** `keyIndex`, `hoverIndex` and `selectedBarIndex` are
+  positions in a dataset that is DERIVED, so it changes length underneath them
+  with nothing loaded and `#apply` never called: RTH/ETH intraday is a pure
+  re-derive (11,609 bars to 3,402) and so is 5-minute RTH to daily RTH (3,402
+  to 42). `focusIndex` bounds-checks all three, which catches the out-of-range
+  half — a reading line clicked deep in the intraday list used to leave the
+  readout on dashes and `focusReading` naming a bar that does not exist, prose,
+  so it printed *"flat bar — trading range, LNaN"* rather than throwing.
+  **The other half is an index that stays perfectly IN range and names a
+  DIFFERENT session**, and that shipped: measured, clicking the reading line
+  for 21 Aug 2026 on the RTH daily chart and switching to 5-minute bars put the
+  readout and the highlight on 01 Jul 2026 16:30 UTC, seven weeks from the
+  session the reader picked. So:
+  - **the reading selection is held as a DATE** (`selectedBarDate`), and
+    `selectedBarIndex` is derived by resolving it against the series on screen
+    — the same shape `selectedMarkId` → `selectedMark` has, and it clears
+    itself by construction when the bar is not there. Verified both ways: the
+    daily→5m switch above now falls through to the last session with no line
+    pressed, and an RTH 5-minute bar clicked then switched to ETH — where that
+    bar still exists — keeps both the readout and the pressed line.
+  - **`#dropCrosshair()` forgets `keyIndex` and `hoverIndex` on every path that
+    changes the bars**, re-derive as well as load: `#apply`, both branches of
+    `setSession`, and `setInterval`'s fast path. **On the LOAD path it is
+    `#apply` that calls it, which means AFTER the load succeeded** — a switch
+    that fails changed nothing, so it must not move the reader either.
+    Measured with the 5-minute feed refused and no 5m cache: with the drop
+    hoisted above the `await`, a keyboard crosshair on 18 Sep 2000 landed on
+    28 Jul 2026 on a switch that errored and left the chart exactly as it was.
 - **`#span` is the one clamped viewport.** The table, the mark list and the
   reading all need "what is on screen", and the chart can report a bar past the
   end mid-refresh. Four copies of `Math.min(viewport.to, n - 1)` are four
@@ -1309,9 +1379,14 @@ window now reaches the **daily** chart, where RTH bars are aggregated from the
 **What is left is DRAWING — marks the reader makes by hand.** Everything that
 needs is already in place and was built that way on purpose:
 
-- `Mark` carries `source: 'manual'` and `MarkStore` carries a `manual` array
-  that is read on load and never written. Adding hand-drawn marks is therefore
-  not a storage-format change, and no file on disk needs migrating.
+- `Mark` carries `source: 'manual'` and `MarkStore` carries a `manual` array —
+  but **`coerceStore()` returns `manual: []` unconditionally**, on load and on
+  save alike, so today the field is reserved rather than round-tripped. The
+  serialised SHAPE is already right and no file on disk needs migrating, which
+  is the part that matters; the one function that has to change is
+  `coerceStore`, and it has to validate what it lets through, since a manual
+  mark is the first thing in that file a reader could hand-edit into any shape.
+  (This note used to claim the array "is read on load", which it is not.)
 - `MarkPrimitive.hitTest()` already returns the id of whatever is under the
   cursor, which is the selection half of a drawing tool.
 - `shapeOf` is pure and consumed by both the renderer and the hit test, so a

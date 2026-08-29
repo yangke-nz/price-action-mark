@@ -713,14 +713,24 @@ scored against the trader:
   into an edge (`ambiguous` counts them so the number stays auditable);
 - a bar that gapped through the entry fills at the **open**, not the order price;
 - the entry order is live for exactly **one bar** — leaving it working turns
-  every failed setup into a different, later trade nobody took.
+  every failed setup into a different, later trade nobody took;
+- **the order goes in at `knownAt`, not at the signal bar.** Three of the eight
+  rules are anchored on a swing *pivot*, which is not readable until it
+  confirms three bars later, so the order cannot be placed on the signal bar's
+  close. It was anyway, for all 257 of their marks — and almost the whole edge
+  those notes showed was that two-session head start. Measured over the full
+  series, `dt-short` went from +0.873 R a mark to **+0.114**, `db-long` from
+  +0.601 to **+0.079**, and `wedge-reversal` from +0.345 to **−0.160**, which
+  changes its sign. `npm run marks -- --check` now re-derives every entry's
+  walk from the mark's own dates and fails if the note disagrees.
 
 Measured over 3,000 sessions, the mechanical 2R target **loses** on the pullback
 entries: `second-entry` fills 75/75 and wins 28%, where 2R needs better than
-33%. The positive rules are the ones whose target is the pattern's own measured
-move — `dt-short` at +1.65R average, `db-long` at +1.10R. That number is left
-alone on purpose. Moving the default target until the table looked better would
-be curve-fitting a review tool.
+33%. Once the pivot-anchored rules have to wait for their own confirmation, the
+measured-move rules are only just positive — `dt-short` at +0.21R average,
+`db-long` at +0.19R — and `wedge-reversal` is negative at −0.21R. Those numbers
+are left alone on purpose. Moving the default target until the table looked
+better would be curve-fitting a review tool.
 
 ## Reading the bars
 

@@ -75,13 +75,20 @@
 
   --up: #006300;
   --down: #e34948;
-  --neutral: #828b96;
   --up-text: #006300;
   --down-text: #cc3131;
   --ema: #4338ca;
   --ema-text: #4338ca;
 
-  --focus: #2a78d6;
+  /* Darkened from #2a78d6 because --focus is a GROUND as well as a mark: the
+     marking pane's selected-tab count chip paints --surface on it at 10.5px,
+     which was 4.30:1 — text, and short of 4.5:1. Even pure white on the old
+     blue is only 4.42:1, so the fix has to be the blue. This is the smallest
+     move along LIGHTNESS with hue and saturation held (HSL 212.8/67.7%,
+     50.2% -> 48.6%), exactly how --muted-text was chosen: the chip clears at
+     4.54:1 and --focus as a MARK improves from 3.92:1 to 4.15:1 on --plane.
+     Dark needs no change — there the chip is near-black on bright blue, 4.89:1. */
+  --focus: #2874d0;
   --shadow: 0 1px 2px rgb(12 16 21 / 5%), 0 8px 24px -12px rgb(12 16 21 / 18%);
 
   --sans: "Archivo Variable", "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -110,7 +117,6 @@
 
     --up: #008300;
     --down: #e66767;
-    --neutral: #6d7681;
     --up-text: #0ca30c;
     --down-text: #e66767;
     --ema: #2962ff;
@@ -139,7 +145,6 @@
 
   --up: #008300;
   --down: #e66767;
-  --neutral: #6d7681;
   --up-text: #0ca30c;
   --down-text: #e66767;
   --ema: #2962ff;

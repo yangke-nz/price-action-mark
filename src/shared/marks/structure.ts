@@ -27,7 +27,6 @@
  * `pullback` and `lastPivot` are the causal per-bar record. They can disagree
  * about the recent past, and that disagreement is correct.
  */
-import type { Dataset } from '../types.ts';
 import type { Metrics } from './metrics.ts';
 
 export interface Pivot {

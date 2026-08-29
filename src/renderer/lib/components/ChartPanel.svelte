@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { CandleChart } from '$lib/chart/candles.ts';
-  import { RANGES, type AppState } from '$lib/state/app.svelte.ts';
+  import { PAGE_STEP, RANGES, type AppState } from '$lib/state/app.svelte.ts';
   import type { Dataset, RangeId } from '$shared/types.ts';
   import { barLabel, price } from '$shared/format.ts';
 
@@ -132,7 +132,7 @@
     const move = app.change(bar.i);
     const gap = app.settings.showEma && app.focusEmaGap
       ? `, ${Math.abs(app.focusEmaGap.pct).toFixed(2)} percent ` +
-        `${app.focusEmaGap.abs >= 0 ? 'above' : 'below'} the ${app.emaPeriod}-session average`
+        `${app.focusEmaGap.abs >= 0 ? 'above' : 'below'} the ${app.emaPeriod}-bar average`
       : '';
     // The reading is spoken HERE rather than from the readout, which is an
     // atomic live region and would re-read every figure alongside it. This
@@ -150,7 +150,10 @@
 <!-- The chart is a focusable, keyboard-driven surface, which is exactly what
      role="application" describes; Svelte's a11y pass does not recognise it as
      interactive and would otherwise flag the tabindex and the handlers. The
-     live region below carries the same information to a screen reader. -->
+     live region below carries the same information to a screen reader.
+     The paging description counts BARS. "About a month" was true of daily
+     sessions and is 105 minutes of a five-minute chart, so it quotes
+     PAGE_STEP, which is the thing the key actually moves. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
@@ -158,7 +161,7 @@
   class="chart"
   tabindex="0"
   role="application"
-  aria-label={`Candlestick chart of E-Mini S&P 500 futures, ${app.subjectLabel}. Left and right arrow keys step through bars and the readout above announces each one. Page Up and Page Down move about a month of bars; Home and End jump to the ends. A full data table is available below the chart.`}
+  aria-label={`Candlestick chart of E-Mini S&P 500 futures, ${app.subjectLabel}. Left and right arrow keys step through bars and the readout above announces each one. Page Up and Page Down move ${PAGE_STEP} bars; Home and End jump to the ends. A full data table is available below the chart.`}
   onkeydown={onKeydown}
   onblur={() => { app.clearKeyboard(); chart?.clearCrosshair(); }}
 ></div>

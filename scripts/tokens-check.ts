@@ -35,8 +35,18 @@ import { fileURLToPath } from 'node:url';
 
 const FILE = fileURLToPath(new URL('../src/renderer/styles/tokens.css', import.meta.url));
 
-/** The three grounds a colour can sit on. */
-type Ground = 'plane' | 'surface' | 'surface-2';
+/**
+ * The grounds a colour can sit on.
+ *
+ * `focus` is one of them, and leaving it out was this script's own blind spot.
+ * The model only ever paired a token with the three PAGE grounds, so a token
+ * used as a background for something else was never a ground — and the
+ * marking pane's selected-tab count chip is 10.5px `--surface` text on a
+ * `--focus` fill, which measured 4.30:1 in light while this file reported
+ * "every token clears the bar it is used at". Any token that paints a
+ * background for text belongs here.
+ */
+type Ground = 'plane' | 'surface' | 'surface-2' | 'focus';
 
 /** What a token is used AS, which is what decides its threshold. */
 type Role =
@@ -71,12 +81,15 @@ const ROLES: Readonly<Record<string, Role>> = {
   down: { need: 'mark', on: ['surface'] },
   ema: { need: 'mark', on: ['surface'] },
   muted: { need: 'mark', on: ['surface'] },
-  neutral: { need: 'mark', on: ['surface'] },
   focus: { need: 'mark', on: ['plane', 'surface'] },
+
+  // A ground almost everywhere, and TEXT on one thing: the marking pane's
+  // selected-tab count chip inverts, painting `--surface` on a `--focus` fill.
+  // Both roles are real and this is the one that has a threshold.
+  surface: { need: 'text', on: ['focus'] },
 
   // --- deliberately unmeasured -------------------------------------------
   plane: { need: 'exempt', why: 'a ground, not a foreground' },
-  surface: { need: 'exempt', why: 'a ground, not a foreground' },
   'surface-2': { need: 'exempt', why: 'a ground, not a foreground' },
   grid: { need: 'exempt', why: 'the horizontal rules behind the candles — decorative' },
   axis: { need: 'exempt', why: 'hairline borders and the crosshair; ~1.5:1 by design' },
