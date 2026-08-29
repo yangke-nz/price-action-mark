@@ -8,7 +8,11 @@ export interface ChartTokens {
   ema: string;
   grid: string;
   axis: string;
+  /** Arrows, neutral and caution mark strokes — a MARK, held to 3:1. */
   muted: string;
+  /** The same role in TEXT — axis labels, bar numbers — held to 4.5:1.
+   *  Same split as --up / --up-text and --ema / --ema-text. */
+  mutedText: string;
   /** The selection colour the rest of the UI focuses with. The bar-reading
    *  band uses it so that "this is the line you clicked" cannot be mistaken
    *  for a statement about direction, which --up / --down already own. */
@@ -29,6 +33,7 @@ export function readTokens(root: HTMLElement = document.documentElement): ChartT
     grid: g('--grid'),
     axis: g('--axis'),
     muted: g('--muted'),
+    mutedText: g('--muted-text'),
     focus: g('--focus'),
     ink: g('--ink'),
     ink2: g('--ink-2'),

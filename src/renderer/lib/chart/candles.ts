@@ -206,7 +206,7 @@ export class CandleChart {
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: t.surface },
-        textColor: t.muted,
+        textColor: t.mutedText,
         fontFamily: t.mono,
         fontSize: 11,
         attributionLogo: false,
@@ -545,7 +545,7 @@ export class CandleChart {
     this.#chart.applyOptions({
       layout: {
         background: { type: ColorType.Solid, color: t.surface },
-        textColor: t.muted,
+        textColor: t.mutedText,
         panes: { separatorColor: t.grid, separatorHoverColor: t.axis },
       },
       grid: { horzLines: { color: t.grid } },

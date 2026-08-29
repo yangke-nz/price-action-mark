@@ -76,6 +76,7 @@ npm run marks          # metric columns for any span; --check runs invariants
                        #   --structure adds pivots/trend/pullback, --tune sweeps
                        #   --golden rewrites the regression fixture
 npm run marks:check    # the marking layer's regression guard; fails on drift
+npm run tokens:check   # the palette's guard: three scopes agree, contrast holds
 npm run smoke          # headless render check of the artifact
 npm run smoke:app      # headless render check of the desktop app
 ```
@@ -127,6 +128,31 @@ Break one of these and it fails quietly, not loudly.
 - **Theme tokens live in three scopes** in `styles/tokens.css`: bare `:root`, the
   `prefers-color-scheme: dark` media query, *and* `:root[data-theme="dark"]`. Miss
   one and the in-app toggle and the OS setting disagree. Change a colour in all three.
+- **`--ema` is the LINE and `--ema-text` is the FIGURE, and they differ in dark
+  mode.** The line is `#2962ff` to match the reference chart: dE 13.3 from
+  `--focus`, which is what chose it — the cornflower blues that look closer by
+  eye measure dE 2-5 from it and read as a selected control. It is 3.63:1 on
+  the dark surface, which clears the 3:1 a mark needs and misses the 4.5:1 a
+  figure needs, so the readout's EMA value takes `--ema-text` (`#93a5f4`,
+  7.57:1). Exactly the split `--up` / `--up-text` already makes, and the reason
+  a "just use --ema" in a text rule is a contrast regression that nothing will
+  catch for you.
+- **`--muted` is the MARK and `--muted-text` is anything the reader READS**, and
+  this is the third and widest of those splits. The one token drew the roll
+  arrows, the `neutral` and `caution` strokes and the legend glyph — all
+  graphics, all clearing 3:1 — while also carrying 39 distinct TEXT roles across
+  13 components, 558 elements on one page, at 8px to 14px. As text it was short
+  in both themes: 3.36 / 3.21 / 3.07 light and 3.87 / 3.59 / 4.22 dark on
+  surface / surface-2 / plane, against 4.5:1, and the large-text relaxation
+  never applies because 14px is the biggest `--muted` text in the app and the
+  threshold is 24px. `--muted-text` is `#676f7a` / `#7e8792` — the smallest move
+  along LIGHTNESS, hue and saturation held, that clears 4.5:1 on all three
+  grounds (4.95 / 4.73 / 4.52 and 4.89 / 4.55 / 5.34). L* moves 11.0 and 6.7
+  against a 21.6 / 22.6 gap to `--ink-2`, so the quiet register stays quiet.
+  `readTokens()` carries both: `layout.textColor` and the bar numbers take
+  `mutedText`, the roll markers and `styleFor`'s neutral/caution keep `muted`.
+  The light plane is the one to watch — `--muted` clears the 3:1 graphics bar
+  there by 0.07, so a nudge to `--plane` puts the arrows under it.
 - **The `data-theme` attribute is set in `$effect.pre`, not `$effect`**
   ([App.svelte](src/renderer/App.svelte)). `CandleChart.applyTheme()` calls
   `getComputedStyle` to pick up the new palette, so the attribute must already be
@@ -241,6 +267,7 @@ src/shared/                    imported by main, renderer AND the CLI scripts
   session.ts                     RTH/ETH window + trading-day bar numbers;
                                    the only timezone code
   rolls.ts                       expiry arithmetic + contractStarts()
+  aggregate.ts                   intraday -> daily bars, for RTH daily
   indicators.ts                  ema(), atr(), trueRange(); pure series maths
   marks/metrics.ts               per-bar columns every marking rule reads
   marks/structure.ts             pivots, legs, always-in state, H/L counts
@@ -260,11 +287,11 @@ src/shared/                    imported by main, renderer AND the CLI scripts
 
 src/main/
   index.ts                       window, CSP, IPC handlers, save dialogs
-  marks.ts                       verdicts, one atomic JSON per symbol
+  marks.ts                       verdicts, one atomic JSON per symbol+window
   dataset.ts                     network -> cache -> bundled, in that order
   settings.ts                    atomic JSON in userData, validated field by field
   menu.ts                        native menu; items send Commands to the renderer
-  window.ts                      vertical maximize (Electron has no API for it)
+  window.ts                      vertical maximize + extend-left (no Electron API)
 
 src/preload/index.ts           the entire privileged surface, sandboxed CJS
 
@@ -377,6 +404,28 @@ only way a detector is tested against something other than itself. The eight
 in `data/marks-golden.json` were read off the 2025 pivot list by hand, and seven
 matched the rule's own arithmetic exactly once it existed.
 
+**`npm run tokens:check` is the palette's guard, and it covers the two faults
+in `tokens.css` that render as nothing at all.** It asserts the THREE-SCOPE
+invariant — the two dark scopes must hold the same keys with the same values,
+nothing may exist only in the dark, and every colour in `:root` must be
+redefined for it — and then the contrast of every token against the grounds it
+actually sits on, 4.5:1 for text and 3:1 for a mark. `ROLES` in the script is
+authored, because "is this text" is a fact about the components rather than
+about the CSS; the GROUNDS in it were measured by walking every text element in
+the built artifact and resolving the first ancestor that paints. **A hex token
+with no `ROLES` entry fails the run**, so adding a colour forces the decision
+rather than defaulting to unmeasured. Verified to have teeth on all four fault
+classes: reverting `--down-text` reports *"4.27:1 on --plane ... needs 4.5:1"*,
+dropping a token from one scope reports *"in the media query but not in
+[data-theme=\"dark\"]"*, changing one dark scope reports *"disagrees between the
+dark scopes"*, and a new `--brand` reports both that it is never redefined dark
+and that nobody classified it.
+- **The ground matters as much as the colour, and that is what it caught first.**
+  `--down-text` was 4.68:1 on the card surface and **4.27:1 on the page plane**,
+  and the masthead's session-change figure has no card behind it. It only
+  renders on a DOWN session, and the shipped snapshot's last bar closed up — so
+  neither the eye nor a screenshot would have found it. Now `#cc3131`.
+
 **`npm run marks:check` is the regression guard.** It holds per-rule mark counts,
 those hand-picked dates, and the STRUCTURE DIALS, and `--golden` rewrites it —
 deliberately a separate command, so drift has to be accepted on purpose. The
@@ -408,6 +457,43 @@ never return a `hoveredInfo` across `executeJavaScript`; it holds a live
 `%APPDATA%/price-action-mark/`, so a probe that expects a default will disagree
 with a machine that has run the app. Set the state you are testing explicitly, or
 delete that directory first.
+
+## Window gestures
+
+- **Two of them, and neither is `maximize`.** Vertical takes the full work-area
+  height and leaves x and width alone; **extend-left** moves the LEFT edge to the
+  work area's left and leaves the RIGHT edge exactly where it is. That asymmetry
+  is the feature: it widens the chart into empty desktop without walking over
+  whatever is parked beside it.
+- **Two WeakMaps, not one record.** The gestures are independent and compose — a
+  window can be full-height and extended left at once — so each remembers its own
+  pre-gesture geometry. Verified on a 3440px display: left edge to the work area,
+  right edge unmoved, y and height unmoved, toggles back, composes with fit height.
+- **The Session menu is always enabled, and was greyed out on daily.** It was
+  right when RTH meant "filter the intraday bars in hand"; the session window
+  now reaches the DAILY chart, where the bars are aggregated instead. The
+  in-page control had learned this and the menu had not, so the two disagreed
+  about a shipped feature — measured: `MENU Session enabled: false` beside
+  `PAGE Session control: ["ETH*","RTH"]` on the same chart. Main is the desktop
+  target, where `can.timeframes` is true by construction, so the answer there
+  is simply "always". A menu item and a button are supposed to be one code path;
+  that is the whole premise of [menu.ts](src/main/menu.ts).
+- **They act in main, not through the renderer.** Window geometry is main's own
+  business, which is why these two menu items click straight through instead of
+  sending a Command. `Ctrl+Shift+M` and `Ctrl+Shift+L`.
+- **main PUSHES the state; the buttons do not remember it.** `app.fitted` and
+  `app.fittedLeft` exist only to label the two buttons, and they used to be set
+  by the buttons alone — which made them wrong the moment anything else moved
+  the window. Measured: fit the height, then drag the bottom edge, and the
+  button still read *Restore* over a window that was no longer full height, so
+  pressing it maximized rather than restored. The accelerators are the worse
+  path, because they never touch the renderer at all. `CH.windowState` is
+  broadcast on `resize`, `move`, `maximize`, `unmaximize`, `restore` and once
+  on `did-finish-load`, debounced 120 ms because a drag fires `resize` every
+  frame. The gesture toggles need no push of their own: they move the window
+  with `setBounds`, which fires `resize`.
+
+---
 
 ## Deliberately absent — do not "fix" these
 
@@ -600,6 +686,17 @@ delete that directory first.
   the app's own state. Smoke now fails on any notice being present, and
   `#persistMarks` reports the error rather than swallowing it — a catch that
   hides a programming error is how this survived a whole phase.
+  **It then happened a THIRD time, to SETTINGS.** `#patchMarks` puts
+  `settings.marks.rules` and `.folded` — both rune-backed, both proxies —
+  straight into the IPC payload, so every marks patch was rejected and
+  `patch()`'s bare `catch {}` swallowed it: rule toggles, folds, Show marks and
+  Confirmed only all worked for the session and were gone on the next launch,
+  with nothing on screen to say so. The artifact was unaffected, because
+  `JSON.stringify` walks a proxy quite happily — which is why only one of the
+  two targets was broken and neither smoke could see it. `patch()` now
+  snapshots at the seam rather than at the four call sites, so a fifth cannot
+  reintroduce it, and it REPORTS a failure instead of swallowing it. A bare
+  `catch {}` on a persistence path is the actual bug, three times running.
 - **Mark ids must be unique, and a rule can break that without trying.** Two
   breakouts on consecutive sessions find the SAME first pullback, so
   `bo-pullback` emitted two marks carrying one id: two identical rows, one
@@ -726,10 +823,18 @@ delete that directory first.
     six rules instead of fifteen. The blurb therefore goes first and early
     (700px), the numeric columns at 620px, `Where` at 420px — after which
     every width from 392px up holds a 32px row.
-- **`settings.marks.rules` is sparse on purpose.** It stores only the ids the
-  reader moved off the rule's own `defaultOn`. Persisting all thirty-one booleans
-  would freeze today's defaults into every settings file, so a later tightening
-  would never reach anyone who had already run the app.
+- **`settings.marks.rules` is sparse on purpose — and it was NOT, for a whole
+  release.** It stores only the ids the reader moved off the rule's own
+  `defaultOn`, because persisting all thirty-one booleans would freeze today's
+  defaults into every settings file and a later tightening would never reach
+  anyone who had already run the app. `toggleRule` only ever ADDED, so a rule
+  switched off and back on stayed pinned to today's answer forever: the exact
+  failure the sparseness exists to prevent. It now DELETES a key whose value
+  agrees with `defaultOn`, and `#merge` deletes what an incoming record leaves
+  out — the same two halves `folded` has always had. A settings file written
+  before this keeps its redundant entries until the reader touches those rules;
+  nothing rewrites it, because silently editing someone's file to satisfy an
+  invariant is worse than the invariant being late.
 - **`marks.show` is sparse for the same reason, and it bit twice.** Publishing
   verdicts is what puts an artifact into confirmed-only mode, so a stored
   `show` has to mean "the viewer chose this", never "this was the default when
@@ -753,6 +858,32 @@ delete that directory first.
   thresholds move; a mark that vanishes today comes back when a tolerance is
   loosened. They cost a few bytes and dropping them would silently discard
   decisions the reader made.
+- **The verdict store is keyed by symbol AND WINDOW, because a daily date names
+  two different bars.** A mark id is `rule:date`, and on a daily chart
+  `2026-08-28` is the whole 23-hour Globex day in ETH and 09:30-16:15 New York
+  in RTH. Measured against the shipped feed: over the 42 sessions the two
+  windows share, 23 of the RTH daily chart's 53 marks carry an id an ETH daily
+  mark also carries, and ALL 23 name bars whose OHLC differs — so one store for
+  both meant a Keep made in one window silently landed on a different bar in
+  the other, and a Drop silently hid one. `markScope()` appends the window slug
+  for an AGGREGATE only, which is the same distinction `slugFor` makes for an
+  export filename: intraday keys carry a time of day, so RTH and ETH there name
+  the very same five-minute bar and rightly share a store, and the feed's own
+  daily series keeps the bare symbol so every verdict already on disk is still
+  found. RTH daily gets `ES_F_rth.json`. `#adoptMarks` reloads on every switch
+  that can change it — the store used to be fetched once, at boot, which is how
+  the ETH verdicts followed the reader into RTH in the first place.
+  **The PUBLISH path is guarded too, at build time.** `data/marks.json` is a
+  flat verdict map with no record of which window produced it, so an RTH daily
+  export dropped over the ETH daily snapshot published marks the author never
+  confirmed onto bars they never saw — verified end to end: three RTH verdicts
+  produced a confirmed-only page showing three ETH bars, silently.
+  `inline-artifact.ts` now compares the store's `symbol` against
+  `markScope(es_data.json)` and refuses the build, which is what that script's
+  guards are for. Only a store that CARRIES verdicts is judged, so the shipped
+  empty one still builds; and only the scope is compared, so 5-minute verdicts
+  over a daily snapshot pass — an intraday id carries a time of day and matches
+  nothing, which is harmless.
 
 ## Timeframes
 
@@ -787,6 +918,24 @@ changed is one decision.
   is still the expiring contract, and the old form put the carry warning ~223
   bars early. On a daily series both reduce to exactly what they did before;
   `marks:check` is what proves that, and it still passes unchanged.
+- **The status line names the WINDOW whenever the heading does, which on daily
+  means whenever the bars were aggregated.** The two sit inches apart and
+  disagreed: the heading said *"daily bars, RTH"* and the readout said *"Daily
+  bars · 24 in view"*. Same class of fault as *"Daily bars"* over five-minute
+  candles, one field narrower. The smoke's own heading/status cross-check was
+  written before the session control reached daily and FAILED on that state —
+  it asserted a daily heading must END in "daily bars" — so it now reads the
+  bar size and the window out of both strings and compares them, and a third
+  window or a third bar size needs no third branch. Run `smoke:app` in all four
+  states after touching either line; the machine's stored settings decide which
+  one you get.
+- **`setInterval` does not reload a series it already holds.** 5-minute RTH to
+  daily RTH is a re-derive of the bars on screen — `sourceIntervalFor` returns
+  `5m` for both — and it went round the source anyway: an IPC round trip
+  carrying 11,600 bars back, and a `#apply` that drops the crosshair and the
+  reader's clicked session for nothing. `setSession` always had that guard;
+  `setInterval` now has the same one. Measured after: the switch settles inside
+  400 ms.
 - **Range presets belong to the interval.** `5Y` against a 60-day archive shows
   the same thing as `MAX` while implying history that is not there, so
   `INTERVALS[x].ranges` decides what the control and the menu offer, and
@@ -795,6 +944,15 @@ changed is one decision.
   today's preset list into every settings file, the argument `marks.rules`
   makes for being sparse. The menu's `Ctrl+1..0` number by POSITION in the
   offered list, so Ctrl+1 is always the shortest range that exists.
+  **This is keyed on the INTERVAL alone, which the RTH daily chart breaks and
+  nothing here fixes.** Those bars are aggregated from the 60-day intraday
+  archive, so the chart is about 42 sessions — and it offers the daily presets,
+  1Y and 5Y and MAX among them, four of which show exactly the same thing. It
+  is the argument this note makes against a 5Y button on a 60-day archive,
+  applied to a case the rule does not reach. Fixing it means the offered set
+  depending on the dataset's SPAN rather than its bar size, which is a product
+  decision (what should a 42-session daily chart offer?) rather than a defect
+  with one obvious answer, so it is written down rather than guessed at.
 - **The daily userData cache MOVED, and the old file is orphaned.** It was
   `es_data.json`; it is now `es_daily.json`, because the name is derived from
   the interval. Every existing install therefore re-fetches once and leaves a
@@ -912,6 +1070,34 @@ One line of the intraday chart's furniture, and three decisions in it.
   unpressed. Read `app.interval` / `app.range`; `settings.*` is what is on disk.
   Build an artifact from `data/es_5m.json` before trusting anything here — the
   daily smoke cannot see this class of bug.
+- **The AGGREGATE rides `can.timeframes`, and the artifact is why.**
+  `settings.interval` is a REQUEST, and only a target that can switch bar size
+  is in a position to make one — the artifact carries a single snapshot and IS
+  whatever that snapshot holds, so the `1d` it stores is a default that means
+  nothing. Without the guard, an artifact built from `data/es_5m.json` matched
+  the RTH-daily branch and silently aggregated its own 11,609 five-minute bars
+  into 44 daily ones: `Daily bars · ETH · 44 in view` on a page published as a
+  5-minute chart. This is the `app.interval` fault below, MOVED rather than
+  fixed — reading the dataset stopped the label lying and left the transform in
+  place. Build from `data/es_5m.json` and run `npm run smoke` after touching
+  `dataset`; the daily artifact cannot show you this.
+- **`app.session` READS THE DATASET TOO, and did not, which cost the RTH daily
+  chart its restart.** `boot()` asked the source for `settings.interval`, never
+  consulting `settings.session` — so a window left on RTH daily reopened
+  holding the feed's own 24-hour daily bars, with the session control still
+  showing RTH pressed and the heading quietly dropping the `, RTH`. Clicking
+  RTH did nothing, because `setSession` compares against the SETTING and the
+  setting already said RTH; the only way back was ETH and then RTH again.
+  Two halves, and both are needed. `sourceIntervalFor(interval, session)` in
+  [session.ts](src/shared/session.ts) is now the one answer to "which series
+  does this chart load", used by `boot`, `setSession`, `setInterval` and main's
+  boot refresh — which was refreshing `1d` at a renderer holding 5-minute bars,
+  so `adopt()` correctly discarded it and an RTH daily window never got a boot
+  refresh at all. And `session` derives from `#raw`: a daily series that came
+  from the FEED is ETH whatever the setting says, because an RTH daily bar has
+  to be aggregated and this is not one. That also makes the offline fallback
+  honest — if the intraday pull fails, boot shows the feed's daily bars, says
+  so in a notice, and the control reads ETH rather than lying.
 - **`AppState.dataset` is DERIVED from `#raw` plus the session.** One pull
   serves both windows, so switching is a re-derive (~70 ms) rather than a round
   trip, and nothing can hold a dataset that disagrees with the setting. Two
@@ -921,11 +1107,36 @@ One line of the intraday chart's furniture, and three decisions in it.
 - **ETH is the default**, because it means "every bar the feed has" and this app
   does not silently drop 71% of what it pulled — the Notes card says how many
   bars RTH is holding back for the same reason. RTH is the reader's choice.
-- **The control is intraday-only and needs NO capability.** A daily bar is a
-  whole session, so on daily it is absent rather than present and inert. And
-  the filter is a pure transform over a dataset already in hand, so an artifact
-  built from an intraday snapshot offers it too — unlike the timeframe switch,
-  which needs a second dataset and therefore `can.timeframes`.
+- **The control is no longer intraday-only, and on DAILY it is a LOAD.** The
+  feed's daily bar is the whole 23-hour Globex day, so an RTH daily bar does not
+  exist to be filtered for — it is aggregated from the intraday series in
+  [aggregate.ts](src/shared/aggregate.ts). That needs a second dataset, so the
+  daily case rides `can.timeframes` while the intraday case still needs no
+  capability at all; `app.sessionApplies` is that whole sentence, and the
+  artifact therefore offers the control only where it is a pure filter over its
+  own snapshot.
+  - **`RTH_DAILY_SOURCE` is `5m`, and hourly was REJECTED on correctness.**
+    Measured: Yahoo serves 14,560 hourly bars over the full 730 days against 60
+    days of five-minute ones — and hourly bars sit on the hour in New York, so
+    the 09:00 bar straddles the 09:30 open and the 16:00 bar straddles the 16:15
+    close. Every window is wrong at both ends, and an open and a close are what
+    a price-action chart is read on: every bar rule tests where the close sits
+    in the range. 42 correct sessions beat two years of guesses.
+  - **`#sourceInterval` is not `interval`.** On an RTH daily chart the raw is
+    5-minute and the dataset is daily, so `refresh()` and `adopt()` ask for what
+    is actually HELD, while `interval` stays what the chart is OF. Get that
+    wrong and a refresh swaps the RTH source for the feed's daily series under
+    the reader.
+  - **`Dataset.window` says which hours a daily bar covers.** An intraday
+    dataset says so in its own keys; a daily key is just a date, so the
+    aggregate carries the marker and `slugFor` reads it — otherwise an RTH daily
+    export and a 24-hour one leave under the same filename, the exact failure
+    the export-naming note warns about. Optional, and never written to a cache,
+    so nothing on disk is invalidated.
+  - **The Notes card had to stop contradicting itself.** "No aggregation and no
+    downsampling" is that card's first sentence, and it sat directly above the
+    paragraph explaining the aggregation. Both the heading and that sentence now
+    switch on `app.aggregated`.
 - **The export filename says which window it holds** (`ES_F_5m_rth.csv`),
   derived from the DATA rather than from settings, so the name stays true if the
   reader switches before the dialog closes. Two exports of one symbol and
@@ -1006,6 +1217,16 @@ bar. Every session gets a line.
   tellable apart. Measured with both probe controls: a click changes 5,814
   pixels on the primitive's canvas and **zero on the price axis** — the band
   cannot move the scale, because `autoscaleInfo()` is null.
+- **`focusIndex` BOUNDS-CHECKS all three of its inputs.** `keyIndex`,
+  `hoverIndex` and `selectedBarIndex` are positions in a dataset that is
+  DERIVED, so it changes length underneath them with nothing loaded and
+  `#apply` never called: RTH/ETH intraday is a pure re-derive (11,609 bars to
+  3,402) and so is 5-minute RTH to daily RTH (3,402 to 42). Click a reading
+  line deep in the intraday list, switch, and the readout went to dashes while
+  the reading named a bar that does not exist — it is prose, so it printed
+  *"flat bar — trading range, LNaN"* rather than throwing. Checked at the one
+  place all three are consumed, so every path is covered including the ones not
+  written yet; out of range falls through to the last session.
 - **`#span` is the one clamped viewport.** The table, the mark list and the
   reading all need "what is on screen", and the chart can report a bar past the
   end mid-refresh. Four copies of `Math.min(viewport.to, n - 1)` are four
@@ -1077,6 +1298,13 @@ and the **bar reading** are done: 31 rules over three groups (special bars, the 
 form, the entries they set up), drawn as one canvas primitive, with the reader's
 keep/drop verdicts persisted per symbol and publishable into the artifact — and
 a line of Brooks prose for every session in view, clickable back to the bar.
+
+Shipped since, and equally done: the rules card **folds** its less-used rules
+behind a per-group chip, with a modal **rules sheet** letting the reader move
+any rule off the tier it ships with; the intraday chart carries **Brooks bar
+numbers**, every third bar with the session's first bar dated; and the session
+window now reaches the **daily** chart, where RTH bars are aggregated from the
+5-minute series rather than filtered for.
 
 **What is left is DRAWING — marks the reader makes by hand.** Everything that
 needs is already in place and was built that way on purpose:

@@ -66,7 +66,7 @@
     gap: 3px;
     font-size: 12px;
     line-height: 1.6;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   a {

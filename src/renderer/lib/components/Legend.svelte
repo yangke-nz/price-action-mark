@@ -73,9 +73,9 @@
   .num {
     font-family: var(--mono);
     font-size: 10px;
-    color: var(--muted);
+    color: var(--muted-text);
     width: 13px;
     text-align: center;
   }
-  .hint { margin-left: auto; color: var(--muted); }
+  .hint { margin-left: auto; color: var(--muted-text); }
 </style>

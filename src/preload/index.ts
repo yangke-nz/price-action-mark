@@ -5,7 +5,7 @@
  * one, so a compromised renderer cannot invoke handlers it was not given.
  */
 import { contextBridge, ipcRenderer } from 'electron';
-import { CH, type Command, type DesktopApi } from '../shared/ipc.ts';
+import { CH, type Command, type DesktopApi, type WindowState } from '../shared/ipc.ts';
 import type { Dataset, DatasetResult, Settings } from '../shared/types.ts';
 import type { MarkStore } from '../shared/marks/types.ts';
 
@@ -25,6 +25,7 @@ const api: DesktopApi = {
 
   appInfo: () => ipcRenderer.invoke(CH.appInfo),
   fitHeight: () => ipcRenderer.invoke(CH.fitHeight) as Promise<boolean>,
+  fitLeft: () => ipcRenderer.invoke(CH.fitLeft) as Promise<boolean>,
 
   onCommand(handler) {
     // The IpcRendererEvent never crosses the bridge — only the payload does.
@@ -37,6 +38,12 @@ const api: DesktopApi = {
     const listener = (_event: unknown, result: DatasetResult): void => handler(result);
     ipcRenderer.on(CH.datasetUpdated, listener);
     return () => ipcRenderer.off(CH.datasetUpdated, listener);
+  },
+
+  onWindowState(handler) {
+    const listener = (_event: unknown, state: WindowState): void => handler(state);
+    ipcRenderer.on(CH.windowState, listener);
+    return () => ipcRenderer.off(CH.windowState, listener);
   },
 };
 

@@ -2,7 +2,7 @@
  *  renderer already listens on, so the menu and the in-page controls drive
  *  exactly one code path instead of two that drift. */
 import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron';
-import { toggleVerticalMaximize } from './window.ts';
+import { toggleLeftMaximize, toggleVerticalMaximize } from './window.ts';
 import { CH, type Command } from '../shared/ipc.ts';
 import type { RangeId, Settings } from '../shared/types.ts';
 import { INTERVAL_IDS, INTERVALS } from '../shared/interval.ts';
@@ -69,15 +69,21 @@ export function buildMenu(settings: Settings): void {
         },
         {
           label: 'Session',
-          // Disabled rather than hidden on a daily interval: the item is part
-          // of the menu's shape, and a menu that changes length as you switch
-          // timeframe is harder to learn than one greyed item.
-          enabled: settings.interval !== '1d',
+          // Always enabled, and it used to be greyed out on a daily interval.
+          // That was right when RTH meant "filter the intraday bars in hand" —
+          // and the session window now reaches the DAILY chart too, where those
+          // bars are aggregated out of the 5-minute feed instead. The in-page
+          // control had already learned this (`app.sessionApplies` is
+          // `intraday || can.timeframes`), so a menu that stayed greyed made
+          // the two disagree about a shipped feature — the exact drift this
+          // file exists to prevent, since a menu item and a button are supposed
+          // to be one code path. Main is the desktop target, where
+          // `can.timeframes` is true by construction, so the answer here is
+          // simply "always".
           submenu: SESSION_IDS.map((id) => ({
             label: `${SESSIONS[id].label} — ${SESSIONS[id].title.split(' — ')[1] ?? ''}`.trim(),
             type: 'radio' as const,
             checked: settings.session === id,
-            enabled: settings.interval !== '1d',
             click: () => send({ kind: 'session', value: id }),
           })),
         },
@@ -156,6 +162,16 @@ export function buildMenu(settings: Settings): void {
           click: () => {
             const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
             if (win) toggleVerticalMaximize(win);
+          },
+        },
+        {
+          // Window geometry is main's business too, so this acts directly for
+          // the same reason its sibling above does.
+          label: 'Extend to left edge',
+          accelerator: 'CmdOrCtrl+Shift+L',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+            if (win) toggleLeftMaximize(win);
           },
         },
         { type: 'separator' },

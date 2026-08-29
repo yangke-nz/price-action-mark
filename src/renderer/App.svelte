@@ -47,6 +47,11 @@
   // series, so main pushes it here rather than the renderer asking again.
   $effect(() => source.onDatasetUpdate((result) => app.adopt(result)));
 
+  // The window gestures act in main — the accelerators bypass the renderer
+  // entirely, and a drag tells nobody — so main reports the state rather than
+  // the buttons remembering what they last did.
+  $effect(() => source.onWindowState((state) => app.setWindowState(state)));
+
   // Native menu items and accelerators arrive here rather than as synthetic
   // DOM events, so the menu and the in-page controls drive one code path.
   $effect(() =>
@@ -160,7 +165,7 @@
     height: var(--chart-h);
     font-family: var(--mono);
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   @media (max-width: 720px) {

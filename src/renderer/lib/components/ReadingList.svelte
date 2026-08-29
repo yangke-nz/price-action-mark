@@ -97,7 +97,7 @@
     margin: 0;
     padding: 12px 16px 16px;
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .hint {
@@ -108,7 +108,7 @@
     font-size: 10.5px;
     line-height: 1.5;
     letter-spacing: 0.02em;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .cap { color: var(--ink-2); }
@@ -170,7 +170,7 @@
     white-space: nowrap;
   }
 
-  .yr { display: block; font-size: 10.5px; color: var(--muted); }
+  .yr { display: block; font-size: 10.5px; color: var(--muted-text); }
 
   /* Prose, so the digits inside "1.9x ATR" are not set on the tabular grid the
      date rail needs. */
@@ -181,7 +181,7 @@
      dozen characters. */
   @container (max-width: 430px) {
     .line { grid-template-columns: minmax(0, 1fr); gap: 1px; padding: 7px 12px; }
-    .d { font-size: 11px; color: var(--muted); }
+    .d { font-size: 11px; color: var(--muted-text); }
     .yr { display: inline; font-size: inherit; }
   }
 </style>

@@ -12,14 +12,45 @@
  *
  * --ema is the one non-directional mark, and it has to read as neither up nor
  * down. Blue is the safe axis: protan and deuteran vision compress red-green
- * but leave blue-yellow intact, so #4338ca / #93a5f4 sit dE 40+ from BOTH the
+ * but leave blue-yellow intact, so #4338ca / #2962ff sit dE 40+ from BOTH the
  * up and down steps under either simulation, against a dE 8 threshold. They
  * are also kept dE 13+ from --focus, so a moving average never reads as a
  * focused control.
  *
+ * The dark step is #2962ff to match the reference chart, and that constraint
+ * is what picked it: the softer cornflower blues that look closer by eye
+ * measure dE 2-5 from --focus and would read as a selected control. #2962ff is
+ * dE 13.3 from it, 60.8/41.9 from up/down (70.9/47.0 protan, 69.0/63.3
+ * deutan), and 3.63:1 on the dark surface — above the 3:1 a mark needs, and
+ * BELOW the 4.5:1 text needs, which is why --ema-text exists. The readout
+ * prints the EMA value in words; the chart draws it as a line. Same colour
+ * role, two contrast requirements, exactly as --up / --up-text already split.
+ *
  * Marks need 3:1 against the surface; text needs 4.5:1. That is why the delta
  * values use separate --up-text / --down-text steps: #e34948 only reaches
  * 3.85:1 on the light surface.
+ *
+ * --down-text is #cc3131 rather than #d03b3b because the ground matters as much
+ * as the colour. The masthead's session-change figure has no card behind it, so
+ * it sits on --plane, not --surface — and #d03b3b is 4.68:1 on the surface but
+ * only 4.27:1 on the plane. It went unnoticed because it only renders on a DOWN
+ * session and the snapshot's last bar closed up. #cc3131 is 4.61 / 5.05 / 4.82
+ * on plane / surface / surface-2, and L* moves 2.1, which is not visible.
+ * `npm run tokens:check` is what found it and what keeps it found.
+ *
+ * --muted is the third token to split, and the widest: it draws the roll
+ * arrows, the neutral and caution mark strokes and the legend glyph, AND it
+ * carried 39 distinct TEXT roles across 13 components. As a mark it passes —
+ * 3.07:1 at worst, on the light plane. As text it does not: 3.36/3.21/3.07
+ * light and 3.87/3.59/4.22 dark on surface/surface-2/plane, against the 4.5:1
+ * a figure needs, and the large-text relaxation never applies because the
+ * biggest --muted text in the app is 14px against a 24px threshold. So the
+ * text roles take --muted-text, which is the smallest move along LIGHTNESS —
+ * hue and saturation held — that clears 4.5:1 on all three grounds: 4.95/4.73/
+ * 4.52 light and 4.89/4.55/5.34 dark. L* moves 11.0 and 6.7, against a 21.6 /
+ * 22.6 gap between --muted and --ink-2, so the quiet register stays quiet and
+ * the annotation layer is untouched. Marks keep --muted; anything the reader
+ * READS takes --muted-text.
  *
  * Every token is declared in THREE scopes: bare :root, the dark media query,
  * and :root[data-theme="dark"]. Miss one and the in-app toggle and the OS
@@ -36,6 +67,7 @@
   --ink: #0c1015;
   --ink-2: #4d5560;
   --muted: #828b96;
+  --muted-text: #676f7a;
 
   --grid: #e2e7ec;
   --axis: #c9d1d9;
@@ -45,8 +77,9 @@
   --down: #e34948;
   --neutral: #828b96;
   --up-text: #006300;
-  --down-text: #d03b3b;
+  --down-text: #cc3131;
   --ema: #4338ca;
+  --ema-text: #4338ca;
 
   --focus: #2a78d6;
   --shadow: 0 1px 2px rgb(12 16 21 / 5%), 0 8px 24px -12px rgb(12 16 21 / 18%);
@@ -69,6 +102,7 @@
     --ink: #f2f5f8;
     --ink-2: #a8b1bc;
     --muted: #6d7681;
+    --muted-text: #7e8792;
 
     --grid: #23282e;
     --axis: #333a42;
@@ -79,7 +113,8 @@
     --neutral: #6d7681;
     --up-text: #0ca30c;
     --down-text: #e66767;
-    --ema: #93a5f4;
+    --ema: #2962ff;
+    --ema-text: #93a5f4;
 
     --focus: #3987e5;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
@@ -96,6 +131,7 @@
   --ink: #f2f5f8;
   --ink-2: #a8b1bc;
   --muted: #6d7681;
+  --muted-text: #7e8792;
 
   --grid: #23282e;
   --axis: #333a42;
@@ -106,7 +142,8 @@
   --neutral: #6d7681;
   --up-text: #0ca30c;
   --down-text: #e66767;
-  --ema: #93a5f4;
+  --ema: #2962ff;
+  --ema-text: #93a5f4;
 
   --focus: #3987e5;
   --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);

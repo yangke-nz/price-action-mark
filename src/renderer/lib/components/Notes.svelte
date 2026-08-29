@@ -31,10 +31,25 @@
   </div>
 
   <div class="note">
-    <h3>All {integer(app.count)} bars, always</h3>
+    <!-- The heading and the first sentence BOTH change when the bars were
+         aggregated here. "No aggregation and no downsampling" sitting above an
+         explanation of the aggregation is the card contradicting itself in one
+         paragraph, which is worse than either sentence alone. -->
+    <h3>
+      {#if app.aggregated}Built from {integer(app.count)} sessions{:else}All {integer(app.count)} bars, always{/if}
+    </h3>
     <p>
-      No aggregation and no downsampling &mdash; every bar the feed has is loaded and the
-      chart pans across the whole span. The range buttons only move the viewport.
+      {#if app.aggregated}
+        These <b>RTH daily bars do not come from the feed</b> &mdash; its daily bar is the
+        whole 23-hour Globex day. Each one here is one session of the 5-minute series,
+        filtered to 09:30&ndash;16:15 New York and collapsed to a single bar: first open,
+        last close, the extremes between. That series is a <b>60-day rolling window</b>,
+        so this chart is {integer(app.count)} sessions rather than 26 years &mdash; switch
+        to <b>ETH</b> for the feed's own daily bars and the full history.
+      {:else}
+        No aggregation and no downsampling &mdash; every bar the feed has is loaded and the
+        chart pans across the whole span. The range buttons only move the viewport.
+      {/if}
       {#if app.intraday}
         Intraday is a <b>60-day rolling window</b>: that is the entire archive this feed
         keeps, not a page of a longer one.
@@ -71,7 +86,7 @@
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   p { margin: 0; font-size: 13px; line-height: 1.52; color: var(--ink-2); }

@@ -8,6 +8,7 @@
  */
 import { source } from '$source';
 import type { Bar, Dataset, DatasetOrigin, DatasetResult, MarkSettings, RangeId, Settings, ThemeChoice } from '$shared/types.ts';
+import type { WindowState } from '$shared/ipc.ts';
 import type { Viewport } from '$lib/chart/candles.ts';
 import { EMA_PERIOD, ema } from '$shared/indicators.ts';
 import { DEFAULT_SETTINGS } from '$lib/source/types.ts';
@@ -17,8 +18,9 @@ import { emptyStore } from '$shared/marks/types.ts';
 import { buildCtx, type Ctx } from '$shared/marks/rule.ts';
 import { RULES, detect, ruleFor } from '$shared/marks/registry.ts';
 import { readAt, readingIndex, type BarReading } from '$shared/marks/reading.ts';
-import { INTERVALS, intervalOf, rangeFor, specOf, type Interval } from '$shared/interval.ts';
-import { SESSIONS, applySession, type Session } from '$shared/session.ts';
+import { INTERVALS, RTH_DAILY_SOURCE, intervalOf, rangeFor, specOf, type Interval } from '$shared/interval.ts';
+import { SESSIONS, applySession, markScope, sourceIntervalFor, type Session } from '$shared/session.ts';
+import { dailyFrom } from '$shared/aggregate.ts';
 
 /** The table is viewport-scoped, but a MAX viewport is 6,550 rows on daily and
  *  11,600 on a 60-day 5-minute pull, and nobody scrolls either. Show the newest
@@ -83,8 +85,32 @@ export class AppState {
    * the marking layer and the exports all see: an RTH chart whose ATR was
    * computed over the overnight would not be an RTH chart.
    */
-  dataset = $derived.by((): Dataset | null =>
-    this.#raw === null ? null : applySession(this.#raw, this.settings.session));
+  dataset = $derived.by((): Dataset | null => {
+    const raw = this.#raw;
+    if (raw === null) return null;
+    const windowed = applySession(raw, this.settings.session);
+    // A DAILY chart holding intraday bars means one thing: the reader asked
+    // for RTH daily, which the feed does not have — its daily bar is the whole
+    // Globex day. So it is built here, from the session-filtered intraday
+    // series. The aggregate carries `window` so everything downstream, the
+    // export filename included, knows which of the two it is.
+    //
+    // `can.timeframes` FIRST, and it is load-bearing. `settings.interval` is a
+    // REQUEST, and only a target that can switch bar size is in a position to
+    // make one. The artifact carries a single snapshot and IS whatever bar size
+    // that snapshot holds — it never patches `interval`, so the stored `1d`
+    // there is a default that means nothing. Without this guard, an artifact
+    // built from `data/es_5m.json` matched this branch and silently AGGREGATED
+    // its own 11,609 five-minute bars into 44 daily ones: a page published as a
+    // 5-minute chart rendering as a daily one. This is the same fault the note
+    // about `app.interval` describes, which moved rather than being fixed —
+    // reading the dataset stopped the LABEL lying, and left the transform.
+    // Read `source.can` rather than `this.can`: class fields initialise in
+    // declaration order and `can` is declared far below this one.
+    return source.can.timeframes && this.settings.interval === '1d' && specOf(raw).intraday
+      ? dailyFrom(windowed, this.settings.session)
+      : windowed;
+  });
 
   origin = $state<DatasetOrigin>('bundled');
   status = $state<Status>('loading');
@@ -100,6 +126,16 @@ export class AppState {
     },
     window: { ...DEFAULT_SETTINGS.window },
   });
+
+  /**
+   * The bar size of the series in hand, which is NOT always the one on screen.
+   *
+   * On an RTH daily chart the raw is 5-minute and the dataset is daily, so
+   * anything that talks to the SOURCE — refresh, and the boot push — has to ask
+   * for what it is actually holding. `interval` stays the reader's answer:
+   * what the chart is of.
+   */
+  #sourceInterval = $derived(this.#raw ? intervalOf(this.#raw) : this.settings.interval);
 
   /** Crosshair driven by the pointer. */
   hoverIndex = $state<number | null>(null);
@@ -172,6 +208,31 @@ export class AppState {
    * This — and nothing else about marking — is what persists.
    */
   markStore = $state<MarkStore>(emptyStore('series'));
+
+  /** Which store is loaded — see `markScope`. Tracked so a window or timeframe
+   *  switch reloads the verdicts only when it actually changed store. */
+  #markScope = '';
+
+  /**
+   * Load the verdict store the series on screen belongs to.
+   *
+   * Called after every load that can change the window or the bar size. The
+   * store used to be fetched once, at boot, which is why switching an ETH daily
+   * chart to RTH carried the ETH verdicts straight over onto bars that share
+   * their dates and nothing else.
+   */
+  async #adoptMarks(): Promise<void> {
+    const ds = this.dataset;
+    if (!ds) return;
+    const scope = markScope(ds);
+    if (scope === this.#markScope) return;
+    this.#markScope = scope;
+    try {
+      this.markStore = await source.getMarks(scope);
+    } catch {
+      this.markStore = emptyStore(scope);
+    }
+  }
 
   verdictOf(id: string): Verdict | undefined {
     return this.markStore.verdicts[id];
@@ -382,12 +443,27 @@ export class AppState {
    * the readout which session it was — but moving the pointer back over the
    * candles has to take the readout with it, or the reader is left with a
    * readout stuck on a bar they have finished with.
+   *
+   * ALL THREE ARE BOUNDS-CHECKED, and that is not belt and braces. They are
+   * positions in a dataset that is DERIVED, so it can change length underneath
+   * them without any of the three being touched: RTH/ETH intraday is a pure
+   * re-derive (11,609 bars to 3,402) and so is 5-minute RTH to daily RTH
+   * (3,402 to 42). `#apply` clears them when a dataset is LOADED, which covers
+   * nothing here. Unchecked, a line clicked deep in the intraday series left
+   * the readout on dashes after the switch and `focusReading` reading a bar
+   * that does not exist — it renders as prose, so it came out as
+   * "flat bar — trading range, LNaN" rather than as an error. Checking at the
+   * one place all three are consumed fixes every path, including the ones
+   * nobody has added yet; out of range simply falls through to the last
+   * session, which is what an empty readout should have said anyway.
    */
   focusIndex = $derived.by((): number | null => {
-    if (this.keyIndex !== null) return this.keyIndex;
-    if (this.hoverIndex !== null) return this.hoverIndex;
-    if (this.selectedBarIndex !== null) return this.selectedBarIndex;
-    return this.count > 0 ? this.count - 1 : null;
+    const n = this.count;
+    const has = (i: number | null): i is number => i !== null && i >= 0 && i < n;
+    if (has(this.keyIndex)) return this.keyIndex;
+    if (has(this.hoverIndex)) return this.hoverIndex;
+    if (has(this.selectedBarIndex)) return this.selectedBarIndex;
+    return n > 0 ? n - 1 : null;
   });
 
   focusBar = $derived.by(() => this.bar(this.focusIndex));
@@ -476,15 +552,33 @@ export class AppState {
 
   async boot(): Promise<void> {
     this.#merge(await source.getSettings());
+    // What the stored pair actually has to LOAD, which for RTH daily is the
+    // intraday series those bars are aggregated from. Asking for `interval`
+    // here loaded the feed's 24-hour daily bars and left the session control
+    // saying RTH over them — and since the setting already said RTH, clicking
+    // it was a no-op and the only way back was ETH and then RTH again.
+    const want = sourceIntervalFor(this.settings.interval, this.settings.session);
     try {
-      const result = await source.load(this.interval);
-      this.#apply(result.dataset, result.origin);
-      // After the dataset, because the store is keyed by its symbol.
+      let result: DatasetResult;
       try {
-        this.markStore = await source.getMarks(result.dataset.symbol);
-      } catch {
-        this.markStore = emptyStore(result.dataset.symbol);
+        result = await source.load(want);
+      } catch (err) {
+        if (want === this.settings.interval) throw err;
+        // The RTH daily source is intraday and ships no offline seed, so this
+        // is a real possibility on a cold offline start. Fall back to the
+        // feed's own daily bars rather than showing nothing — and say so,
+        // because `session` then reports what is on screen rather than what
+        // was asked for and the control would otherwise change under them
+        // with no explanation.
+        result = await source.load(this.settings.interval);
+        this.notice = {
+          tone: 'error',
+          text: `Could not build ${SESSIONS.rth.label} daily bars: ${message(err)}. Showing ${SESSIONS.eth.label} instead.`,
+        };
       }
+      this.#apply(result.dataset, result.origin);
+      // After the dataset, because the store is keyed off it.
+      await this.#adoptMarks();
       if (result.error) this.notice = { tone: 'error', text: result.error };
     } catch (err) {
       this.notice = { tone: 'error', text: `Could not load any dataset: ${message(err)}` };
@@ -497,7 +591,7 @@ export class AppState {
     this.status = 'refreshing';
     this.notice = null;
     try {
-      const result = await source.refresh(this.interval);
+      const result = await source.refresh(this.#sourceInterval);
       // Against the RAW length, not `count`: `count` is post-session-filter, so
       // comparing the two would report a refresh as having lost 71% of its bars
       // whenever RTH is on.
@@ -526,7 +620,7 @@ export class AppState {
     // interval the window opened on, and the reader can switch before it
     // lands; adopting it would swap 60 days of 5-minute bars for 26 years of
     // daily ones under them, silently.
-    if (intervalOf(result.dataset) !== this.interval) return;
+    if (intervalOf(result.dataset) !== this.#sourceInterval) return;
     const current = this.#raw;
     if (current && current.fetched === result.dataset.fetched) return;
     this.#apply(result.dataset, result.origin);
@@ -568,8 +662,17 @@ export class AppState {
     if (next.marks !== undefined) {
       if (next.marks.enabled !== s.marks.enabled) s.marks.enabled = next.marks.enabled;
       if (next.marks.show !== undefined && next.marks.show !== s.marks.show) s.marks.show = next.marks.show;
-      for (const [id, on] of Object.entries(next.marks.rules)) {
+      const rules = next.marks.rules;
+      for (const [id, on] of Object.entries(rules)) {
         if (s.marks.rules[id] !== on) s.marks.rules[id] = on;
+      }
+      // `rules` is sparse for the same reason `folded` is, so it has to be able
+      // to SHRINK. A merge that only ever added left a rule the reader had put
+      // back on its shipped default stored forever, which is exactly what
+      // sparseness exists to prevent — a later change to that default could
+      // then never reach them.
+      for (const id of Object.keys(s.marks.rules)) {
+        if (!(id in rules)) delete s.marks.rules[id];
       }
       if (next.marks.folded !== undefined) {
         const incoming = next.marks.folded;
@@ -592,9 +695,20 @@ export class AppState {
   async patch(patch: Partial<Settings>): Promise<void> {
     this.#merge(patch);                    // optimistic: the UI must not lag a click
     try {
-      this.#merge(await source.patchSettings(patch));
-    } catch {
-      /* persistence is best-effort; the session keeps the change either way */
+      // `$state.snapshot` is not optional, and this is the one seam where every
+      // setting crosses. `settings.marks.rules` and `.folded` are rune-backed,
+      // which means PROXIES, and a proxy cannot be structured-cloned — so
+      // `ipcRenderer.invoke` rejected every marks patch with "An object could
+      // not be cloned" and the catch below swallowed it. Rule toggles, folds,
+      // Show marks and Confirmed only all survived the session and were gone on
+      // the next launch. Snapshotting here rather than at each of the four call
+      // sites means a fifth cannot reintroduce it.
+      this.#merge(await source.patchSettings($state.snapshot(patch) as Partial<Settings>));
+    } catch (err) {
+      // Still not fatal — the session keeps the change either way — but it is
+      // no longer INVISIBLE. The bug above lived for a whole release behind a
+      // bare `catch {}`.
+      this.notice = { tone: 'error', text: `Could not save settings: ${message(err)}` };
     }
   }
 
@@ -636,10 +750,31 @@ export class AppState {
   /** True while the loaded dataset's bars carry a time of day. */
   intraday = $derived(this.dataset ? specOf(this.dataset).intraday : false);
 
-  /** The session window on screen. Inert on a daily interval, where a bar is a
-   *  whole session — the control hides rather than lying about it. */
-  session = $derived<Session>(this.settings.session);
+  /**
+   * The session window ON SCREEN — read from the loaded series, not from the
+   * setting, for exactly the reason `interval` is.
+   *
+   * The setting is a request; the series in hand is the answer. A DAILY series
+   * that came from the feed covers the whole Globex day whatever the setting
+   * says, because an RTH daily bar has to be aggregated out of intraday ones
+   * and this is not that. Reading the setting here is what let the control sit
+   * on RTH over 24-hour candles — and made clicking RTH a no-op, since the
+   * setting it compares against already said so.
+   *
+   * Intraday, and for an aggregate, the two always agree.
+   */
+  session = $derived<Session>(
+    this.#raw !== null && !specOf(this.#raw).intraday ? 'eth' : this.settings.session,
+  );
   sessionLabel = $derived(SESSIONS[this.session].label);
+
+  /** True when the session control has something to do: always intraday, and
+   *  on daily only where a second dataset can be fetched to aggregate from. */
+  sessionApplies = $derived(this.intraday || this.can.timeframes);
+
+  /** True when the daily bars on screen were built here rather than fetched —
+   *  which is what bounds their span, and what the notes card explains. */
+  aggregated = $derived(this.dataset?.window !== undefined);
 
   /**
    * What the chart is OF, for the masthead heading and the chart's accessible
@@ -654,16 +789,67 @@ export class AppState {
    * reads a field below it is not untidy, it is broken.
    */
   subjectLabel = $derived(
-    `${this.intervalBars.toLowerCase()} bars${this.intraday ? `, ${this.sessionLabel}` : ''}`,
+    `${this.intervalBars.toLowerCase()} bars${this.intraday || this.aggregated ? `, ${this.sessionLabel}` : ''}`,
   );
 
-  /** How many bars the session window is hiding, for the notes card. */
-  hiddenBars = $derived((this.#raw?.d.length ?? 0) - this.count);
+  /**
+   * How many bars the session window is hiding, for the notes card.
+   *
+   * Zero when the dataset was aggregated: 11,609 five-minute bars became 42
+   * daily ones, and calling the difference "held back" would be nonsense —
+   * they were consumed, not dropped. The notes card says what happened instead.
+   */
+  hiddenBars = $derived(this.aggregated ? 0 : (this.#raw?.d.length ?? 0) - this.count);
 
-  setSession(session: Session): void {
+  /**
+   * Switch the session window.
+   *
+   * Intraday this is a pure re-derive of the series in hand — one pull serves
+   * both windows. On DAILY it is a load, because an RTH daily bar does not
+   * exist in the feed: it is aggregated from the 5-minute series, and going
+   * back to ETH means the feed's own daily bars again.
+   *
+   * Loads BEFORE it commits, for the same reason `setInterval` does: the
+   * intraday feed can fail, and committing first would leave the app claiming
+   * an RTH daily chart while showing the 24-hour one.
+   */
+  async setSession(session: Session): Promise<void> {
     if (session === this.session) return;
-    void this.patch({ session });
+    if (this.interval !== '1d') {
+      await this.patch({ session });
+      return;
+    }
+    if (!this.can.timeframes || this.status === 'refreshing') return;
+
+    const need = sourceIntervalFor('1d', session);
+    if (need === this.#sourceInterval) {
+      await this.patch({ session });
+      await this.#adoptMarks();
+      return;
+    }
+
+    this.status = 'refreshing';
+    this.notice = null;
+    try {
+      const result = await source.load(need);
+      if (intervalOf(result.dataset) !== need) {
+        throw new Error(`asked for ${need} bars and got ${intervalOf(result.dataset)}`);
+      }
+      this.#apply(result.dataset, result.origin);
+      await this.patch({ session });
+      // The window is part of the verdict store's identity on a DAILY chart —
+      // an RTH daily bar and an ETH one share a date and are not the same bar.
+      await this.#adoptMarks();
+      if (result.error) this.notice = { tone: 'error', text: result.error };
+    } catch (err) {
+      this.notice = {
+        tone: 'error',
+        text: `Could not build ${SESSIONS[session].label} daily bars: ${message(err)}`,
+      };
+    }
+    this.status = 'ready';
   }
+
 
   /**
    * Switch bar size.
@@ -680,13 +866,27 @@ export class AppState {
     this.status = 'refreshing';
     this.notice = null;
     try {
-      const result = await source.load(next);
-      if (intervalOf(result.dataset) !== next) {
-        throw new Error(`asked for ${next} bars and got ${intervalOf(result.dataset)}`);
+      // Daily + RTH is the one case where the interval asked for is not the
+      // one loaded: those bars are aggregated from the intraday feed.
+      const want = sourceIntervalFor(next, this.session);
+      // ...and the one case where the series in hand is ALREADY the right one:
+      // 5-minute RTH -> daily RTH is a re-derive of the bars on screen, not a
+      // load. It went round the source anyway, which meant an IPC round trip
+      // carrying 11,600 bars back and a `#apply` that drops the crosshair and
+      // the reader's clicked session for nothing. `setSession` has always had
+      // this guard; this is the same one.
+      if (want !== this.#sourceInterval) {
+        const result = await source.load(want);
+        if (intervalOf(result.dataset) !== want) {
+          throw new Error(`asked for ${want} bars and got ${intervalOf(result.dataset)}`);
+        }
+        this.#apply(result.dataset, result.origin);
+        if (result.error) this.notice = { tone: 'error', text: result.error };
       }
-      this.#apply(result.dataset, result.origin);
       await this.patch({ interval: next, range: rangeFor(next, this.settings.range) });
-      if (result.error) this.notice = { tone: 'error', text: result.error };
+      // Daily and intraday do not share a verdict store on the same window —
+      // see `#adoptMarks`.
+      await this.#adoptMarks();
     } catch (err) {
       this.notice = {
         tone: 'error',
@@ -742,9 +942,22 @@ export class AppState {
     }
   }
 
+  /**
+   * Switch a rule on or off.
+   *
+   * An id whose new value agrees with the rule's own `defaultOn` is DELETED
+   * rather than stored, exactly as `setRulesFolded` does — that is what makes
+   * the record sparse, and it only ever ADDED before. A reader who switched a
+   * rule off and back on left it pinned to today's default forever, so a later
+   * tightening of that default could never reach them: the precise failure
+   * sparseness exists to prevent.
+   */
   toggleRule(id: RuleId): void {
     const next = !this.enabledRules.has(id);
-    void this.#patchMarks({ rules: { ...this.settings.marks.rules, [id]: next } });
+    const rules = { ...this.settings.marks.rules };
+    if (next === (ruleFor(id)?.defaultOn ?? true)) delete rules[id];
+    else rules[id] = next;
+    void this.#patchMarks({ rules });
   }
 
   /**
@@ -829,15 +1042,41 @@ export class AppState {
 
   // ---- window ----------------------------------------------------------
 
-  /** True while the window is at full work-area height. Tracked only so the
-   *  button can label itself; the OS is the authority, and the accelerator or
-   *  a manual drag can move it without telling us. */
+  /**
+   * True while the window is at full work-area height — held only so the button
+   * can label itself.
+   *
+   * The OS is the authority, so main PUSHES this rather than the button setting
+   * it: `Ctrl+Shift+M` acts straight through main, and a drag, an OS snap or a
+   * display change moves the window with nothing telling the renderer at all.
+   * Set by the button alone, the label sat on "Restore" over a window that was
+   * no longer full height, and pressing it then maximized rather than restored
+   * — the button doing the opposite of what it said.
+   */
   fitted = $state(false);
+  /** The left-edge gesture's own state: a window can be full-height and
+   *  extended left at the same time, so one flag cannot serve both. */
+  fittedLeft = $state(false);
+
+  /** main's report of what the window is actually doing. */
+  setWindowState(state: WindowState): void {
+    this.fitted = state.fitted;
+    this.fittedLeft = state.fittedLeft;
+  }
 
   async fitHeight(): Promise<void> {
     if (!this.can.fitWindow) return;
     try {
       this.fitted = await source.fitHeight();
+    } catch {
+      /* the window went away mid-click */
+    }
+  }
+
+  async fitLeft(): Promise<void> {
+    if (!this.can.fitWindow) return;
+    try {
+      this.fittedLeft = await source.fitLeft();
     } catch {
       /* the window went away mid-click */
     }

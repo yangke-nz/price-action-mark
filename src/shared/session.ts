@@ -26,7 +26,7 @@
  */
 import type { Dataset } from './types.ts';
 import { rollIndices } from './rolls.ts';
-import { dayOf, specOf } from './interval.ts';
+import { RTH_DAILY_SOURCE, dayOf, specOf, type Interval } from './interval.ts';
 
 export type Session = 'eth' | 'rth';
 
@@ -59,6 +59,44 @@ export const SESSION_IDS: readonly Session[] = ['eth', 'rth'];
 
 export function isSession(value: unknown): value is Session {
   return value === 'eth' || value === 'rth';
+}
+
+/**
+ * The bar size a chart of `interval` in `session` has to LOAD, which is not
+ * always the one it shows.
+ *
+ * Daily + RTH is the one pair where they differ: the feed's daily bar is the
+ * whole 23-hour Globex day, so RTH daily bars are aggregated out of the
+ * intraday series instead. Everything that asks the source for a dataset —
+ * boot, the timeframe switch, and main's own boot refresh — has to agree about
+ * this, and they did not: `boot()` asked for the INTERVAL, so a window left on
+ * RTH daily reopened showing the feed's 24-hour bars with the session control
+ * still saying RTH, and clicking RTH did nothing because the setting already
+ * said so.
+ */
+export function sourceIntervalFor(interval: Interval, session: Session): Interval {
+  return interval === '1d' && session === 'rth' ? RTH_DAILY_SOURCE : interval;
+}
+
+/**
+ * Which verdict store a dataset's marks belong to.
+ *
+ * A mark id is `rule:date`, and on a DAILY chart that date names two DIFFERENT
+ * bars depending on the window: 2026-08-28 ETH is the whole 23-hour Globex day,
+ * 2026-08-28 RTH is 09:30 to 16:15 New York. Measured on the shipped feed, 23
+ * of the 53 marks an RTH daily chart finds share an id with an ETH daily mark
+ * over the same 42 sessions, and all 23 name bars whose OHLC differs — so one
+ * store for both meant a Keep made in one window silently landed on a
+ * different bar in the other, and a Drop silently hid one.
+ *
+ * Only an AGGREGATE is scoped, which is the same distinction `slugFor` makes
+ * for an export filename. Intraday keys carry a time of day, so RTH and ETH
+ * name the very same five-minute bar and go on sharing one store; the feed's
+ * own daily series has no window to state and keeps the bare symbol, so every
+ * verdict already on disk is still found by the chart that made it.
+ */
+export function markScope(ds: Pick<Dataset, 'symbol' | 'window'>): string {
+  return ds.window === undefined ? ds.symbol : `${ds.symbol} ${SESSIONS[ds.window].slug}`;
 }
 
 /**

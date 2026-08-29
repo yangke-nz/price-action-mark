@@ -75,13 +75,13 @@
     content: "\203A";
     display: inline-block;
     font-size: 16px;
-    color: var(--muted);
+    color: var(--muted-text);
     transition: transform 0.15s;
   }
 
   .tableview[open] summary::before { transform: rotate(90deg); }
   summary:hover { color: var(--ink); }
-  .dim { color: var(--muted); font-weight: 400; }
+  .dim { color: var(--muted-text); font-weight: 400; }
 
   .tscroll { max-height: 400px; overflow: auto; border-top: 1px solid var(--grid); }
 
@@ -103,7 +103,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
     border-bottom: 1px solid var(--grid);
     white-space: nowrap;
   }
@@ -123,7 +123,7 @@
   tbody tr:hover td { background: var(--surface-2); }
 
   .rolltag {
-    color: var(--muted);
+    color: var(--muted-text);
     font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;

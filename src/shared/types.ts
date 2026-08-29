@@ -37,6 +37,16 @@ export interface Dataset {
    * `intervalOf()`, never directly.
    */
   interval?: '1d' | '5m';
+  /**
+   * Which session window these bars cover, when it cannot be told from them.
+   *
+   * Only set on a DAILY series aggregated from intraday bars: an intraday
+   * dataset says so in its own keys — every bar's time is inside the window —
+   * and a daily bar's key is just a date. Absent means the whole session, which
+   * is what the feed's own daily bars are and what every cached file holds, so
+   * nothing on disk is invalidated by this existing.
+   */
+  window?: 'eth' | 'rth';
 }
 
 export interface Bar {

@@ -12,8 +12,15 @@
    *  chart cannot show about itself: how much is off-screen, and whether the
    *  roll markers were suppressed. */
   const status = $derived.by(() => {
+    // The window is named whenever the heading names it, which on a DAILY
+    // chart means whenever those bars were aggregated: "Daily bars" alone does
+    // not say whether they cover 6.75 hours or 23, and the heading has said so
+    // since the session control reached daily. The two lines sit inches apart
+    // and disagreed — the same class of fault as "Daily bars" over 5-minute
+    // candles, one field narrower.
+    const named = app.intraday || app.aggregated;
     const parts = [
-      `${app.intervalBars} bars${app.intraday ? ` · ${app.sessionLabel}` : ''}` +
+      `${app.intervalBars} bars${named ? ` · ${app.sessionLabel}` : ''}` +
       ` · ${integer(app.visibleCount)} in view`,
     ];
     if (app.tableTruncated) parts.push(`table capped at ${integer(TABLE_CAP)}`);
@@ -115,20 +122,23 @@
      a real character, not a margin: this sits in an aria-live region, and a
      margin left "28 Aug 202612:17" for anything reading the text. */
   .at { font-weight: 500; color: var(--ink-2); }
-  .rollflag { color: var(--muted); font-weight: 500; }
-  .f { display: inline-flex; gap: 5px; color: var(--muted); }
+  .rollflag { color: var(--muted-text); font-weight: 500; }
+  .f { display: inline-flex; gap: 5px; color: var(--muted-text); }
   .f b { font-weight: 600; color: var(--ink-2); }
-  .f b.ema { color: var(--ema); }
+  /* --ema-text, not --ema. The line's blue is 3.63:1 on the dark surface —
+     fine for a mark, short of the 4.5:1 a figure needs. Same split as
+     --up-text / --down-text, and for the same reason. */
+  .f b.ema { color: var(--ema-text); }
   /* Distance from the average, dimmed — it qualifies the number before it
      rather than competing with the session's own change. */
-  .gap { color: var(--muted); font-size: 11px; }
+  .gap { color: var(--muted-text); font-size: 11px; }
 
   .gran {
     margin-left: auto;
     font-size: 10.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   @media (max-width: 720px) {

@@ -30,6 +30,7 @@
     "csv": "node scripts/export-csv.ts",
     "marks": "node scripts/mark-report.ts",
     "marks:check": "node scripts/mark-report.ts --check",
+    "tokens:check": "node scripts/tokens-check.ts",
     "smoke": "electron scripts/smoke.cjs dist/preview.html",
     "smoke:app": "electron scripts/smoke.cjs --app",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",

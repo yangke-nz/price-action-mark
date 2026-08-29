@@ -227,7 +227,7 @@
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
     user-select: none;
   }
 
@@ -322,7 +322,7 @@
     gap: 10px;
     font-family: var(--mono);
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .reset {
@@ -330,7 +330,7 @@
     border: 1px solid var(--hair);
     border-radius: 5px;
     background: var(--surface);
-    color: var(--muted);
+    color: var(--muted-text);
     cursor: pointer;
     font: inherit;
   }
@@ -366,7 +366,7 @@
     font-weight: 600;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .rules > .ghead:first-child { padding-top: 0; }
@@ -385,7 +385,7 @@
     border: 1px solid var(--hair);
     border-radius: 20px;
     background: var(--surface-2);
-    color: var(--muted);
+    color: var(--muted-text);
     cursor: pointer;
     font: inherit;
     letter-spacing: 0.08em;
@@ -415,7 +415,7 @@
   /* A rule from the folded set keeps a lighter name wherever it appears — in
      an open drawer, or promoted into the list because it is on. One signal,
      read the same way in both places; the checkbox says which case it is. */
-  .rule.quiet .name { font-weight: 400; color: var(--muted); }
+  .rule.quiet .name { font-weight: 400; color: var(--muted-text); }
   .rule.quiet:not(.dim):hover .name { color: var(--ink-2); }
 
   input { width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--focus); }
@@ -442,14 +442,14 @@
     font-family: var(--mono);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .blurb {
     grid-column: 2 / -1;
     font-size: 11.5px;
     line-height: 1.4;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   /* Compact rows once the card is too narrow to carry a blurb per rule —

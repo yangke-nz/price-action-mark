@@ -63,7 +63,7 @@
     font-weight: 500;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--axis); flex: none; }
@@ -103,6 +103,6 @@
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 </style>

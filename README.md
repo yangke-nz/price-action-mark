@@ -16,7 +16,7 @@ One Svelte 5 codebase, **two build targets**:
 | Target | Command | Output |
 | --- | --- | --- |
 | Electron desktop app | `npm run build` | `out/` (packaged with `npm run dist`) |
-| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (751 KB, self-contained) |
+| Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (~750 KB, self-contained) |
 
 Both render the same components against the same dataset, the same design
 tokens and the same chart controller. They differ in exactly one file —
@@ -106,6 +106,7 @@ src/shared/                 imported by main, renderer AND the CLI scripts
   interval.ts                 bar size: keys, ranges, feed limits
   session.ts                  RTH/ETH window + trading-day bar numbers
   rolls.ts                    expiry arithmetic + contractStarts()
+  aggregate.ts                intraday -> daily bars, for RTH daily
   indicators.ts               ema(), atr(), trueRange()
   instrument.ts               per-symbol tick size
   types.ts  ipc.ts            the dataset shape and the whole IPC contract
@@ -124,7 +125,7 @@ src/main/                   Electron main
   index.ts                    window, CSP, IPC handlers, save dialogs
   dataset.ts                  network → cache → bundled, in that order
   settings.ts  menu.ts        atomic JSON settings; native menu
-  marks.ts                    verdicts, one atomic JSON per symbol
+  marks.ts                    verdicts, one atomic JSON per symbol+window
   window.ts                   vertical maximize (no Electron API for it)
 
 src/preload/index.ts        the entire privileged surface, sandboxed CJS
@@ -364,8 +365,14 @@ the way `marks.rules` stores only the ids moved off `defaultOn`, and the sheet's
 footer says so out loud: *"5 rules moved off what this build folds — only those
 are stored"*, or *"Nothing stored: every rule is where this build put it"*. A
 fold set written out in full would freeze today's answer into every settings
-file, so the merge that applies it has to be able to **delete** — every other
-field-wise merge only ever adds, and a fold taken back is a key going away.
+file, so the merge that applies it has to be able to **delete** — and a fold
+taken back is a key going away.
+
+`marks.rules` did not actually hold up its half of that until an audit went
+looking. `toggleRule` only ever added, so a rule switched off and back on
+stayed pinned to today's default forever — the precise thing sparseness exists
+to prevent. It now deletes a key whose value agrees with `defaultOn`, and the
+merge deletes what an incoming record leaves out, so both records shrink.
 
 Two details in that dialog were measured rather than assumed. The `Fold` box is
 **disabled, not hidden**, while a rule is on (25 of 31 by default): an empty
@@ -442,8 +449,11 @@ exists. The creation effect reads its dependencies through `untrack`, so a
 data refresh calls `setData` instead of tearing the chart down and rebuilding
 it.
 
-No aggregation and no downsampling: every bar the feed has is loaded the whole
-time and the range buttons only move the viewport.
+No downsampling: every bar the series holds is loaded the whole time and the
+range buttons only move the viewport. There is exactly one aggregation in the
+app, and it is a different thing — RTH daily bars, which the feed does not
+supply and which are therefore assembled from the intraday series; see
+[RTH on the daily chart](#rth-on-the-daily-chart).
 
 ## Two timeframes
 
@@ -526,8 +536,9 @@ that path; a daily smoke cannot see it.
 
 ETH is the default, because it means "every bar the feed has" and this app does
 not silently drop 71% of what it pulled; the Notes card reports how many bars RTH
-is holding back. Switching is a re-derive of one pull — no round trip — and the
-control is absent on daily, where a bar is already a whole session.
+is holding back. Switching is a re-derive of one pull — no round trip — on an
+intraday chart. On a daily one it is a load instead, because an RTH daily bar has
+to be built rather than filtered for: see below.
 
 Two operational notes. `data/es_5m.json` is **gitignored** — a 60-day rolling
 window is stale in a day and worthless in two months, so the first switch to 5m
@@ -536,6 +547,29 @@ opposite reason. And every displayed time is **UTC**, stated as such in the
 readout: the stored key is UTC and a mark id is built from it, so an
 exchange-local clock would show a different time than the one in the data and
 spread DST arithmetic across the axis, the readout, both lists and the CSV.
+
+### RTH on the daily chart
+
+The feed's daily bar for `ES=F` covers the whole 23-hour Globex day, so an **RTH
+daily bar — open 09:30, close 16:15 New York — does not exist to be filtered
+for.** It is assembled: the 5-minute series, reduced to the regular session, with
+each trading day collapsed into one bar (first open, last close, the extremes
+between, volume summed). Intraday the session control is a pure filter over the
+series in hand; on daily it is a load, so there it rides `can.timeframes`, and
+the artifact offers it only where the filter alone suffices.
+
+**The source is the 5-minute feed, and that is a correctness choice.** Hourly
+bars would buy far more history — measured, Yahoo serves 14,560 of them across
+the full 730 days against 60 days of 5-minute bars — and they sit on the hour in
+New York, so the 09:00 bar straddles the 09:30 open and the 16:00 bar straddles
+the 16:15 close. Every candidate window is wrong at both ends, and the open and
+the close are exactly what a price-action chart is read on: every bar rule tests
+where the close sits in the range. So RTH daily is about **42 sessions**, the
+notes card says so on the page, and ETH returns the feed's own 26 years.
+
+Verified against an independent rebuild: for 2026-08-27 the aggregate consumed 81
+five-minute bars — the RTH session, exactly — and produced `7,716.25 / 7,755.50 /
+7,702.75 / 7,735.25`, matching to the tick.
 
 ## Marking
 
@@ -881,7 +915,8 @@ eye:
 | Down — marks | `#e34948` | `#e66767` |
 | Up — delta text | `#006300` | `#0ca30c` |
 | Down — delta text | `#d03b3b` | `#e66767` |
-| EMA 20 | `#4338ca` | `#93a5f4` |
+| EMA 20 — the line | `#4338ca` | `#2962ff` |
+| EMA 20 — the figure | `#4338ca` | `#93a5f4` |
 
 A dark green against a lighter red lets **lightness** carry the separation where
 hue cannot: ΔE 7.8 (light) and 8.6 (dark) under simulated protanopia and
@@ -896,11 +931,42 @@ holds on the lightness step above; what is gone is the redundancy, and the
 [Notes](src/renderer/lib/components/Notes.svelte) card and the chart legend both
 say so rather than claiming a shape channel that is no longer there.
 
+The **EMA has two steps in dark mode**, and the split is the same one
+`--up`/`--up-text` already makes. The drawn line is `#2962ff`, the royal blue of
+the reference chart; measured, it sits ΔE 60.8 from up and 41.9 from down
+(70.9/47.0 protan, 69.0/63.3 deutan) and ΔE 13.3 from `--focus`, which is the
+constraint that chose it — the softer cornflower blues that look closer by eye
+measure ΔE 2–5 from `--focus` and would read as a selected control. At 3.63:1 on
+the dark surface it clears the 3:1 a mark needs and misses the 4.5:1 a figure
+needs, so the readout's EMA value uses `--ema-text` (`#93a5f4`, 7.57:1) instead.
+Light mode needs no split: `#4338ca` is 7.69:1 either way.
+
 Marks need 3:1 contrast against the surface but text needs 4.5:1, which is why
 delta values use separate `--up-text`/`--down-text` tokens on darker steps —
 `#e34948` only reaches 3.85:1 on the light surface.
 
-All four tokens are defined in **three** scopes in
+`--muted` is split the same way, and it is the widest of the three. That one
+token drew the roll arrows, the `neutral` and `caution` mark strokes and the
+legend glyph — graphics, which clear 3:1 — while also carrying 39 distinct text
+roles across 13 components, 558 elements on a page, none larger than 14px and so
+none eligible for the large-text relaxation at 24px. As text it was short in
+both themes. `--muted-text` (`#676f7a` light, `#7e8792` dark) is the smallest
+move along lightness, hue and saturation held, that clears 4.5:1 on the surface,
+the second surface and the page plane alike; L\* moves 11.0 and 6.7 against a
+21.6/22.6 gap to `--ink-2`, so the quiet register is still quiet and the
+annotation layer over the candles never moved.
+
+`npm run tokens:check` is what keeps all of that true. It parses the three
+scopes and asserts they agree — the two dark ones must hold the same keys with
+the same values, nothing may exist only in the dark, every colour in `:root`
+must be redefined for it — then measures each token against the grounds it
+actually sits on, 4.5:1 for text and 3:1 for a mark, and refuses to let a new
+colour ship unclassified. It earned its place on the first run: `--down-text`
+was 4.68:1 on the card surface and only **4.27:1 on the page plane**, which is
+where the masthead's session-change figure sits, and that figure only renders in
+red on a down session — so nothing anyone could look at would have shown it.
+
+All five tokens are defined in **three** scopes in
 [styles/tokens.css](src/renderer/styles/tokens.css): bare `:root`, the
 `prefers-color-scheme: dark` media query, and `:root[data-theme="dark"]`. Miss
 one and the theme toggle and the OS setting disagree. If you change a colour,
@@ -1000,10 +1066,19 @@ the maximized state, and there is no width worth preserving in it anyway. The
 "already full height" test carries a 2px tolerance, because DPI scaling makes
 the round-trip through `setBounds` land a pixel or two off.
 
-Unlike every other menu item, this one acts directly in main rather than sending
-a command to the renderer and back: window geometry is main's own business. The
-button is gated on `source.can.fitWindow`, so the artifact — a page in a tab,
-with no window of its own — does not render it.
+**Extend to left edge** (`Ctrl+Shift+L`) is its horizontal counterpart, and
+deliberately not a maximize: it moves the **left** edge to the work area's left
+and leaves the right edge where the reader put it, widening the chart into empty
+desktop without covering whatever is parked beside it. The two compose — a window
+can be full-height and extended left — so each remembers its own pre-gesture
+geometry in its own `WeakMap`. Measured on a 3440px display: left edge to 0,
+right edge unmoved at 1220, y and height untouched, and a second press puts it
+back.
+
+Unlike every other menu item, these two act directly in main rather than sending
+a command to the renderer and back: window geometry is main's own business. Both
+buttons are gated on `source.can.fitWindow`, so the artifact — a page in a tab,
+with no window of its own — renders neither.
 
 ## Testing
 

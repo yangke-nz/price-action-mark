@@ -4,19 +4,19 @@ import {
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CH, type AppInfo, type SaveResult } from '../shared/ipc.ts';
+import { CH, type AppInfo, type SaveResult, type WindowState } from '../shared/ipc.ts';
 import type { Dataset, Settings } from '../shared/types.ts';
 import type { MarkStore } from '../shared/marks/types.ts';
 import { coerceStore } from '../shared/marks/types.ts';
 import { datasetToCsv, suggestedFilename } from '../shared/csv.ts';
 import { isDataset } from '../shared/yahoo.ts';
 import { isInterval, specOf } from '../shared/interval.ts';
-import { SESSIONS, inRth } from '../shared/session.ts';
+import { SESSIONS, inRth, sourceIntervalFor } from '../shared/session.ts';
 import * as datasetStore from './dataset.ts';
 import * as settingsStore from './settings.ts';
 import * as markStore from './marks.ts';
 import { buildMenu } from './menu.ts';
-import { toggleVerticalMaximize } from './window.ts';
+import { isLeftMaximized, isVerticallyMaximized, toggleLeftMaximize, toggleVerticalMaximize } from './window.ts';
 
 const dir = fileURLToPath(new URL('.', import.meta.url));
 const CHARTS_VERSION = '5.2.1';
@@ -63,6 +63,20 @@ function createWindow(settings: Settings): BrowserWindow {
 
   win.on('close', () => persistBounds(win));
 
+  // The two gesture buttons label themselves from a renderer flag, and main is
+  // the only thing that knows the truth: the accelerators act here without
+  // telling the renderer, and a drag or an OS snap tells nobody. So the state
+  // is pushed on every geometry change, and once when the page has loaded.
+  // Listed one by one rather than looped: `BrowserWindow.on` is typed as a
+  // union of per-event overloads, so a loop variable does not resolve to one.
+  const report = (): void => pushWindowState(win);
+  win.on('resize', report);
+  win.on('move', report);
+  win.on('maximize', report);
+  win.on('unmaximize', report);
+  win.on('restore', report);
+  win.webContents.on('did-finish-load', report);
+
   const devServer = process.env['ELECTRON_RENDERER_URL'];
   if (devServer) void win.loadURL(devServer);
   else void win.loadFile(join(dir, '../renderer/index.html'));
@@ -83,6 +97,26 @@ function visibleBounds(w: Settings['window']): { width: number; height: number; 
   const onSomeDisplay = screen.getAllDisplays().some(({ workArea: a }) =>
     x >= a.x - 40 && y >= a.y - 40 && x < a.x + a.width - 40 && y < a.y + a.height - 40);
   return onSomeDisplay ? { ...size, x, y } : size;
+}
+
+/** A drag fires `resize` every frame, and the label only has to be right once
+ *  the gesture stops. */
+let statePush: ReturnType<typeof setTimeout> | null = null;
+
+function pushWindowState(win: BrowserWindow): void {
+  if (statePush) clearTimeout(statePush);
+  statePush = setTimeout(() => {
+    statePush = null;
+    // Both guards: this fires on a timer, so the window can go away between
+    // the last resize and the push — and an uncaught throw in a main-process
+    // timer takes the whole app with it, which is a steep price for a button
+    // label.
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+    win.webContents.send(CH.windowState, {
+      fitted: isVerticallyMaximized(win),
+      fittedLeft: isLeftMaximized(win),
+    } satisfies WindowState);
+  }, 120);
 }
 
 function persistBounds(win: BrowserWindow): void {
@@ -120,6 +154,12 @@ async function saveMarksDialog(store: MarkStore): Promise<SaveResult> {
  * file even if the reader switches timeframe before the dialog closes.
  */
 function slugFor(dataset: Dataset): string {
+  // A daily series aggregated from intraday bars carries its window, because
+  // its keys no longer can: two exports of one symbol and interval would
+  // otherwise differ by a whole session's worth of hours under the same name.
+  if (dataset.window !== undefined) {
+    return `${specOf(dataset).slug}_${SESSIONS[dataset.window].slug}`;
+  }
   const spec = specOf(dataset);
   if (!spec.intraday) return spec.slug;
   const everyBarIsRth = dataset.d.every((key) => inRth(key));
@@ -177,6 +217,7 @@ function registerIpc(): void {
     saveMarksDialog(coerceStore(store, 'series')));
 
   ipcMain.handle(CH.fitHeight, () => (mainWindow ? toggleVerticalMaximize(mainWindow) : false));
+  ipcMain.handle(CH.fitLeft, () => (mainWindow ? toggleLeftMaximize(mainWindow) : false));
 
   ipcMain.handle(CH.appInfo, (): AppInfo => ({
     app: app.getVersion(),
@@ -227,7 +268,13 @@ void app.whenReady().then(() => {
   // On whatever timeframe the window opened, which is the one the reader left
   // it on. Refreshing daily while they are looking at 5-minute bars would push
   // a dataset the renderer has to discard.
-  const booted = settingsStore.load().interval;
+  // ...and on the series that timeframe actually LOADS, which for RTH daily is
+  // the intraday one those bars are aggregated from. Refreshing `interval` here
+  // pushed a daily dataset at a renderer holding 5-minute bars, which `adopt()`
+  // correctly discards — so an RTH daily window silently never got its boot
+  // refresh at all.
+  const stored = settingsStore.load();
+  const booted = sourceIntervalFor(stored.interval, stored.session);
   void datasetStore
     .warm(booted)
     .then(() => datasetStore.refresh(booted))

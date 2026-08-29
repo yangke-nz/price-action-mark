@@ -17,9 +17,14 @@
  */
 import { readdir, readFile, mkdir, writeFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { markScope } from '../src/shared/session.ts';
+import type { Dataset } from '../src/shared/types.ts';
 
 const IN = fileURLToPath(new URL('../dist-artifact/', import.meta.url));
 const OUT = fileURLToPath(new URL('../dist/', import.meta.url));
+/** The two files `source/artifact.ts` imports through the `$data` alias, which
+ *  are therefore exactly what got bundled. */
+const DATA = fileURLToPath(new URL('../data/', import.meta.url));
 
 /** The publishable body. Named for the product, not the instrument — the page
  *  charts whatever data/ holds. */
@@ -161,6 +166,49 @@ if (cssRefs.length > 0) {
 }
 
 if (!/id=["']app["']/.test(artifact)) die('the mount point #app is missing from the output');
+
+// The verdicts have to belong to the SNAPSHOT they are being published over.
+//
+// A mark id is `rule:date`, and on a daily chart that date names two different
+// bars depending on the session window: 2026-08-28 ETH is the whole 23-hour
+// Globex day, RTH is 09:30 to 16:15 New York. Measured over the 42 sessions
+// the two share, 23 mark ids are common to both and every one of them names
+// bars with different OHLC — so a `marks.json` exported from an RTH daily
+// chart and dropped over the ETH daily snapshot publishes marks the author
+// never confirmed, on bars they never looked at, and says nothing about it.
+// Verified end to end before this guard existed: three RTH verdicts produced a
+// confirmed-only page showing three ETH bars.
+//
+// Only a store that actually CARRIES verdicts is judged — the shipped
+// `marks.json` is an empty one and must keep building — and only against the
+// scope, so publishing from a 5-minute chart into a 5-minute artifact is fine
+// and publishing 5-minute verdicts over a daily snapshot is harmless anyway
+// (an intraday id carries a time of day and simply matches nothing).
+{
+  const read = async (name: string): Promise<Record<string, unknown> | null> => {
+    try { return JSON.parse(await readFile(DATA + name, 'utf8')) as Record<string, unknown>; }
+    catch { return null; }
+  };
+  const store = await read('marks.json');
+  const snapshot = await read('es_data.json');
+  const verdicts = store?.['verdicts'];
+  const held = typeof verdicts === 'object' && verdicts !== null ? Object.keys(verdicts).length : 0;
+  const from = store?.['symbol'];
+  if (held > 0 && typeof from === 'string' && from !== '' && snapshot) {
+    const to = markScope(snapshot as unknown as Dataset);
+    if (from !== to) {
+      die(
+        `data/marks.json holds ${held} verdict${held === 1 ? '' : 's'} from "${from}", ` +
+        `but data/es_data.json is "${to}"
+` +
+        `       Those are different bars under the same ids — publishing would put marks ` +
+        `the author never confirmed onto sessions they never saw.
+` +
+        `       Export the marks again from a chart of THIS snapshot, or replace the snapshot.`,
+      );
+    }
+  }
+}
 
 // ---- write --------------------------------------------------------------
 

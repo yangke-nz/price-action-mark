@@ -1,4 +1,11 @@
 <script lang="ts">
+  /** On a daily chart the two windows mean something else: not "which bars are
+   *  shown" but "which hours each bar is built from". */
+  const DAILY_SESSION_TITLE = {
+    eth: 'The whole 23-hour Globex day, as the feed aggregates it — 26 years of it',
+    rth: 'Daily bars built from the 09:30-16:15 New York session only, aggregated from the 5-minute feed — about 60 days of it',
+  } as const;
+
   import { type AppState } from '$lib/state/app.svelte.ts';
   import type { ThemeChoice } from '$shared/types.ts';
   import { INTERVAL_IDS, INTERVALS } from '$shared/interval.ts';
@@ -34,17 +41,18 @@
     </div>
   {/if}
 
-  <!-- Only on an intraday interval. A daily bar IS a whole session, so there is
-       no window to apply, and a control that cannot do anything is worse than
-       no control. Needs no capability: the filter is a pure transform over the
-       dataset already in hand, so an artifact built from an intraday snapshot
-       offers it too. -->
-  {#if app.intraday}
+  <!-- Intraday it is a pure transform over the dataset in hand, so it needs no
+       capability and an artifact built from an intraday snapshot offers it too.
+       On DAILY it is a load — the feed's daily bar is the whole Globex day, and
+       an RTH daily bar has to be aggregated from the intraday series — so there
+       it rides `can.timeframes`, the flag that already means "can fetch a
+       second dataset". `sessionApplies` is that whole sentence. -->
+  {#if app.sessionApplies}
     <div class="seg" role="group" aria-label="Session">
       {#each SESSION_IDS as id (id)}
         <button
           type="button"
-          title={SESSIONS[id].title}
+          title={app.intraday ? SESSIONS[id].title : DAILY_SESSION_TITLE[id]}
           aria-pressed={app.session === id}
           onclick={() => app.setSession(id)}
         >{SESSIONS[id].label}</button>
@@ -111,6 +119,22 @@
             stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         {app.fitted ? 'Restore' : 'Fit height'}
+      </button>
+      <!-- The horizontal half. Not "maximize": the RIGHT edge stays where the
+           reader put it, so this widens the chart into empty desktop without
+           covering whatever is parked beside it. -->
+      <button
+        type="button"
+        class="action icon"
+        title="Extend to the left edge of the screen — the right edge stays put (Ctrl+Shift+L)"
+        onclick={() => app.fitLeft()}
+      >
+        <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
+          <path d="M11.8 6.5 H1.2 M3.4 3.6 L0.6 6.5 L3.4 9.4 M11.8 1.8 V11.2"
+            fill="none" stroke="currentColor" stroke-width="1.4"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        {app.fittedLeft ? 'Restore' : 'Fit left'}
       </button>
     {/if}
   </div>

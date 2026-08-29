@@ -10,7 +10,7 @@
  * of these and declares what it can actually do. Components read
  * `source.can.*` and simply do not render controls that would not work.
  */
-import type { AppInfo, Command, SaveResult } from '../../../shared/ipc.ts';
+import type { AppInfo, Command, SaveResult, WindowState } from '../../../shared/ipc.ts';
 import type { Dataset, DatasetResult, Settings } from '../../../shared/types.ts';
 import type { Interval } from '../../../shared/interval.ts';
 import type { MarkStore } from '../../../shared/marks/types.ts';
@@ -65,9 +65,14 @@ export interface Source {
   appInfo(): Promise<AppInfo | null>;
   /** Vertical maximize; resolves to the state the window was left in. */
   fitHeight(): Promise<boolean>;
+  /** Extend the left edge to the screen's; same contract. */
+  fitLeft(): Promise<boolean>;
   onCommand(handler: (command: Command) => void): () => void;
   /** A refresh nobody asked for landing behind the window. */
   onDatasetUpdate(handler: (result: DatasetResult) => void): () => void;
+  /** The window's geometry changed, however it happened. A target with no
+   *  window of its own never fires it. */
+  onWindowState(handler: (state: WindowState) => void): () => void;
 }
 
 export const DEFAULT_SETTINGS: Settings = {

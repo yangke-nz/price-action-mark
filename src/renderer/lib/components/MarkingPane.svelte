@@ -166,7 +166,7 @@
     padding: 0 5px;
     border-radius: 4px;
     background: var(--surface-2);
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   /* The active count inverts, so the number the reader is looking at is the
@@ -179,7 +179,7 @@
     font-family: var(--mono);
     font-size: 10.5px;
     letter-spacing: 0.02em;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   /* display: none on the inactive view, not visibility or a height of zero:

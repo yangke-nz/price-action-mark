@@ -91,7 +91,7 @@
     margin: 0;
     padding: 12px 16px 16px;
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .hint {
@@ -101,7 +101,7 @@
     font-family: var(--mono);
     font-size: 10.5px;
     letter-spacing: 0.04em;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   /* The fallback keeps this from running to 3,000px where nothing bounds the
@@ -132,7 +132,7 @@
     font-weight: 600;
     letter-spacing: 0.11em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
     white-space: nowrap;
   }
 
@@ -155,7 +155,7 @@
 
   /* A pivot-anchored pattern is not readable on the day it points at, and the
      gap between the two dates is the honest size of that lag. */
-  .lag { display: block; font-size: 10.5px; color: var(--muted); }
+  .lag { display: block; font-size: 10.5px; color: var(--muted-text); }
 
   .label {
     font-family: var(--mono);
@@ -190,7 +190,7 @@
   tr.picked .d { box-shadow: inset 3px 0 0 var(--focus); }
   tr.picked .pick { text-decoration: underline; text-decoration-thickness: 2px; }
 
-  .rule { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .rule { font-family: var(--mono); font-size: 11.5px; color: var(--muted-text); white-space: nowrap; }
 
   .verdict { display: flex; gap: 4px; justify-content: flex-end; }
 
@@ -199,7 +199,7 @@
     border: 1px solid var(--hair);
     border-radius: 5px;
     background: var(--surface);
-    color: var(--muted);
+    color: var(--muted-text);
     cursor: pointer;
     font-family: var(--mono);
     font-size: 10.5px;

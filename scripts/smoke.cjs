@@ -299,16 +299,33 @@ app.whenReady().then(async () => {
     // intraday one must not offer 5Y.
     [r.ranges.includes('MAX') && !(r.ranges.includes('5Y') && r.ranges.includes('3D')),
       `the range presets read ${JSON.stringify(r.ranges)}`],
-    // RTH/ETH is intraday-only: a daily bar IS a whole session, so on a daily
-    // chart the control must be absent rather than present and inert. Both
-    // targets are built from a daily snapshot, so both are checked the same way.
-    [/Daily bars/.test(r.status ?? '') ? r.session.length === 0 : r.session.join(',') === 'ETH,RTH',
-      `the session control reads ${JSON.stringify(r.session)} on ${JSON.stringify(r.status)}`],
-    // The heading and the status line must agree about the bar size, which is
-    // the check that would have caught "daily bars" over intraday candles.
-    [/Daily bars/.test(r.status ?? '')
-      ? /daily bars$/.test(r.heading ?? '')
-      : /5-minute bars, (ETH|RTH)$/.test(r.heading ?? ''),
+    // RTH/ETH is no longer intraday-only. Intraday it filters the series in
+    // hand; on DAILY it aggregates RTH bars out of the intraday feed, which
+    // needs a second dataset — so it rides `can.timeframes` and the two targets
+    // differ. Desktop offers it on both bar sizes; the artifact carries one
+    // snapshot and offers it only where it is a pure filter over that snapshot.
+    [desktopMode
+      ? r.session.join(',') === 'ETH,RTH'
+      : (/Daily bars/.test(r.status ?? '') ? r.session.length === 0 : r.session.join(',') === 'ETH,RTH'),
+      `the session control reads ${JSON.stringify(r.session)} on ${JSON.stringify(r.status)} (desktop ${desktopMode})`],
+    // The heading and the status line must agree about the bar size — the check
+    // that would have caught "daily bars" over intraday candles — AND about the
+    // session window. The window half matters on an RTH DAILY chart, where the
+    // bars are aggregated and "daily" alone does not say which hours they
+    // cover: the heading said ", RTH" there and the status line did not, so
+    // this assertion FAILED on a state the app ships, which is how it was
+    // found. Both are read out rather than pattern-matched per case, so a third
+    // window or a third bar size needs no third branch.
+    [(() => {
+      // Case-insensitive: the status line capitalises the bar size and the
+      // heading does not, because one starts a line and the other sits mid-phrase.
+      const size = (s) => (/(daily|5-minute) bars/i.exec(s ?? '') ?? [, null])[1];
+      const window = (s) => (/\b(ETH|RTH)\b/.exec(s ?? '') ?? [null])[0];
+      const head = (r.heading ?? '').replace(/^.*futures, /, '');
+      return size(r.status) !== null
+        && size(r.status).toLowerCase() === String(size(head)).toLowerCase()
+        && window(r.status) === window(head);
+    })(),
       `the heading reads ${JSON.stringify(r.heading)} beside ${JSON.stringify(r.status)}`],
     // Errors the app reports to the reader rather than to the console — a
     // failed IPC call surfaces here and nowhere else.

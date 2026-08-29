@@ -293,7 +293,7 @@
     font-family: var(--mono);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .x {
@@ -302,7 +302,7 @@
     border: 0;
     border-radius: 5px;
     background: none;
-    color: var(--muted);
+    color: var(--muted-text);
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
@@ -334,7 +334,7 @@
   }
   input[type="search"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; }
 
-  .hint, .spacer { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .hint, .spacer { font-family: var(--mono); font-size: 10.5px; color: var(--muted-text); }
   .spacer { margin-left: auto; }
 
   .list { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
@@ -354,7 +354,7 @@
     font-weight: 600;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
     white-space: nowrap;
   }
 
@@ -392,7 +392,7 @@
     font-weight: 600;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   .bulk {
@@ -405,7 +405,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
     text-decoration: underline;
     text-decoration-color: var(--axis);
     text-underline-offset: 3px;
@@ -419,7 +419,7 @@
     display: block;
     font-size: 11.5px;
     line-height: 1.35;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   /* A folded rule reads quieter here for the same reason it does in the card:
@@ -436,7 +436,7 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
     white-space: nowrap;
-    color: var(--muted);
+    color: var(--muted-text);
   }
   .place.listed { color: var(--ink-2); }
   /* Green, because "on" is the state that overrides the fold — the same thing
@@ -447,12 +447,12 @@
     font-family: var(--mono);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
-    color: var(--muted);
+    color: var(--muted-text);
   }
   /* The density warning, in the one place there is room to show it. */
   td.n.hot { color: var(--down-text); }
 
-  td.empty { padding: 20px 16px; color: var(--muted); }
+  td.empty { padding: 20px 16px; color: var(--muted-text); }
 
   .foot {
     display: flex;
@@ -465,7 +465,7 @@
     background: var(--surface-2);
     font-family: var(--mono);
     font-size: 11px;
-    color: var(--muted);
+    color: var(--muted-text);
   }
 
   /* What is on disk, said out loud: the record is sparse, and a reader who

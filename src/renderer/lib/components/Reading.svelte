@@ -31,6 +31,6 @@
      cannot be trusted, which is a different thing from a direction. Italic
      rather than a fourth hue, the same argument the mark palette makes. */
   .bar.caution { color: var(--ink); font-style: italic; }
-  .ctx { color: var(--muted); }
+  .ctx { color: var(--muted-text); }
   .pat { color: var(--ink); font-weight: 600; }
 </style>

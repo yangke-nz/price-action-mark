@@ -35,6 +35,8 @@ export const source: Source = {
 
   appInfo: () => bridge().appInfo(),
   fitHeight: () => bridge().fitHeight(),
+  fitLeft: () => bridge().fitLeft(),
   onCommand: (handler) => bridge().onCommand(handler),
   onDatasetUpdate: (handler) => bridge().onDatasetUpdate(handler),
+  onWindowState: (handler) => bridge().onWindowState(handler),
 };

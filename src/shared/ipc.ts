@@ -18,10 +18,27 @@ export const CH = {
   exportJson: 'export:json',
   appInfo: 'app:info',
   fitHeight: 'window:fit-height',
+  fitLeft: 'window:fit-left',
   /** main -> renderer */
   command: 'menu:command',
   datasetUpdated: 'dataset:updated',
+  windowState: 'window:state',
 } as const;
+
+/**
+ * Whether each window gesture is currently in effect.
+ *
+ * Pushed rather than returned, because the buttons are not the only way in:
+ * Ctrl+Shift+M and Ctrl+Shift+L act straight through main, and a drag, an OS
+ * snap or a monitor change moves the window with nothing telling the renderer
+ * at all. The flags were set only by the buttons, so the label sat on "Restore"
+ * over a window that was no longer full height — and pressing it then did the
+ * opposite of what it said.
+ */
+export interface WindowState {
+  fitted: boolean;
+  fittedLeft: boolean;
+}
 
 /** Menu items and accelerators do not touch the DOM; they send one of these. */
 export type Command =
@@ -72,6 +89,9 @@ export interface DesktopApi {
   /** Vertical maximize — full work-area height, same width and x. Toggles;
    *  resolves to the state the window was left in. */
   fitHeight(): Promise<boolean>;
+  /** Extend the LEFT edge to the work area's left, right edge untouched.
+   *  Toggles; resolves to the state the window was left in. */
+  fitLeft(): Promise<boolean>;
   /** Returns an unsubscribe function. */
   onCommand(handler: (command: Command) => void): () => void;
 
@@ -83,4 +103,8 @@ export interface DesktopApi {
    * Returns an unsubscribe function.
    */
   onDatasetUpdate(handler: (result: DatasetResult) => void): () => void;
+
+  /** Fires whenever the window is moved or resized, however that happened, and
+   *  once when the page loads. Returns an unsubscribe function. */
+  onWindowState(handler: (state: WindowState) => void): () => void;
 }

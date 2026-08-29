@@ -148,7 +148,10 @@ export const source: Source = {
   appInfo: async () => null,
   // A page in a tab has no window of its own to resize.
   fitHeight: async () => unavailable('vertical maximize'),
+  fitLeft: async () => unavailable('window sizing'),
   onCommand: () => () => undefined,
   // Nothing can arrive after the build, so this never fires.
   onDatasetUpdate: () => () => undefined,
+  // A page in a tab has no window gestures to report on either.
+  onWindowState: () => () => undefined,
 };

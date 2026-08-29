@@ -200,7 +200,7 @@ export class BarNumberPrimitive implements ISeriesPrimitive<Time> {
 
       // The date first, so a number is never painted over by it.
       if (!hidden.dates) paint(this.#dates, tokens.ink2);
-      if (!hidden.numbers) paint(this.#numbers, tokens.muted);
+      if (!hidden.numbers) paint(this.#numbers, tokens.mutedText);
       context.restore();
     });
   }

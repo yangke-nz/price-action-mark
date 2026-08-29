@@ -82,6 +82,19 @@ export const INTERVALS: { readonly [K in Interval]: IntervalSpec } = {
 
 export const INTERVAL_IDS: readonly Interval[] = ['1d', '5m'];
 
+/**
+ * The interval an RTH DAILY chart is built from.
+ *
+ * Five-minute rather than hourly, and that is a correctness choice, not a
+ * convenience one: hourly bars sit on the hour in New York, so the 09:00 bar
+ * straddles the 09:30 open and the 16:00 bar straddles the 16:15 close. They
+ * would buy 730 days of history — measured — in exchange for an open and a
+ * close that are both guesses, and those two prices are what a price-action
+ * chart is read on. Five-minute bars land exactly on the session's edges: 81 a
+ * session, every session.
+ */
+export const RTH_DAILY_SOURCE: Interval = '5m';
+
 export function isInterval(value: unknown): value is Interval {
   return value === '1d' || value === '5m';
 }
