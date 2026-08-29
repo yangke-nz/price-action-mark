@@ -12,7 +12,7 @@
  * foresight. So `knownAt` is the confirmation date of the LAST pivot the
  * pattern depends on, never the date of the pattern's own last point.
  */
-import type { ChannelMark, Mark, PathMark, SegmentMark, Tone } from '../types.ts';
+import type { ChannelMark, LevelMark, Mark, SegmentMark, Tone } from '../types.ts';
 import { markId } from '../types.ts';
 import type { Ctx, Rule } from '../rule.ts';
 import type { Pivot } from '../structure.ts';
@@ -262,20 +262,38 @@ function doubleRule(id: string, kind: 'high' | 'low'): Rule {
     detect: (ctx) => {
       const out: Mark[] = [];
       for (const { a, middle, b } of findDoubles(ctx, kind)) {
+        // Drawn as the LEVEL, not as the M. The three-point zigzag through the
+        // first peak, the neckline and the second traced what price did and
+        // named nothing; what a double top IS about is the one price that was
+        // tested twice and held, so that is what gets a line. The neckline is
+        // not lost — it is in the note, and `dt-short` still projects the
+        // measured move from it.
+        //
+        // The price is the more EXTREME of the two peaks, not their mean. At
+        // the mean one of the two peaks pokes through its own line, which
+        // reads as a line drawn slightly wrong; at the extreme the line is a
+        // ceiling nothing in the pattern breaches. They sit within DT_TOL_ATR
+        // of each other by definition, so the choice moves it under half an
+        // ATR either way.
+        //
+        // The span runs from the first peak to `knownAt`, the bar the pattern
+        // became readable — three sessions past the second peak at the default
+        // strength. Ending at the second peak would stop the line before the
+        // sessions that test it; any other extension would be a constant with
+        // nothing behind it.
+        const known = knownAt(ctx, [a, middle, b]);
         out.push({
           id: markId(id, at(ctx, a.i), at(ctx, b.i)),
           rule: id, group: 'lines',
           label: top ? 'double top' : 'double bottom',
           note: `${Math.abs(b.price - a.price).toFixed(2)} apart, neckline ${middle.price.toFixed(2)}`,
           tone: top ? 'bear' : 'bull',
-          at: at(ctx, b.i), knownAt: knownAt(ctx, [a, middle, b]), source: 'rule',
-          kind: 'path',
-          points: [
-            { d: at(ctx, a.i), price: a.price },
-            { d: at(ctx, middle.i), price: middle.price },
-            { d: at(ctx, b.i), price: b.price },
-          ],
-        } satisfies PathMark);
+          at: at(ctx, b.i), knownAt: known, source: 'rule',
+          kind: 'level',
+          price: top ? Math.max(a.price, b.price) : Math.min(a.price, b.price),
+          fromD: at(ctx, a.i),
+          toD: known,
+        } satisfies LevelMark);
       }
       return out;
     },
@@ -464,7 +482,8 @@ export const SPIKE_AND_CHANNEL: Rule = {
   group: 'lines',
   label: 'Spike and channel',
   blurb: `${SPIKE_MIN_BARS}+ trend bars covering ${SPIKE_MIN_ATR} ATR, then a channel of at most ${SPIKE_SLOPE_RATIO}x that slope. Marks where the trend stopped being one-way.`,
-  defaultOn: true,
+  defaultOn: false,
+  tier: 'extra',
   detect: (ctx) => {
     const { m, s, data } = ctx;
     const out: Mark[] = [];

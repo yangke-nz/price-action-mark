@@ -10,9 +10,9 @@
   const shown = $derived(app.marks.length);
 
   /** The three groups, in the order the marking layer builds them: the special
-   *  bars, the lines they form, the entries they set up. Headings earn their
-   *  place once the card is narrow enough to drop the blurbs — with only a name
-   *  and a count, the group is the remaining clue to what a rule is about. */
+   *  bars, the lines they form, the entries they set up. The headings carry
+   *  weight now that a row is only a name and a count: the group is the
+   *  remaining clue on the card to what a rule is about. */
   const GROUPS = [
     { id: 'bars', label: 'Special bars' },
     { id: 'lines', label: 'Lines they form' },
@@ -163,9 +163,12 @@
   </div>
 </details>
 
-<!-- title carries the blurb for the compact layout, where the blurb line is
-     hidden: it is the description a screen reader gets as well, so the text is
-     not simply lost. `quiet` marks a rule that lives in the folded set,
+<!-- The blurb is the row's `title` and nothing else. It used to print as a
+     second line on a card wider than 700px, which is 31 descriptions nobody
+     reads twice and the difference between the pane showing a group and
+     showing a fragment; hovering the row says the same thing when the reader
+     actually wants it, and the title is what a screen reader is handed too, so
+     the text is not lost. `quiet` marks a rule that lives in the folded set,
      whether it is showing because the drawer is open or because it is on. -->
 {#snippet row(rule: Rule, quiet: boolean)}
   <label class="rule" class:dim={!marks.enabled} class:quiet title={rule.blurb}>
@@ -177,7 +180,6 @@
     />
     <span class="name">{rule.label}{#if quiet}<span class="sr">, less used</span>{/if}</span>
     <span class="n">{integer(app.markCounts.get(rule.id) ?? 0)}</span>
-    <span class="blurb">{rule.blurb}</span>
   </label>
 {/snippet}
 
@@ -186,11 +188,13 @@
      <details> the summary is the first flex item, which is also what makes the
      card collapse to just that bar when it is shut.
 
-     container-type is INLINE-SIZE, not size: the compact layout below keys off
-     WIDTH. Keying it off height would be closer to the real constraint and is
-     not available — `size` containment makes the element ignore its content
-     for sizing, which collapses this card in the stacked layout where its
-     height is indefinite. */
+     It carried `container-type: inline-size` for one query — the width at
+     which the blurb line had to go — and there is no blurb line now, so the
+     query and the containment went with it. Measured both ways in the built
+     artifact before removing: card, list, scroll window, columns and row
+     height are identical with it and without it, at 1904x1015 (a 647px card,
+     2 columns) and at 1100x900 (a 1045px card, 4). The marking pane still
+     declares its own container; this card no longer needs one. */
   .panel {
     background: var(--surface);
     border: 1px solid var(--hair);
@@ -198,7 +202,6 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    container-type: inline-size;
   }
 
   /* ::details-content is the flex item, not `.body`.
@@ -347,11 +350,16 @@
     user-select: none;
   }
 
+  /* Two columns of name and count fit ~15 rules in the space one column of
+     blurbs fit 5, and that is the difference between the pane showing a group
+     and showing a fragment. This was the compact layout a container query
+     switched to under 700px; with the blurb line gone there is nothing left
+     for the wide case to do differently, so it is simply the layout. */
   .rules {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
-    gap: 2px 20px;
-    padding: 12px 16px 16px;
+    grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+    gap: 0 22px;
+    padding: 12px 16px;
   }
 
   .ghead {
@@ -400,12 +408,12 @@
 
   .rule {
     display: grid;
-    grid-template-columns: auto auto 1fr;
+    grid-template-columns: auto 1fr auto;
     align-items: baseline;
-    gap: 3px 8px;
-    padding: 5px 0;
+    gap: 8px;
+    padding: 3px 0;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--ink-2);
   }
 
@@ -443,37 +451,6 @@
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     color: var(--muted-text);
-  }
-
-  .blurb {
-    grid-column: 2 / -1;
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: var(--muted-text);
-  }
-
-  /* Compact rows once the card is too narrow to carry a blurb per rule —
-     which is every width the side column hands it. Two columns of name and
-     count fit ~15 rules in the space one column of blurbs fits 5, and that is
-     the difference between the pane showing a group and showing a fragment.
-     The blurb is not deleted, it moves to the row's title.
-
-     A container query, not a media query: this card is full-width in the
-     stacked layout and a narrow pane in the wide one, and it is the CARD's
-     width that decides whether a blurb fits. Same seam MarkList uses. */
-  @container (max-width: 700px) {
-    .rules {
-      grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
-      gap: 0 22px;
-      padding-bottom: 12px;
-    }
-    .rule {
-      grid-template-columns: auto 1fr auto;
-      gap: 8px;
-      padding: 3px 0;
-      font-size: 12px;
-    }
-    .blurb { display: none; }
   }
 
   @media (max-width: 720px) {

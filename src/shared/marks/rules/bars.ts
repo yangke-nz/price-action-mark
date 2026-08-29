@@ -8,9 +8,10 @@
  *
  * DENSITY IS THE REAL DIFFICULTY HERE. `trend-bar` fires on roughly a third of
  * all sessions and `doji` on another fifth; a chart wearing every label is
- * strictly less readable than one wearing none. So the high-frequency rules
- * ship `defaultOn: false`, and the ones that stay on are the ones that mark
- * something a reader would stop at.
+ * strictly less readable than one wearing none. So the DENSEST rules ship
+ * `defaultOn: false`, and the ones that stay on are the ones that mark
+ * something a reader would stop at. The line sits just under `inside` and
+ * `outside` at about 12% — those two are on, `shaved` at 15.1% is not.
  */
 import type { Mark } from '../types.ts';
 import type { Ctx, Rule } from '../rule.ts';
@@ -135,9 +136,8 @@ export const BAR_RULES: readonly Rule[] = [
     id: 'inside',
     group: 'bars',
     label: 'Inside bar',
-    blurb: 'High no higher and low no lower than the session before. One session in eight, so it ships off.',
-    defaultOn: false,
-    tier: 'extra',
+    blurb: 'High no higher and low no lower than the session before. One session in eight.',
+    defaultOn: true,
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -156,9 +156,8 @@ export const BAR_RULES: readonly Rule[] = [
     id: 'outside',
     group: 'bars',
     label: 'Outside bar',
-    blurb: 'Higher high and lower low than the session before. One session in eight, so it ships off.',
-    defaultOn: false,
-    tier: 'extra',
+    blurb: 'Higher high and lower low than the session before. One session in eight.',
+    defaultOn: true,
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -269,7 +268,8 @@ export const BAR_RULES: readonly Rule[] = [
     group: 'bars',
     label: 'Pin bar',
     blurb: `One tail at least ${Math.round(PIN_TAIL * 100)}% of the range with a small body. Direction is the tail's opposite.`,
-    defaultOn: true,
+    defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];
@@ -322,7 +322,8 @@ export const BAR_RULES: readonly Rule[] = [
     group: 'bars',
     label: 'Gap',
     blurb: 'Opens clear of the previous session’s range. Contract rolls are excluded — that gap is carry.',
-    defaultOn: true,
+    defaultOn: false,
+    tier: 'extra',
     detect: (ctx) => {
       const { m } = ctx;
       const out: Mark[] = [];

@@ -101,8 +101,17 @@ export interface LevelMark extends MarkBase {
   readonly toD: string;
 }
 
-/** An open polyline: a wedge's three pushes, a triangle's two converging
- *  lines drawn as one path. */
+/**
+ * An open polyline.
+ *
+ * NO RULE EMITS ONE TODAY, and that is not a reason to delete it. The doubles
+ * drew a three-point path until the level replaced it (see `doubleRule` in
+ * rules/lines.ts), and wedges and triangles draw as channels rather than as
+ * the polyline this comment used to claim. `shapeOf` still handles the kind
+ * because a manual drawing tool needs it — a freehand line is exactly this —
+ * and it costs four lines to keep against a serialised shape that would
+ * otherwise have to be reintroduced later.
+ */
 export interface PathMark extends MarkBase {
   readonly kind: 'path';
   readonly points: readonly Anchor[];

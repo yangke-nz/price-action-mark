@@ -221,7 +221,8 @@ export const FAILED_BO: Rule = {
   group: 'entries',
   label: 'Failed breakout',
   blurb: `A breakout that closes back inside the prior range within ${FAILED_BO_WINDOW} sessions. Faded the other way.`,
-  defaultOn: true,
+  defaultOn: false,
+  tier: 'extra',
   detect: (ctx) => {
     const { m, data } = ctx;
     const out: Mark[] = [];
@@ -275,7 +276,8 @@ export const FINAL_FLAG: Rule = {
   group: 'entries',
   label: 'Final flag',
   blurb: `A tight ${FLAG_MIN_BARS}-${FLAG_MAX_BARS} bar flag late in a trend whose breakout closes back inside within ${FLAG_FAIL_WINDOW} sessions. Faded. "Final" is retrospective — the rule only sees a failed late-trend flag.`,
-  defaultOn: true,
+  defaultOn: false,
+  tier: 'extra',
   detect: (ctx) => {
     const { m, s, data } = ctx;
     const out: Mark[] = [];

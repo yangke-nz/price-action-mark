@@ -399,24 +399,34 @@ The same box is full-width when stacked and a narrow pane when not, and it is
 the **box's** width that decides what fits — so each measures itself rather than
 re-reading the page breakpoint, which is how two files drift apart.
 
-`MarkPanel` drops its blurbs to the row's `title` and goes to two columns under
-a 700px card, with `bars` / `lines` / `entries` headings earning their place
-once a row is only a name and a count. That takes the 31 rules from **2,199px**
-of card to **498px** of content at two columns, or 895px at one.
+`MarkPanel` is no longer one of them, and the reason is worth keeping. Its one
+container query decided the width at which the per-rule blurb line had to go —
+and the blurb does not print on the card at any width now. It is the row's
+`title`, which is where the narrow layout had always put it and what a screen
+reader is handed either way, so a rule is a name and a count everywhere and the
+compact grid is simply the layout. `bars` / `lines` / `entries` headings carry
+the weight the blurbs used to.
+
+The saving lands in the stacked layout, where the card is wide enough that the
+blurbs used to show: 31 rules are **310px** of content in four columns at a
+1045px card, against the **2,199px** one column of blurbs measured when that
+was the layout. In the side column, at a 647px card, nothing moved — that width
+was already below the query's 700px and already compact.
 
 Two columns were not enough on their own, so the card also **folds the rules a
-reader rarely reaches for**. Six carry `tier: 'extra'` — the five dense bar
-rules and `pullback-entry` — and each group heading grows a `+5 ▾` chip that
+reader rarely reaches for**. Nine carry `tier: 'extra'` — `trend-bar`, `doji`,
+`shaved`, `pin-bar`, `gap-bar`, `spike-and-channel`, `pullback-entry`,
+`failed-bo` and `final-flag` — and each group heading grows a `+5 ▾` chip that
 reveals them in place. The chip rides the heading rather than taking a row of
 its own, because the heading already spans the list and already carries the
 group's name: a `▸ 5 less used` row per group was tried first and spent ~16px
-each to say what the heading says for free. Measured on the artifact at a 642px
-card, the list goes from **506px to 431px**, and the top row carries one
-`Show all 6` for the whole card.
+each to say what the heading says for free. Measured on the artifact at a 647px
+card, the list goes from **510px to 410px**, and the top row carries one
+`Show all 9` for the whole card.
 
-That is a 75px saving, not a fix: at 1904x1015 the list is 431px inside a 197px
-window, so it still scrolls, and about eight more folded rules is what "fits"
-would cost. The fold is also **not** a second `defaultOn`. That flag is about
+That is a 100px saving, not a fix: at 1904x1015 the list is 410px inside a
+211px window, so it still scrolls, and at ~11px a row roughly eighteen more
+folded rules is what "fits" would cost. The fold is also **not** a second `defaultOn`. That flag is about
 density — a rule firing on a third of all sessions makes a chart less readable
 than no marks at all — where `tier` is about how often the reader consults it.
 `climax` fires once a year and is worth a glance; `shaved` fires 38 times and
@@ -447,7 +457,7 @@ to prevent. It now deletes a key whose value agrees with `defaultOn`, and the
 merge deletes what an incoming record leaves out, so both records shrink.
 
 Two details in that dialog were measured rather than assumed. The `Fold` box is
-**disabled, not hidden**, while a rule is on (25 of 31 by default): an empty
+**disabled, not hidden**, while a rule is on (22 of 31 by default): an empty
 cell reads as "this cannot be folded", where ticked-and-disabled says "folded,
 and listed anyway because it is on" — and it keeps the preference, so switching
 the rule off later puts it back where you had it. And its width tiers are about
@@ -739,12 +749,33 @@ Re-measured across all 20 rules with marks in a 6M viewport: 3,285–9,851 chang
 pixels each, all on the primitive's canvas, with the price axis untouched
 everywhere.
 
+### The doubles draw a level, not an M
+
+A double top used to draw as a three-point path — up to the first peak, down to
+the neckline, up to the second — which traced what price did and named nothing.
+It draws as a single horizontal now: the price that was tested twice and held,
+which is the line a reader would draw by hand.
+
+Three details in it. The level sits at the more **extreme** of the two peaks
+rather than their mean, because at the mean one peak pokes through its own line
+and the whole mark reads as slightly misplaced; the two are within half an ATR
+of each other by definition, so it is a small move either way. The span runs
+from the first peak to the pattern's **`knownAt`** — three sessions past the
+second peak at the default pivot strength — so the line is still under the
+candles that test it, and the extension needed no invented constant. And the
+mark's id is unchanged, built from the same two dates, so **verdicts already
+saved still find their mark** and the regression fixture passes untouched:
+counts and dates are geometry-blind.
+
+The neckline is not lost with the zigzag. It is in the mark's note, and the
+`dt-short` / `db-long` entries still project their measured move from it.
+
 ### Density is the design constraint
 
 `trend-bar` fires on 34.5% of all sessions and `doji` on 27.2%; a chart wearing
 every label is strictly less readable than one wearing none. The shipped
-defaults are budgeted to **0.56 marks a bar** — measured at 0.54 on a 60-day
-5-minute pull, close enough that intraday needed no second budget — and
+defaults are budgeted to **0.71 marks a bar** — measured at 0.71 on a 60-day
+5-minute pull too, so intraday needs no second budget — and
 `npm run marks -- --catalogue` prints the hit rate per rule so the budget is
 checkable rather than felt.
 

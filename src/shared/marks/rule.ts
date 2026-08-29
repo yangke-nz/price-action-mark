@@ -60,7 +60,7 @@ export interface Rule {
    * Rules the panel folds away until the reader asks for them.
    *
    * Absent means core, so a rule opts IN to being quiet and the other
-   * twenty-five need no line. This is a USAGE decision, NOT the density one
+   * twenty-two need no line. This is a USAGE decision, NOT the density one
    * `defaultOn` makes, and the two lists are not the same: `climax` fires once
    * a year and is worth a glance, `shaved` fires 38 times and may never be
    * switched on. Presentation only — nothing in the marking layer reads it, so

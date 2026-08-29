@@ -783,12 +783,22 @@ delete that directory first.
     rest and viewport-height when stuck, and with panes there is nothing to
     stick.
   A card's own density is a CONTAINER query on the card, never App's media
-  query repeated: MarkPanel drops its blurbs to `title` and goes to two columns
-  under 700px, and the marking pane declares the container both its views read —
+  query repeated: the marking pane declares the container both its views read —
   the mark table tightens its five columns under 780px and 660px, the reading
   rows drop the date rail under 430px. The same box is full-width when stacked
-  and a narrow pane when not, and it is that box's width that decides. Measured:
-  the 31 rules go from 2,199px of card to 498px of content at two columns.
+  and a narrow pane when not, and it is that box's width that decides.
+  **MarkPanel used to be the other example and is no longer any example at
+  all.** Its one query decided the width at which the per-rule blurb line had
+  to go; the blurb does not print on the card at any width now — it is the
+  row's `title`, which is where the compact layout had always put it and what a
+  screen reader is handed either way — so the compact grid is simply the
+  layout, and `container-type` came off with the query. Measured both ways in
+  the built artifact before removing it: card, list, scroll window, columns and
+  row height are identical with and without, at 1904x1015 (647px card, 2
+  columns) and 1100x900 (1045px card, 4). The saving is in the STACKED layout,
+  where the card is wide enough that the blurbs used to show: 31 rules are
+  310px of content in four columns, against the 2,199px one column of blurbs
+  measured when that was the layout.
 - **The mark table has an irreducible ~535px floor and scrolls sideways below
   it.** The container tiers took it from 766px to 535px, which fits from about a
   1700px viewport up; at 1500 it is 57px short and at 1200, 147px. Closing that
@@ -833,10 +843,12 @@ delete that directory first.
   intraday needs 1D or shorter before a label appears. The readout says *"zoom
   in for bar marks"* the rest of the time, on either timeframe. Marks stacked on ONE bar are fine — the library offsets those.
 - **Density is the design constraint, and it TRANSFERS.** `npm run marks --
-  --catalogue` prints the hit rate per rule. The defaults are budgeted to 0.56
-  marks a bar on daily — and measured 0.54 on a 60-day 5-minute pull, which is
-  close enough that the budget did not need a second set of numbers. A rule
-  firing on 10%+ of bars ships `defaultOn: false` (`trend-bar` alone is 34.5%).
+  --catalogue` prints the hit rate per rule. The defaults budget 0.71 marks a
+  bar on daily — and measured 0.71 on a 60-day 5-minute pull as well, so the
+  budget still needs no second set of numbers. It was 0.56 until `inside` and
+  `outside` were switched on. The DENSEST rules still ship `defaultOn: false`
+  (`trend-bar` 34.5%, `doji` 27.2%, `shaved` 15.1%, `pullback-entry` 12.3%),
+  and the line now sits just under those two at about 12%.
   When a rule looks too eager, tighten the rule before hiding it: `reversal-bar`
   went 22% -> 5.2% by requiring it to actually reverse a 10-session extreme.
 - **Snapshot anything crossing the preload bridge: `$state.snapshot(x)`.** A
@@ -891,6 +903,23 @@ delete that directory first.
   in a trend (20+ bars in) whose breakout closes back inside within two sessions
   — and leaves "was it the last one" to the outcome column. It is the best of
   the non-measured-move entries at +0.46R.
+- **A DOUBLE IS DRAWN AS THE LEVEL, NOT AS THE M.** It was a three-point
+  `path` — first peak, neckline pivot, second peak — which traced what price
+  did and named nothing; what the pattern is *about* is the one price that was
+  tested twice and held. `doubleRule` now emits a `level`, and three things in
+  it were decided rather than defaulted. The price is the more EXTREME of the
+  two peaks, because at their mean one of the two pokes through its own line
+  and reads as a line drawn wrong; they sit within `DT_TOL_ATR` of each other
+  by definition, so it moves the line under half an ATR either way. The span
+  runs from the first peak to `knownAt` — three sessions past the second at
+  the default strength — so the line does not stop before the sessions that
+  test it, and no constant had to be invented for it. And the id is still
+  built from the same two dates, so **every verdict already on disk still
+  finds its mark**; `marks:check` passes untouched because counts and dates
+  are geometry-blind. The neckline is not lost: it is in the note, and
+  `dt-short` still projects the measured move from it. NOTHING EMITS A `path`
+  ANY MORE — see the comment on `PathMark`, which is kept for the drawing
+  tool, not left behind by accident.
 - **A sliding pivot window emits the same shape several times.** Wedge and
   triangle scan five pivots at a time, so a genuinely coiling stretch satisfies
   the predicate at four consecutive positions. Both keep a claimed-range list
@@ -932,9 +961,10 @@ delete that directory first.
   through a trendline is what trendlines are for; counting those as breaks
   rejects every real channel on the chart.
 - **The rules card FOLDS its less-used rules, and `Rule.tier` is the only thing
-  that decides which.** Six carry `tier: 'extra'` today — the five dense bar
-  rules and `pullback-entry`. Absent means core, so a rule opts IN to being
-  quiet and the other twenty-five need no line; nothing in the marking layer
+  that decides which.** Nine carry `tier: 'extra'` today — `trend-bar`,
+  `doji`, `shaved`, `pin-bar`, `gap-bar`, `spike-and-channel`,
+  `pullback-entry`, `failed-bo` and `final-flag`. Absent means core, so a rule
+  opts IN to being quiet and the other twenty-two need no line; nothing in the marking layer
   reads it, so detection, the counts, `--catalogue` and `marks:check` are
   untouched. Four things are load-bearing, and each was decided by measuring
   the alternative in a mock first:
@@ -942,7 +972,7 @@ delete that directory first.
     The heading already spans the list and already carries the group's name, so
     `+5 ▾` costs no row; a `▸ 5 less used` row per group spent ~16px each to
     say what the heading says for free. Measured on the artifact at the pane's
-    642px: 31 rules are 506px of list, 25 are **431px**.
+    647px: 31 rules are 510px of list, 22 are **410px**.
   - **A folded rule the reader has switched ON is never hidden.** It is
     promoted into the list, keeping the quieter name so "less used" stays ONE
     signal rather than two — its ticked box says the rest. Without this the
@@ -951,15 +981,18 @@ delete that directory first.
   - **`tier` is a USAGE decision and `defaultOn` is a DENSITY one, and the two
     lists are not the same.** `climax` fires once a year and is worth a glance;
     `shaved` fires 38 times and may never be switched on. They happen to
-    coincide today because the dense rules are also the rarely-consulted ones.
+    coincide today — every rule that is off is also folded — but no longer
+    because density decides both: `gap-bar` fires 42 times and `final-flag` 44,
+    and both are off and folded on usage alone.
   - **Open or closed is component `$state`, and the show-all lives in `.top`,
     not the `<summary>`.** A summary IS a button, so a button inside one is a
     button inside a button — the constraint that stopped the marking pane's
     tabs going there. Persisting the open state would freeze today's answer
     into every settings file, the argument the next note makes.
   It does NOT make the card fit, and should not be described as if it does: at
-  1904x1015 the list is 431px in a 197px window, so folding about eight more
-  rules is what "fits" would take. `smoke.cjs` asserts the fold reveals and
+  1904x1015 the list is 410px in a 211px window, and a row measures ~11px, so
+  fitting would mean folding roughly eighteen more — most of what is left.
+  (An earlier note said eight, from the arithmetic rather than from the rows.) `smoke.cjs` asserts the fold reveals and
   re-folds — measured in a SECOND `executeJavaScript`, because Svelte flushes
   on a microtask and counting rows in the same expression reports every fold as
   broken.
@@ -987,7 +1020,7 @@ delete that directory first.
     `showModal()`, so the focus trap, Escape, the backdrop and the top layer
     are the platform's. `onclose` syncs `app.rulesOpen` back — without it
     Escape leaves the flag set and the sheet never reopens.
-  - **The `Fold` box is DISABLED, not hidden, while a rule is on** (25 of 31
+  - **The `Fold` box is DISABLED, not hidden, while a rule is on** (22 of 31
     by default). An empty cell reads as "cannot be folded"; ticked-and-disabled
     says "folded, and listed anyway because it is on", and it keeps the
     preference so switching the rule off later puts it back. The `Where`
