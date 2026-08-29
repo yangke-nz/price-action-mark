@@ -49,11 +49,29 @@ Everything else is current: Electron 44.0.0, Svelte 5.56.10, lightweight-charts
   Windows sets `core.autocrlf=true` system-wide; without the `eol=lf` rule a
   fresh clone checks out CRLF and every file immediately reads as modified.
   Do not remove it, and do not add a file expecting CRLF.
-- **Git may refuse to run here: *"dubious ownership"*.** The working tree is
-  owned by the Windows account `yangke` while the shell may run as `keatu`, so
+- **Supported platforms: Windows x64 and macOS on APPLE SILICON.** Intel Macs
+  are not supported — the mac build is `arch: [arm64]` and arm64-thin, so it
+  cannot run on one at all. Linux is in
+  [electron-builder.yml](electron-builder.yml) and builds, but nothing
+  exercises it; treat it as unexercised rather than as a promise. **The `arch`
+  lists in that file are honoured by `npm run dist` and IGNORED by
+  `npm run pack`**, which builds the host architecture — so on an Apple Silicon
+  Mac `electron-builder --win --dir` quietly makes a *win32/arm64* app, not the
+  declared x64 one. Pass the arch explicitly whenever it is the thing under
+  test. Windows targets DO cross-build from macOS, verified end to end
+  including the icon; only the NSIS installer step is untested here.
+- **userData is per platform, and every note here names the macOS path.**
+  `~/Library/Application Support/price-action-mark/` on macOS,
+  `%APPDATA%\price-action-mark\` on Windows,
+  `~/.config/price-action-mark/` on Linux. It holds `settings.json`, one
+  dataset cache per interval and `marks/<symbol>.json`. Nothing in it is
+  precious — delete the directory to get a first-run state back.
+- **WINDOWS ONLY — git may refuse to run: *"dubious ownership"*.** The working
+  tree is owned by the account `yangke` while the shell may run as `keatu`, so
   every git command aborts until
   `git config --global --add safe.directory C:/code/github/price-action-mark`.
-  Already applied for `keatu`; a third account, or a fresh profile, hits it again.
+  Already applied for `keatu`; a third account, or a fresh profile, hits it
+  again. Does not arise on macOS or Linux.
 
 ## Commands
 
@@ -77,6 +95,7 @@ npm run marks          # metric columns for any span; --check runs invariants
                        #   --golden rewrites the regression fixture
 npm run marks:check    # the marking layer's regression guard; fails on drift
 npm run tokens:check   # the palette's guard: three scopes agree, contrast holds
+npm run icon           # resources/icon.svg -> icon.png + icon.icns
 npm run smoke          # headless render check of the artifact
 npm run smoke:app      # headless render check of the desktop app
 ```
@@ -89,6 +108,115 @@ That is a tidy that stays tidy: three had already accumulated where nothing was
 looking. Name a genuinely unused parameter `_x` rather than relaxing the flag. Two justified a11y warnings
 on the chart surface are silenced inline with `svelte-ignore` and a reason; do not
 add more without one.
+
+---
+
+## macOS: local dev and local install
+
+Every command above runs unchanged. The codebase has **no `win32` branch**, and
+the two `darwin` branches it does have — `window-all-closed` in
+[main/index.ts](src/main/index.ts), the app menu and `close` vs `quit` in
+[menu.ts](src/main/menu.ts) — are the correct ones. Verified end to end on
+arm64 / Electron 44 / Node 26: typecheck, build, artifact, both smokes,
+`marks:check`, `tokens:check`, `pack`, a live Yahoo pull, both window gestures
+and the daily-RTH aggregation.
+
+Needs **macOS 13**, Electron 44's floor (`LSMinimumSystemVersion` in the built
+`Info.plist`). Every Apple Silicon Mac clears that, so it is not a constraint
+worth thinking about here.
+
+**APPLE SILICON ONLY, and the build is arm64-THIN — not universal.** Measured
+on the installed bundle: 7 executables and 6 dylibs, every one of them arm64,
+and **zero x86_64 files anywhere**. It therefore cannot run on an Intel Mac at
+all, and equally cannot be running under Rosetta — Rosetta translates x86_64,
+and there is none here to translate. `mac.target.arch` in
+[electron-builder.yml](electron-builder.yml) says `[arm64]` for this reason; it
+was `[arm64, x64]`, which bought a second ~120 MB Electron download and a
+second 123 MB dmg on every `dist` for a machine nobody runs.
+
+The x64 half was invisible until someone ran `dist`, because `pack` ignores
+the arch list — see the platform bullet under `## Environment`. Should an Intel
+or universal build ever be wanted it is one line (`arch: [x64]` or
+`[universal]`), with one trap: `--x64` writes to **`release/mac/`**, no `-x64`
+suffix, so a copy step pointed at `release/mac-arm64/` would silently hand over
+the wrong architecture.
+
+Every accelerator is registered as `CmdOrCtrl+…`, so **each `Ctrl+X` written in
+these notes is `⌘X` on macOS**. The in-page hints say so themselves —
+[keys.ts](src/renderer/lib/keys.ts)'s `accel()` renders a chord in the reader's
+own notation, and in Apple's modifier order (⌃⌥⇧⌘, so ⌘ lands last: `⇧⌘M`,
+never `⌘⇧M`). It reads the platform from `navigator`, not over the preload
+bridge, because it is the READER's machine that decides, a `title` needs the
+answer synchronously, and the artifact has no bridge to ask yet is read on Macs
+too.
+
+### Installing it locally
+
+```bash
+npm run pack
+rm -rf "/Applications/Price Action Mark.app"
+cp -R "release/mac-arm64/Price Action Mark.app" /Applications/
+```
+
+**This needs no Apple Developer account and no signing at all.** Gatekeeper
+keys off the `com.apple.quarantine` attribute, which is stamped on by whatever
+DOWNLOADS a file — a browser, Mail, AirDrop. A bundle you built yourself was
+never downloaded, carries no such attribute (`xattr` returns empty) and is
+therefore never assessed. It launches from Finder, the Dock and Spotlight like
+anything else. That is why [electron-builder.yml](electron-builder.yml) has no
+signing config, and why the *"skipped macOS application code signing"* warning
+on every `pack` is noise.
+
+It stops being noise the moment the app travels. `scp`, a USB stick and `curl`
+do not set the quarantine bit; a browser, Mail and AirDrop do — and on a
+quarantined install this build fails the UGLY way, because `spctl --assess`
+reports **`code has no resources but signature indicates they must be
+present`**. electron-builder inserts `app.asar`, `data/` and a new `Info.plist`
+into a bundle that keeps the Electron binary's inherited linker signature
+(`Identifier=Electron`, `Sealed Resources=none`), and macOS renders a broken
+seal as *"…is damaged and can't be opened"* — which reads as a corrupt
+download rather than a policy block. `codesign --force --deep --sign -` repairs
+it for free: `Sealed Resources version=2`, the right identifier, and the app
+still boots. The dialog then becomes the ordinary *"Apple could not verify…"*
+with a working **Open Anyway** under System Settings ▸ Privacy & Security
+(macOS 15 removed the Control-click ▸ Open shortcut, so that pane is the only
+GUI path). A Developer ID signature WITHOUT notarization buys nothing — it is
+blocked identically, so it is notarize or do not bother.
+
+### Two silent-exit traps, and they look identical
+
+Both make the app vanish with no window, no error and exit 0 — the failure this
+file already describes for `smoke:app`, seen from macOS.
+
+- **`open` PASSES THE CALLING SHELL'S ENVIRONMENT to the app.** Some toolchains
+  export `ELECTRON_RUN_AS_NODE=1`, which makes the Electron binary behave as
+  plain Node, so `open "…/Price Action Mark.app"` from such a shell starts Node
+  and it exits at once. Measured back to back: clean env → 1 process, the same
+  command with the variable → 0. It is in no shell profile and not in launchd
+  here, so **Finder, the Dock, Spotlight and a plain Terminal.app are
+  unaffected**; only a shell that has it needs `env -u ELECTRON_RUN_AS_NODE
+  open …`.
+- **A leftover `npm run dev` is named `Electron`, NOT `Price Action Mark`.** It
+  holds the single-instance lock, so the packaged app quits before it draws,
+  and `pkill -f "Price Action Mark"` does not match it. Use `pkill -f
+  "node_modules/electron/dist"`, and check
+  `~/Library/Application Support/price-action-mark/SingletonLock` if it still
+  will not start.
+
+### The icon
+
+`npm run icon` rasterises [resources/icon.svg](resources/icon.svg) into
+`icon.png` (1024) and a ten-face `icon.icns`. electron-builder finds both in
+`buildResources` on its own — there is no `icon:` line in the config and none
+is needed. It draws the SVG into a Chromium canvas and reads a PNG back rather
+than adding an image library, then shells out to `sips` and `iconutil`, both of
+which ship with macOS; on another platform it writes the PNG and skips the
+`.icns`.
+
+**No token name with a leading double hyphen may appear in that file's
+comment.** XML forbids `--` inside a comment, so the document stops being well
+formed and the only symptom is *"the source image cannot be decoded"* — no
+line, no mention of a comment. It cost a build once.
 
 ---
 
@@ -242,8 +370,10 @@ Break one of these and it fails quietly, not loudly.
 - **`electron <file>` and `electron .` resolve a different app identity.** Given a
   file path, `appPath` is that file's directory — no `package.json` there, so
   `getName()` falls back to `"Electron"`, `getVersion()` returns the *Electron*
-  version, and **userData lands in `%APPDATA%/Electron`** instead of
-  `%APPDATA%/price-action-mark`. `smoke.cjs` calls `app.setName()` to compensate.
+  version, and **userData lands in the `Electron` directory** instead of the
+  `price-action-mark` one — `~/Library/Application Support/Electron` on macOS,
+  `%APPDATA%\Electron` on Windows. `smoke.cjs` calls `app.setName()` to
+  compensate.
   Do not trust `getVersion()` from a file-path launch; check the packaged build.
 - **`asar extract-file <archive> <file> <dest>` ignores `<dest>`** and writes to
   the current working directory. Running it on `package.json` in the project root
@@ -348,7 +478,10 @@ before `smoke.cjs` reaches its report or its `app.exit(1)` failure path. Every
 real failure writes to stderr and exits 1, so silence is the one mode the script
 does not anticipate. A healthy run always prints `smoke desktop app: N canvas, …`
 then `smoke: ok`. Clear it with
-`Get-Process electron | Stop-Process -Force` and re-run. (Unrelated but
+`pkill -f "node_modules/electron/dist"` on macOS or Linux,
+`Get-Process electron | Stop-Process -Force` on Windows — and note the dev
+process is named **`Electron`**, not `Price Action Mark`, so a pkill on the
+product name misses it. Then re-run. (Unrelated but
 co-occurring: `ELECTRON_RUN_AS_NODE=1` is exported in some shells here, so every
 Electron entry point takes its re-exec guard — that path works and is not the
 cause of the silence.)
@@ -473,7 +606,8 @@ never return a `hoveredInfo` across `executeJavaScript`; it holds a live
 `ISeriesApi` and the non-cloneable result hangs the call.
 
 **Do not assume persisted state.** Settings and the dataset cache live in
-`%APPDATA%/price-action-mark/`, so a probe that expects a default will disagree
+userData (`~/Library/Application Support/price-action-mark/` on macOS —
+see `## Environment` for the other platforms), so a probe that expects a default will disagree
 with a machine that has run the app. Set the state you are testing explicitly, or
 delete that directory first.
 
@@ -527,7 +661,7 @@ delete that directory first.
   plumbing (a parameter on `getDataset`, a cache file per key, a load-before-
   commit setter), so a picker is now mostly a matter of following it. Still a
   feature rather than a gap, but a cheaper one than this note used to claim.
-- **No migration from the old `%APPDATA%/es-futures-chart/`.** The project was
+- **No migration from the old `es-futures-chart` userData directory.** The project was
   renamed from *E-Mini Daily Tape*; the old userData directory is orphaned and
   holds only a settings file and a dataset cache, both of which regenerate. Safe
   to delete. Do not write migration code for it.
@@ -1000,7 +1134,7 @@ changed is one decision.
   `es_data.json`; it is now `es_daily.json`, because the name is derived from
   the interval. Every existing install therefore re-fetches once and leaves a
   dead `es_data.json` behind. Deliberately no migration code, for the same
-  reason there is none for the old `%APPDATA%/es-futures-chart/`: a cache
+  reason there is none for the old `es-futures-chart` directory: a cache
   regenerates, and the file is safe to delete.
 - **One cache file per interval, and NO intraday seed.** Sharing a cache would
   have a 5-minute pull overwrite 26 years of daily bars. `data/es_5m.json` is

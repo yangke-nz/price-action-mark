@@ -26,6 +26,7 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "artifact": "vite build --config vite.artifact.config.ts && node scripts/inline-artifact.ts",
+    "icon": "electron scripts/make-icon.cjs",
     "data": "node scripts/fetch-data.ts",
     "csv": "node scripts/export-csv.ts",
     "marks": "node scripts/mark-report.ts",

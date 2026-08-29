@@ -16,6 +16,20 @@ function rangesFor(settings: Settings): RangeId[] {
 }
 const isMac = process.platform === 'darwin';
 
+/**
+ * A top-level label, with its Alt mnemonic.
+ *
+ * `&` marks the accelerated letter on Windows and Linux, where Electron strips
+ * the marker and underlines the letter after it. macOS has no mnemonics at all
+ * and does no stripping, so the menu bar reads a literal "&File" — the one
+ * platform difference in this file that is invisible from the other side.
+ * `&&` is Electron's escape for a real ampersand, so it collapses to one here
+ * rather than vanishing.
+ */
+function mnemonic(label: string): string {
+  return isMac ? label.replace(/&(&?)/g, '$1') : label;
+}
+
 function send(command: Command): void {
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   win?.webContents.send(CH.command, command);
@@ -29,7 +43,7 @@ export function buildMenu(settings: Settings): void {
   const template: MenuItemConstructorOptions[] = [
     ...appMenu,
     {
-      label: '&File',
+      label: mnemonic('&File'),
       submenu: [
         {
           label: 'Refresh data',
@@ -56,7 +70,7 @@ export function buildMenu(settings: Settings): void {
       ],
     },
     {
-      label: '&View',
+      label: mnemonic('&View'),
       submenu: [
         {
           label: 'Timeframe',
@@ -183,7 +197,7 @@ export function buildMenu(settings: Settings): void {
     },
     { role: 'windowMenu' },
     {
-      label: '&Help',
+      label: mnemonic('&Help'),
       submenu: [
         {
           label: 'Lightweight Charts (TradingView)',

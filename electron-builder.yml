@@ -2,6 +2,20 @@ appId: io.github.yangke-nz.price-action-mark
 productName: Price Action Mark
 copyright: Copyright © 2026 Ke Yang
 
+# SUPPORTED PLATFORMS
+#   Windows  x64          NSIS installer
+#   macOS    arm64 only   dmg — Apple Silicon; Intel is NOT supported
+#
+# Linux is present below and builds, but is not a supported target: nobody
+# runs it and nothing verifies it. Treat it as unexercised, not as a promise.
+#
+# One trap spans every platform here: `--dir` (which is what `npm run pack`
+# runs) builds the HOST architecture and IGNORES the `arch` lists below. Only
+# `npm run dist` honours them. On an Apple Silicon Mac that means
+# `electron-builder --win --dir` quietly produces a **win32/arm64** app rather
+# than the x64 one this file declares — pass `--x64` explicitly when the
+# architecture is the thing being tested.
+
 directories:
   output: release
   buildResources: resources
@@ -33,9 +47,15 @@ nsis:
   shortcutName: Price Action Mark
 
 mac:
+  # Apple Silicon only, deliberately. This used to be [arm64, x64], which cost
+  # a second ~120 MB Electron download and a second 123 MB dmg on every `dist`
+  # for a machine nobody here runs. `pack` was never affected — it builds the
+  # HOST architecture and ignores this list — so the waste only showed up on
+  # the release path, which is exactly where it is least likely to be noticed.
+  # An Intel or universal build is a one-line change back; see CLAUDE.md.
   target:
     - target: dmg
-      arch: [arm64, x64]
+      arch: [arm64]
   category: public.app-category.finance
 
 linux:

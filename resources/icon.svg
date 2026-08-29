@@ -1,0 +1,45 @@
+<!--
+  The app icon, and the source the PNG and the .icns are rasterised from:
+  `npm run icon` regenerates both. Edit this, never the generated files.
+
+  Geometry follows Apple's macOS template so it sits correctly beside other
+  Dock icons: the rounded rect is 824x824 inside a 1024 canvas (a 100px margin
+  all round) with a 185px corner radius.
+
+  A bear candle and a bull candle that engulfs it: the subject of the app in
+  the two shapes it is read on. Deliberately only two, and fat. Three thin
+  candles mush together at the 16px the menu bar and Finder use, which is the
+  size that decides whether an icon works.
+
+  Colours are the dark theme's down and up-text tokens, lifted slightly. They
+  are duplicated here rather than read from tokens.css on purpose: this file is
+  rasterised by a Chromium that has never loaded the app's stylesheet, and a
+  custom property it cannot resolve renders as black.
+
+  NOTE: no token names with a leading double hyphen in this comment. XML
+  forbids that sequence inside a comment, and the failure is not a warning:
+  the document stops being well formed, and an SVG an img element cannot
+  decode reports only "the source image cannot be decoded".
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#262e38"/>
+      <stop offset="1" stop-color="#0d1014"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+
+  <!-- bear: wick 270 to 650, body 330 to 560, both centred on x=386 -->
+  <g fill="#e05c5c">
+    <rect x="376" y="270" width="20"  height="380" rx="10"/>
+    <rect x="306" y="330" width="160" height="230" rx="16"/>
+  </g>
+
+  <!-- bull: taller at both ends, so it engulfs. Centred on x=638 -->
+  <g fill="#19b219">
+    <rect x="628" y="205" width="20"  height="520" rx="10"/>
+    <rect x="558" y="255" width="160" height="410" rx="16"/>
+  </g>
+</svg>

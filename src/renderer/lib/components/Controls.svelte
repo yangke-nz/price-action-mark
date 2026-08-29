@@ -7,6 +7,7 @@
   } as const;
 
   import { type AppState } from '$lib/state/app.svelte.ts';
+  import { accel } from '$lib/keys.ts';
   import type { ThemeChoice } from '$shared/types.ts';
   import { INTERVAL_IDS, INTERVALS } from '$shared/interval.ts';
   import { SESSIONS, SESSION_IDS } from '$shared/session.ts';
@@ -110,7 +111,7 @@
       <button
         type="button"
         class="action icon"
-        title="Maximize vertically — full screen height, same width and position (Ctrl+Shift+M)"
+        title="Maximize vertically — full screen height, same width and position ({accel('Ctrl+Shift+M')})"
         onclick={() => app.fitHeight()}
       >
         <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
@@ -126,7 +127,7 @@
       <button
         type="button"
         class="action icon"
-        title="Extend to the left edge of the screen — the right edge stays put (Ctrl+Shift+L)"
+        title="Extend to the left edge of the screen — the right edge stays put ({accel('Ctrl+Shift+L')})"
         onclick={() => app.fitLeft()}
       >
         <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">

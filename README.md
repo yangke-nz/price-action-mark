@@ -18,6 +18,10 @@ One Svelte 5 codebase, **two build targets**:
 | Electron desktop app | `npm run build` | `out/` (packaged with `npm run dist`) |
 | Single-file HTML artifact | `npm run artifact` | `dist/price_action_mark.html` (~750 KB, self-contained) |
 
+The desktop app ships for **Windows (x64)** and **macOS (Apple Silicon)**.
+Intel Macs are not supported: the mac build is arm64-thin, so it will not run
+on one. The artifact has no platform — it is a single HTML file.
+
 Both render the same components against the same dataset, the same design
 tokens and the same chart controller. They differ in exactly one file —
 [src/renderer/lib/source/](src/renderer/lib/source/) — which declares what each
@@ -77,6 +81,72 @@ npm run smoke:app      # headless render check of the desktop app
 > scripts still run, so [scripts/postinstall.ts](scripts/postinstall.ts) invokes
 > Electron's installer directly, and only when the binary is actually absent.
 
+### Installing it on your own Mac
+
+Nothing here is a port. The codebase carries no `win32` branch, and the two
+`darwin` branches it does have — `window-all-closed`, and the app menu with
+`close` in place of `quit` — are the ones macOS wants. Build it and copy it:
+
+```bash
+npm run pack
+rm -rf "/Applications/Price Action Mark.app"
+cp -R "release/mac-arm64/Price Action Mark.app" /Applications/
+```
+
+That is the whole install. **No Apple Developer account, no code signing, no
+notarization**, and no need for the dmg that `npm run dist` would produce — a
+dmg is a transport format, and nothing is being transported.
+
+The reason is Gatekeeper's trigger. It keys off the `com.apple.quarantine`
+attribute, which is written by whatever *downloads* a file: a browser, Mail,
+AirDrop. A bundle you built yourself was never downloaded, so it carries no
+such attribute and is never assessed. It opens from Finder, the Dock and
+Spotlight like any other app. This is why `electron-builder.yml` has no signing
+configuration and why the *"skipped macOS application code signing"* line on
+every `pack` is noise rather than a warning.
+
+Requires macOS 13, Electron 44's floor — which every Apple Silicon Mac clears.
+
+**This is an Apple Silicon build, and it is arm64-thin rather than universal**:
+7 executables and 6 dylibs in the bundle, all arm64, no x86_64 anywhere. It
+will not run on an Intel Mac, and it is never running under Rosetta, because
+there is no x86_64 code in it to translate. `electron-builder.yml` says
+`arch: [arm64]` deliberately; `npm run pack` builds the host architecture and
+ignores that list either way, so only `npm run dist` was ever affected.
+
+Menu accelerators are registered as `CmdOrCtrl`, so **every `Ctrl+X` in this
+README is `⌘X` on a Mac**. The buttons say it correctly themselves:
+[keys.ts](src/renderer/lib/keys.ts) writes each chord in the reader's own
+notation and in Apple's modifier order — `⇧⌘M`, not `⌘⇧M`.
+
+Two things make the app exit silently — no window, no error, exit 0 — and they
+are easy to mistake for each other:
+
+- **`open` hands the calling shell's environment to the app.** If that shell
+  exports `ELECTRON_RUN_AS_NODE=1`, the Electron binary runs as plain Node and
+  quits immediately. Finder, the Dock, Spotlight and a normal Terminal are
+  unaffected; a shell that has it needs `env -u ELECTRON_RUN_AS_NODE open …`.
+- **A leftover `npm run dev` runs under the name `Electron`,** not
+  `Price Action Mark`. It holds the single-instance lock, so the installed app
+  quits before drawing — and `pkill -f "Price Action Mark"` will not find it.
+  Use `pkill -f "node_modules/electron/dist"`.
+
+Settings, the dataset cache and your mark verdicts live in
+`~/Library/Application Support/price-action-mark/`. Deleting that directory
+resets the app to a first run; nothing in it is precious.
+
+> **If it ever has to leave this machine.** `scp`, a USB stick and `curl` do
+> not set the quarantine bit, but a browser, Mail and AirDrop do — and on a
+> quarantined install the current build fails the confusing way, reporting
+> *"is damaged and can't be opened"*. That is a broken bundle seal, not a
+> corrupt download: electron-builder inserts `app.asar` and a new `Info.plist`
+> into a bundle still carrying the Electron binary's inherited signature.
+> `codesign --force --deep --sign -` repairs the seal for free and turns the
+> dialog into the ordinary *"Apple could not verify…"*, which **Open Anyway**
+> under System Settings ▸ Privacy & Security clears. Signing with a Developer
+> ID but not notarizing is blocked identically, so for public distribution it
+> is notarize or don't bother.
+
 ## Scripts
 
 | | |
@@ -90,6 +160,8 @@ npm run smoke:app      # headless render check of the desktop app
 | `marks` | the marking layer's text oracle — see [Marking](#marking) |
 | `marks -- --read` | the bar-by-bar reading in words — see [Reading the bars](#reading-the-bars) |
 | `marks:check` | invariants + the regression fixture; exits non-zero on drift |
+| `tokens:check` | the palette's guard: the three scopes agree, contrast holds |
+| `icon` | [resources/icon.svg](resources/icon.svg) → `icon.png` + `icon.icns` |
 | `typecheck` | `tsc` over main/preload/scripts, `svelte-check` over the renderer |
 | `smoke` / `smoke:app` | load the built output in real Chromium and assert it drew |
 
@@ -597,7 +669,9 @@ Detection is a pure function of `(dataset, ruleConfig)`. Running all 31 over
 filters the result in **0.22 ms**. Nothing about rule output is ever written to
 disk — it would go stale against the candles the moment a session arrived.
 
-Two things persist, in `%APPDATA%/price-action-mark/marks/<symbol>.json`: the
+Two things persist, in `marks/<symbol>.json` under the app's userData
+directory (`~/Library/Application Support/price-action-mark/` on macOS,
+`%APPDATA%\price-action-mark\` on Windows): the
 reader's **keep / drop verdict** on each candidate, keyed by the mark's stable
 id, and (reserved, not yet written) hand-drawn marks.
 
@@ -1064,7 +1138,8 @@ several times faster).
 **Fit height** in the toolbar, or View → Maximize vertically (`Ctrl+Shift+M`),
 stretches the window to the full work-area height and leaves its width and
 horizontal position exactly where they were. Windows exposes this natively when
-you double-click a window's top or bottom edge, but Electron has no API for it,
+you double-click a window's top or bottom edge. Whatever the host OS offers,
+Electron exposes no API for it,
 so [main/window.ts](src/main/window.ts) does the arithmetic against the work
 area of whichever display the window is actually on.
 
