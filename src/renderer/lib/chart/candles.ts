@@ -455,6 +455,12 @@ export class CandleChart {
    * lists, and either can be showing while the other is. The primitive draws
    * the two bands in different colours for that reason.
    */
+  /** The stop and target rails on an entry — a display switch, not a filter:
+   *  the entries themselves are on the chart either way. */
+  setStopTarget(on: boolean): void {
+    this.#primitive.setStopTarget(on);
+  }
+
   setFocusBar(at: string | null): void {
     this.#primitive.setFocusBar(at);
   }

@@ -87,6 +87,19 @@
         >Confirmed only</button>
       </div>
 
+      <!-- Display only, so it sits with `Show marks` and the mode rather than
+           with the rules: it changes what an entry DRAWS, never which marks
+           exist. Disabled with the layer, like everything else in this row. -->
+      <label class="master">
+        <input
+          type="checkbox"
+          checked={marks.stopTarget}
+          disabled={!marks.enabled}
+          onchange={() => app.toggleStopTarget()}
+        />
+        Stop &amp; target
+      </label>
+
       <!-- The whole-list shortcut, in the LEFT cluster: this row divides into
            what is listed and what is kept, and the tally on the right owns the
            verdicts. It cannot live in the summary — a <summary> IS a button,

@@ -62,7 +62,11 @@
         case 'range':       app.setRange(command.value); break;
         case 'interval':    void app.setInterval(command.value); break;
         case 'session':     app.setSession(command.value); break;
-        case 'toggle':      command.value === 'rolls' ? app.toggleRolls() : app.toggleEma(); break;
+        case 'toggle':
+          if (command.value === 'rolls') app.toggleRolls();
+          else if (command.value === 'ema') app.toggleEma();
+          else app.toggleStopTarget();
+          break;
         case 'mark':        command.value === '*' ? app.toggleMarks() : app.toggleRule(command.value); break;
         case 'export':      void app.exportAs(command.value); break;
         case 'focus-chart': panel?.focus(); break;

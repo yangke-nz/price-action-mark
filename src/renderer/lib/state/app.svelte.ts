@@ -130,6 +130,7 @@ export class AppState {
     marks: {
       enabled: DEFAULT_SETTINGS.marks.enabled,
       show: DEFAULT_SETTINGS.marks.show,
+      stopTarget: DEFAULT_SETTINGS.marks.stopTarget,
       rules: { ...DEFAULT_SETTINGS.marks.rules },
       folded: { ...DEFAULT_SETTINGS.marks.folded },
     },
@@ -703,6 +704,9 @@ export class AppState {
     if (next.marks !== undefined) {
       if (next.marks.enabled !== s.marks.enabled) s.marks.enabled = next.marks.enabled;
       if (next.marks.show !== undefined && next.marks.show !== s.marks.show) s.marks.show = next.marks.show;
+      if (next.marks.stopTarget !== undefined && next.marks.stopTarget !== s.marks.stopTarget) {
+        s.marks.stopTarget = next.marks.stopTarget;
+      }
       const rules = next.marks.rules;
       for (const [id, on] of Object.entries(rules)) {
         if (s.marks.rules[id] !== on) s.marks.rules[id] = on;
@@ -975,6 +979,11 @@ export class AppState {
     void this.patch({ marks: { ...this.settings.marks, show } });
   }
 
+  /** The stop and target rails on an entry. Display only — see the field. */
+  toggleStopTarget(): void {
+    this.#patchMarks({ stopTarget: !this.settings.marks.stopTarget });
+  }
+
   /**
    * `$state.snapshot` is not optional here.
    *
@@ -1050,6 +1059,7 @@ export class AppState {
       marks: {
         enabled: m.enabled,
         show: m.show,
+        stopTarget: m.stopTarget,
         rules: m.rules,
         folded: m.folded,
         ...part,

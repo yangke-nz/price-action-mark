@@ -22,7 +22,7 @@ export const DEFAULTS: Settings = {
   range: '6M',
   showRolls: true,
   showEma: true,
-  marks: { enabled: true, show: 'all', rules: {}, folded: {} },
+  marks: { enabled: true, show: 'all', stopTarget: true, rules: {}, folded: {} },
   window: { width: 1320, height: 900, maximized: false },
 };
 
@@ -42,6 +42,9 @@ function coerceMarks(raw: unknown): MarkSettings {
   return {
     enabled: v['enabled'] !== false,
     show: v['show'] === 'confirmed' ? 'confirmed' : 'all',
+    // On unless the reader switched it off, the same shape `enabled` has: a
+    // settings file written before this field existed keeps the rails.
+    stopTarget: v['stopTarget'] !== false,
     rules: flags('rules'),
     // Same shape, same rules, same reason it is sparse.
     folded: flags('folded'),

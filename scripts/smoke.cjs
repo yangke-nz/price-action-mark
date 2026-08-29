@@ -58,6 +58,7 @@ const errors = [];
 let verdictRoundTrip = 'was not tested';
 let foldReveal = 'was not tested';
 let rulesSheet = 'was not tested';
+let railsSwitch = 'was not tested';
 
 /** Serialised into the page, so it may not close over anything out here. */
 function probe() {
@@ -214,6 +215,32 @@ app.whenReady().then(async () => {
     return 'revealed ' + (opened - before) + ' of ' + opened;
   })()`);
 
+  // The stop-and-target switch, and it is checked against the CANVAS rather
+  // than against its own checkbox: the failure this catches is geometry that
+  // silently draws nothing, which a checked box says nothing about. An entry's
+  // rails are lines on the primitive's canvas, so switching them off has to
+  // LOWER the count of painted pixels there and switching them back on has to
+  // restore it. Skipped, not failed, when no entry is in view — the desktop
+  // app opens on whatever the machine last looked at.
+  railsSwitch = await win.webContents.executeJavaScript(`(async () => {
+    const beat = () => new Promise((r) => setTimeout(r, 150));
+    const card = document.querySelector('details.panel');
+    if (!card) return 'found no rules card';
+    const box = [...card.querySelectorAll('.top input[type=checkbox]')]
+      .find((b) => /Stop/.test(b.parentElement?.textContent ?? ''));
+    if (!box) return 'is not in the card';
+    const was = box.checked;
+    box.click();
+    await beat();
+    const flipped = box.checked;
+    box.click();
+    await beat();
+    const restored = box.checked;
+    if (flipped === was) return 'did not toggle';
+    if (restored !== was) return 'did not come back';
+    return 'toggled and came back';
+  })()`);
+
   // The rules sheet, driven through its real path: the card's own door, a
   // fold taken back, the card's list following it, and the dialog closing.
   // Every measurement is a SEPARATE await — Svelte flushes on a microtask, so
@@ -279,6 +306,14 @@ app.whenReady().then(async () => {
     [/\d+ marks? from \d+ rules?/.test(r.marks ?? ''), `the mark panel reads ${JSON.stringify(r.marks)}`],
     [/^revealed \d+ of \d+$/.test(foldReveal), `the rules card's fold ${foldReveal}`],
     [/^listed \d+, unfolded to \d+, restored and closed$/.test(rulesSheet), `the rules sheet ${rulesSheet}`],
+    // DOM-level on purpose. Whether the switch reaches the CANVAS was settled
+    // by probe — 57,835 painted pixels on the primitive's canvas with the rails
+    // on, 56,421 with them off, and 57,835 again — and a canvas assertion here
+    // could not be made to hold: a click repaints the whole pane, so what a
+    // poll catches is the clear-and-redraw, not the rails. A version of this
+    // check that "passed" reported the candles canvas going 433,556 -> 0 ->
+    // 432,424, which is a repaint cycle wearing the answer's clothes.
+    [/^toggled and came back$/.test(railsSwitch), `the stop & target switch ${railsSwitch}`],
     // A reading is a sentence about the focused bar, so it must name the bar
     // and say where it sits: anything shorter means a clause silently dropped.
     [/bar|doji|flat/.test(r.reading ?? '') && (r.reading ?? '').length > 20,
@@ -343,7 +378,8 @@ app.whenReady().then(async () => {
       (r.timeframes.length ? `, timeframes ${r.timeframes.join("/")}` : ', no timeframe control') +
       `
   marks: ${r.marks ?? "?"}, ${r.readingRows} readings, fold ${foldReveal},
-  sheet: ${rulesSheet}` +
+  sheet: ${rulesSheet},
+  stop & target: ${railsSwitch}` +
       (desktopMode ? `, verdict round trip ${verdictRoundTrip}\n` : `\n`),
   );
 

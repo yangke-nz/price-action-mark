@@ -47,7 +47,8 @@ export type Command =
   | { kind: 'range'; value: Settings['range'] }
   | { kind: 'interval'; value: Interval }
   | { kind: 'session'; value: Session }
-  | { kind: 'toggle'; value: 'rolls' | 'ema' }
+  /** A display switch: nothing here changes what was detected. */
+  | { kind: 'toggle'; value: 'rolls' | 'ema' | 'stop-target' }
   /** A rule id, or '*' for the whole marking layer. */
   | { kind: 'mark'; value: string }
   | { kind: 'export'; value: 'csv' | 'json' | 'marks' }

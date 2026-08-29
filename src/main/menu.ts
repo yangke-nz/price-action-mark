@@ -146,6 +146,16 @@ export function buildMenu(settings: Settings): void {
               click: () => send({ kind: 'mark', value: '*' }),
             },
             {
+              // Display only, and it says so by sitting with `Show marks`
+              // rather than with the rules: an entry is on the chart either
+              // way, with or without the two prices that bound it.
+              label: 'Stop & target',
+              type: 'checkbox',
+              enabled: settings.marks.enabled,
+              checked: settings.marks.stopTarget,
+              click: () => send({ kind: 'toggle', value: 'stop-target' }),
+            },
+            {
               // The second door to the sheet. No accelerator: this is a
               // set-once dialog, and Ctrl+R/E/K/0-9 and Ctrl+Shift+E/M are
               // taken by things a reader uses every session.

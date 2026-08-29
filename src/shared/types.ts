@@ -84,6 +84,17 @@ export interface MarkSettings {
   /** `confirmed` hides every candidate the reader has not stood behind — the
    *  mode a chart should be in before it is published. */
   show: 'all' | 'confirmed';
+  /**
+   * Whether an entry draws its stop and target rails.
+   *
+   * An entry's box is the ENTRY — a band on the entry price — and the two
+   * prices that bound the trade are a second thing to say about it. On by
+   * default, because that is what the chart said before the switch existed;
+   * off is the reader quieting 1,655 pairs of rails down to their bands.
+   * Display only: detection, the outcome column and the verdicts are
+   * untouched, and the mark's note still spells all three prices out.
+   */
+  stopTarget: boolean;
   rules: Record<string, boolean>;
   /** Only the ids the reader moved off `Rule.tier`. `true` means "fold this
    *  away even though it ships listed", `false` the reverse; an absent id

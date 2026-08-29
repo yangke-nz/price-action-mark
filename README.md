@@ -749,6 +749,37 @@ Re-measured across all 20 rules with marks in a 6M viewport: 3,285–9,851 chang
 pixels each, all on the primitive's canvas, with the price axis untouched
 everywhere.
 
+### An entry is a band, and its stop and target are a switch
+
+An entry used to draw three things at once: a filled box from the entry down to
+the stop, a line at the entry, and a line at the target. The box and the line
+said the same thing twice, and the only clickable parts were the two thin rails.
+
+The box is the **entry** now — a band on the entry price, a quarter of the risk
+thick, stroked and filled, running from the signal bar to wherever the trade
+resolved. The thickness is in price rather than pixels, so it means the same
+thing at every zoom; the band runs half a bar past each end, because the order
+was live over those sessions and 573 of the 1,655 entries in the series resolve
+on the very next bar.
+
+The stop and the target are a second register: **dashed, thinner, and under a
+switch** — `Stop & target`, in the marking card's top row beside `Show marks`
+and in Marks ▸ *Stop & target*. Dashed rather than a second colour because tone
+already means direction here, and shape is the channel this project uses when it
+needs a second meaning. The switch is display only: it changes what an entry
+draws, never which marks exist, never the outcome column, never a verdict. It is
+on by default, and the artifact stores it only when a viewer switches it off.
+
+Two details are load-bearing. The switch reaches the **shape**, not the paint
+pass, so rails that are not drawn are also not in the hit test — a line nobody
+can see must not still be the thing under the cursor. And a **closed** polyline
+counts as a region: a band is about 14px tall at a 6M viewport, so its centre
+sits 7px from either edge and would miss the 6px hit slop, which would make the
+middle of a box the one place a click did not land. Filled areas are
+deliberately not treated the same way — a channel's band spans a hundred bars,
+and an interior always beats a nearby line, so one channel would swallow every
+click inside it.
+
 ### The doubles draw a level, not an M
 
 A double top used to draw as a three-point path — up to the first peak, down to

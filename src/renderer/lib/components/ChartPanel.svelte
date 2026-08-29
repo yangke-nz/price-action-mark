@@ -45,6 +45,7 @@
     instance.setRollsVisible(settings.showRolls);
     instance.showLastDays(daysFor(untrack(() => app.range)));
     instance.setMarks(untrack(() => app.marks));
+    instance.setStopTarget(settings.marks.stopTarget);
     instance.setSelected(untrack(() => app.selectedMark?.id ?? null));
     instance.setFocusBar(untrack(() => app.selectedBarDate));
 
@@ -90,6 +91,12 @@
   $effect(() => {
     const at = app.selectedBarDate;
     chart?.setFocusBar(at);
+  });
+  // Display only: it changes what an entry draws, never which marks exist, so
+  // it does not belong in the `app.marks` derivation.
+  $effect(() => {
+    const stopTarget = app.settings.marks.stopTarget;
+    chart?.setStopTarget(stopTarget);
   });
   $effect(() => {
     const showEma = app.settings.showEma;

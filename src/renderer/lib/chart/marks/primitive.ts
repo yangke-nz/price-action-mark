@@ -67,6 +67,14 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
    * rather than a mark — a session has no tone and needs none.
    */
   #focusBar: string | null = null;
+  /**
+   * Whether an entry draws its stop and target rails.
+   *
+   * It reaches `shapeOf` rather than the paint pass on purpose: the rails are
+   * part of the shape, so switching them off takes them out of the HIT TEST
+   * too. A rail nobody can see must not still be the thing under the cursor.
+   */
+  #stopTarget = true;
 
   /** Rebuilt each draw and reused by the hit test in the same frame. */
   #shapes: { mark: GeometryMark; shape: Shape }[] = [];
@@ -104,6 +112,7 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
     this.#selected = null;
     this.#focusBar = null;
   }
+
 
   paneViews(): readonly IPrimitivePaneView[] {
     return this.#views;
@@ -149,6 +158,13 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
   setFocusBar(at: string | null): void {
     if (at === this.#focusBar) return;
     this.#focusBar = at;
+    this.#requestUpdate?.();
+  }
+
+  /** The stop and target rails on an entry. See `#stopTarget`. */
+  setStopTarget(on: boolean): void {
+    if (on === this.#stopTarget) return;
+    this.#stopTarget = on;
     this.#requestUpdate?.();
   }
 
@@ -200,8 +216,9 @@ export class MarkPrimitive implements ISeriesPrimitive<Time> {
     // Read the palette once per frame rather than per mark: getComputedStyle
     // is the expensive call here, and every mark of a tone resolves the same.
     const tokens = readTokens();
+    const opts = { stopTarget: this.#stopTarget };
     for (const mark of this.#marks) {
-      const shape = shapeOf(mark, space);
+      const shape = shapeOf(mark, space, opts);
       if (shape) this.#shapes.push({ mark, shape });
     }
 

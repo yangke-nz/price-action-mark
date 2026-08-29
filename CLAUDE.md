@@ -357,6 +357,14 @@ Break one of these and it fails quietly, not loudly.
   autoscales alone and floats free of the candles.
 - **Per-bar colours live on the data points**, not series options — a restyle
   after a theme change needs `setData`, not `applyOptions`.
+- **`logicalToCoordinate` TAKES A FRACTIONAL LOGICAL AND ANSWERS NONSENSE.**
+  It is typed for a `Logical`, it does not complain, and it does not return
+  null — it returns a coordinate at the pane's left edge. An entry's band asked
+  for `i - 0.5` and `i + 0.5` to sit half a bar out at each end, and every band
+  in the viewport collapsed there: **170 lit pixels in canvas column 0** where
+  ten marks should have covered a few thousand, with no error anywhere. Measure
+  bar spacing from two INTEGER indices instead — `xAt(i + 1) - xAt(i)` — which
+  is what `#bandHalfWidth` in the primitive already does for the anchor band.
 - **Markers do not thin themselves.** All 104 roll arrows at MAX zoom become a
   picket fence; `#refreshMarkers()` drops them below ~18px separation and the
   readout says so rather than letting them silently vanish.
@@ -903,6 +911,59 @@ delete that directory first.
   in a trend (20+ bars in) whose breakout closes back inside within two sessions
   — and leaves "was it the last one" to the outcome column. It is the best of
   the non-measured-move entries at +0.46R.
+- **AN ENTRY IS DRAWN AS A BAND ON THE ENTRY PRICE, and its stop and target
+  are a SWITCH.** It used to draw three things at once — a filled box from
+  entry to stop, a line at the entry, a line at the target — of which the box
+  and the entry line said the same thing twice and nothing was clickable but
+  two thin rails. Now the box IS the entry: a band a quarter of the risk thick
+  (`BAND_SHARE` in draw.ts), stroked AND filled, running from the signal bar to
+  where the trade resolved. Four things in it were decided rather than
+  defaulted:
+  - **The thickness is in PRICE, not pixels** — a quarter of the risk — so it
+    means the same thing at every zoom instead of swelling into the candles
+    when the reader zooms out. A band on one price with no thickness is a line,
+    which is what this replaced.
+  - **It extends half a bar past each end**, unlike every other shape here,
+    which runs centre to centre. The band says the order was live over these
+    SESSIONS, and a session is a bar wide — and 573 of the 1,655 entries in the
+    series resolve on the very next bar, so centre to centre leaves those one
+    bar spacing of thin band. Measure that half bar from integer indices; see
+    the `logicalToCoordinate` trap above, which cost a debugging session.
+  - **`Shape.dashed` is a SECOND REGISTER, not a second shape.** The band is
+    the mark; the rails are a statement about it the reader can switch off, so
+    they are dashed and thinner whatever the tone says. Shape is the channel
+    this project uses for that — the same argument `caution` makes for being
+    dashed rather than a fourth hue. `distanceTo` measures them too: clicking
+    an entry's stop should find that entry, and when the rails are off they are
+    not in the shape to be found.
+  - **A CLOSED polyline in `lines` is a REGION, and its inside is a hit.** A
+    band is about 14px tall at a 6M viewport, so its centre — the entry price,
+    the exact thing the reader is aiming at — sits 7px from either edge and
+    would miss the 6px `HIT_SLOP` entirely. Deliberately NOT the same rule for
+    `fills`: a channel's band spans a hundred bars and an interior at distance
+    0 always beats a nearby line, so one channel would swallow every click
+    inside it. Verified by probe: hovering the middle of a band gives a pointer
+    cursor and a click there took the tally from *0 kept* to *1 kept*, with the
+    rails on and again with them off.
+  The switch is `settings.marks.stopTarget`, on by default because that is what
+  the chart said before it existed. It sits in the marking card's top row next
+  to `Show marks` and in Marks ▸ *Stop & target* — display only, so it belongs
+  with the master switch rather than with the rules, and it changes nothing
+  about detection, the outcome column or the verdicts. It reaches `shapeOf`
+  rather than the paint pass on purpose: a rail nobody can see must not still
+  be the thing under the cursor. The artifact stores it **only when it is
+  off**, the same sparseness `marks.show` and `folded` keep.
+  **`smoke.cjs` asserts it at DOM level, and that is a retreat worth
+  recording.** Whether the switch reaches the canvas was settled by probe —
+  57,835 painted pixels on the primitive's canvas with the rails on, 56,421
+  with them off, 57,835 again — but a canvas assertion inside the smoke could
+  not be made to hold: a click repaints the whole pane, so what a poll catches
+  is the clear-and-redraw rather than the rails. A version that "passed"
+  reported the candles canvas going 433,556 -> 0 -> 432,424, which is a repaint
+  cycle wearing the answer's clothes. Two lessons that generalise: hold NO
+  canvas element references across a layout change (the library replaces them,
+  and a stale one reads zero for ever, which looks exactly like a broken
+  feature), and a canvas count that changed is not a canvas count that settled.
 - **A DOUBLE IS DRAWN AS THE LEVEL, NOT AS THE M.** It was a three-point
   `path` — first peak, neckline pivot, second peak — which traced what price
   did and named nothing; what the pattern is *about* is the one price that was

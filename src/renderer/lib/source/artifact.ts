@@ -53,6 +53,9 @@ function readStored(): Settings {
         // other reading freezes today's default into storage the first time the
         // viewer touches the theme, and a later republish never reaches them.
         show: parsed.marks?.show ?? publishedDefault,
+        // On unless the viewer switched it off, exactly as `enabled` reads: a
+        // page stored before this field existed keeps the rails.
+        stopTarget: parsed.marks?.stopTarget !== false,
         rules: typeof parsed.marks?.rules === 'object' && parsed.marks.rules !== null
           ? parsed.marks.rules
           : {},
@@ -79,9 +82,14 @@ function writeStored(next: Settings): void {
     // from a choice, and the fold set is exactly the thing a republish should
     // still be able to change.
     const folds = Object.keys(marks.folded).length > 0 ? { folded: marks.folded } : {};
+    // And `stopTarget` only when it is OFF, which is the same rule once more:
+    // the rails are on by default, so storing that is storing nothing, and
+    // storing nothing is what lets the default still move.
+    const { stopTarget, ...rest } = marks;
+    const rails = stopTarget ? {} : { stopTarget: false };
     const stored = marks.show === publishedDefault
-      ? { enabled: marks.enabled, rules: marks.rules, ...folds }
-      : { ...marks, ...folds };
+      ? { enabled: marks.enabled, rules: marks.rules, ...folds, ...rails }
+      : { ...rest, ...folds, ...rails };
     localStorage.setItem(KEY, JSON.stringify({ theme, range, showRolls, showEma, marks: stored }));
   } catch {
     /* private window, blocked storage — the setting just does not persist */

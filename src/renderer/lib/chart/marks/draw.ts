@@ -36,6 +36,41 @@ export interface Shape {
   readonly lines: readonly (readonly Pt[])[];
   /** Filled at low alpha, then not stroked. */
   readonly fills: readonly (readonly Pt[])[];
+  /**
+   * Stroked DASHED whatever the tone says, and measured by the hit test like
+   * any other line.
+   *
+   * One shape, two registers. An entry's band is the mark; its stop and target
+   * rails are a second statement about it that the reader can switch off, so
+   * they have to be tellable apart from the band at a glance — and shape is
+   * the channel this project uses for that, the same argument `caution` makes
+   * for being dashed rather than a fourth hue. A caution-toned mark would dash
+   * its solid lines too and the two registers would stop being
+   * distinguishable; unreachable today, because a trade's tone is its
+   * direction.
+   */
+  readonly dashed?: readonly (readonly Pt[])[];
+}
+
+/**
+ * How thick an entry's band is, as a share of the trade's risk.
+ *
+ * The band marks the ENTRY, which is one price — and a line at one price is a
+ * line, not a box, so the box needs a thickness that means something. A
+ * quarter of the risk is small enough to read as a band on the entry rather
+ * than as a second risk box, and it is in PRICE rather than pixels, so it
+ * holds that meaning at every zoom instead of swelling into the candles.
+ */
+const BAND_SHARE = 0.25;
+
+/** A rail is a number the mark is about, not the mark: dashed, and thinner. */
+const RAIL_DASH = [5, 4];
+const RAIL_WIDTH_SHARE = 0.8;
+
+/** What the reader has switched on, for the shapes that offer a choice. */
+export interface ShapeOptions {
+  /** Draw an entry's stop and target rails. See `MarkSettings.stopTarget`. */
+  readonly stopTarget?: boolean;
 }
 
 /** Everything `shapeOf` is allowed to ask the chart. */
@@ -60,7 +95,11 @@ function priceAt(i0: number, p0: number, i1: number, p1: number, logical: number
   return p0 + ((p1 - p0) / (i1 - i0)) * (logical - i0);
 }
 
-export function shapeOf(mark: GeometryMark, space: Space): Shape | null {
+export function shapeOf(
+  mark: GeometryMark,
+  space: Space,
+  opts: ShapeOptions = {},
+): Shape | null {
   switch (mark.kind) {
     case 'segment':
     case 'channel': {
@@ -108,24 +147,49 @@ export function shapeOf(mark: GeometryMark, space: Space): Shape | null {
       const i0 = space.index(mark.at);
       const i1 = space.index(mark.through);
       if (i0 === undefined || i1 === undefined) return null;
-      const x0 = space.xAt(i0);
-      const x1 = space.xAt(i1);
-      const yEntry = space.y(mark.entry);
+      // Half a bar out at each end, unlike every other shape here, which runs
+      // centre to centre. The band says the order was live over these
+      // SESSIONS, and a session is a bar wide rather than a point — and 573 of
+      // the 1,655 entries in the series resolve on the very next bar, so
+      // centre to centre would leave those one bar spacing of thin band.
+      //
+      // Measured from two integer indices, NOT by asking for `i - 0.5`.
+      // `logicalToCoordinate` takes a fractional logical without complaining
+      // and answers nonsense for one: every band collapsed to a few pixels at
+      // the pane's left edge — 170 lit pixels in canvas column 0 for ten marks
+      // that should have covered a thousand. It fails silently, which is the
+      // whole reason this note is here.
+      const a = space.xAt(i0);
+      const b = space.xAt(i1);
+      const next = space.xAt(i0 + 1);
+      if (a === null || b === null) return null;
+      const halfBar = next === null ? 0 : Math.abs(next - a) / 2;
+      const x0: number | null = a - halfBar;
+      const x1: number | null = b + halfBar;
+      const half = Math.abs(mark.entry - mark.stop) * BAND_SHARE * 0.5;
+      const yTop = space.y(mark.entry + half);
+      const yBottom = space.y(mark.entry - half);
       const yStop = space.y(mark.stop);
       const yTarget = space.y(mark.target);
-      if (x0 === null || x1 === null || yEntry === null || yStop === null || yTarget === null) {
-        return null;
-      }
-      const box = (yTop: number, yBottom: number): Pt[] => [
-        { x: x0, y: yTop }, { x: x1, y: yTop }, { x: x1, y: yBottom }, { x: x0, y: yBottom },
+      if (x0 === null || x1 === null || yTop === null || yBottom === null) return null;
+
+      // The band is BOTH stroked and filled. A one-bar entry is a few pixels
+      // of box, where a fill at FILL_ALPHA alone is invisible — and unclickable
+      // as well, since the hit test measures `lines` and never a fill.
+      const band: Pt[] = [
+        { x: x0, y: yTop }, { x: x1, y: yTop },
+        { x: x1, y: yBottom }, { x: x0, y: yBottom }, { x: x0, y: yTop },
       ];
-      return {
-        lines: [
-          [{ x: x0, y: yEntry }, { x: x1, y: yEntry }],
-          [{ x: x0, y: yTarget }, { x: x1, y: yTarget }],
-        ],
-        fills: [box(yEntry, yStop)],
-      };
+      const rails: Pt[][] = [];
+      if (opts.stopTarget !== false) {
+        // One rail is dropped rather than the whole mark when its price is off
+        // the scale: `autoscaleInfo()` returns null on purpose and the
+        // measured-move targets reach 21x the risk, so a target below the
+        // visible low is ordinary here rather than exceptional.
+        if (yStop !== null) rails.push([{ x: x0, y: yStop }, { x: x1, y: yStop }]);
+        if (yTarget !== null) rails.push([{ x: x0, y: yTarget }, { x: x1, y: yTarget }]);
+      }
+      return { lines: [band], fills: [band], dashed: rails };
     }
   }
 }
@@ -180,7 +244,7 @@ export function paint(
     ctx.globalAlpha = SELECTED_HALO_ALPHA;
     ctx.lineWidth = SELECTED_HALO_WIDTH * hy;
     ctx.setLineDash([]);
-    for (const poly of shape.lines) {
+    for (const poly of [...shape.lines, ...(shape.dashed ?? [])]) {
       if (poly.length < 2) continue;
       trace(ctx, poly, hx, hy);
       ctx.stroke();
@@ -194,6 +258,17 @@ export function paint(
     if (poly.length < 2) continue;
     trace(ctx, poly, hx, hy);
     ctx.stroke();
+  }
+
+  // The second register, drawn after the mark it qualifies.
+  if (shape.dashed !== undefined && shape.dashed.length > 0) {
+    ctx.setLineDash(RAIL_DASH.map((v) => v * hx));
+    ctx.lineWidth = (selected ? SELECTED_WIDTH : 1.5) * RAIL_WIDTH_SHARE * hy;
+    for (const poly of shape.dashed) {
+      if (poly.length < 2) continue;
+      trace(ctx, poly, hx, hy);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -257,16 +332,51 @@ export function paintFocusBand(
   ctx.restore();
 }
 
-/** Shortest distance in CSS pixels from a point to any segment in the shape.
- *  The hit test and the renderer therefore agree by construction. */
+/**
+ * Shortest distance in CSS pixels from a point to any segment in the shape.
+ * The hit test and the renderer therefore agree by construction — the dashed
+ * rails included, because they belong to the mark: clicking an entry's stop
+ * should find that entry, and when the reader switches the rails off they are
+ * not in the shape to be found. The gaps in a dash are not holes in the hit
+ * test either; the polyline is measured whole, which is what someone aiming at
+ * a dashed line means by it.
+ */
 export function distanceTo(shape: Shape, x: number, y: number): number {
   let best = Number.POSITIVE_INFINITY;
-  for (const poly of shape.lines) {
+  for (const poly of [...shape.lines, ...(shape.dashed ?? [])]) {
+    // A CLOSED polyline is a region, and its inside counts as a hit. Only an
+    // entry's band closes today, and it has to: a band is about 14px tall at a
+    // 6M viewport, so its centre — the entry price, the exact thing the reader
+    // is aiming at — sits 7px from either edge and would MISS a 6px slop.
+    // Deliberately not the same rule for `fills`: a channel's band spans a
+    // hundred bars, and an interior at distance 0 always beats a nearby line,
+    // so filling that in would make one channel swallow every click inside it.
+    if (isClosed(poly) && inside(poly, x, y)) return 0;
     for (let k = 1; k < poly.length; k++) {
       best = Math.min(best, pointToSegment(x, y, poly[k - 1]!, poly[k]!));
     }
   }
   return best;
+}
+
+function isClosed(poly: readonly Pt[]): boolean {
+  if (poly.length < 4) return false;
+  const a = poly[0]!;
+  const b = poly[poly.length - 1]!;
+  return a.x === b.x && a.y === b.y;
+}
+
+/** Even-odd ray cast. The polygons here are rectangles; this is general
+ *  because the next closed shape may not be. */
+function inside(poly: readonly Pt[], x: number, y: number): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if ((a.y > y) === (b.y > y)) continue;
+    if (x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+  }
+  return hit;
 }
 
 function pointToSegment(x: number, y: number, a: Pt, b: Pt): number {
