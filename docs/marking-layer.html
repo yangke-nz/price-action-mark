@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Reference for Price Action Mark's marking layer: all 31 rules with measured hit rates, the structure dials, the walk-forward findings, and how detectors get tested.">
+<meta name="description" content="Reference for Price Action Mark's marking layer: all 31 rules with measured hit rates, the structure dials, the bar reading, the walk-forward findings, and how detectors get tested.">
 <style>
   /* Reset. The CSS below assumes no inherited margins: spacing is set
      explicitly or comes from flex/grid gap. */
@@ -33,6 +33,7 @@
     --ink: #0c1015;
     --ink-2: #4d5560;
     --muted: #828b96;
+    --muted-text: #676f7a;
 
     --grid: #e2e7ec;
     --axis: #c9d1d9;
@@ -40,13 +41,13 @@
 
     --up: #006300;
     --down: #e34948;
-    --neutral: #828b96;
     --up-text: #006300;
-    --down-text: #d03b3b;
+    --down-text: #cc3131;
     --ema: #4338ca;
+    --ema-text: #4338ca;
     --ema-wash: rgb(67 56 202 / 9%);
 
-    --focus: #2a78d6;
+    --focus: #2874d0;
     --shadow: 0 1px 2px rgb(12 16 21 / 5%), 0 8px 24px -12px rgb(12 16 21 / 18%);
 
     --sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -67,6 +68,7 @@
       --ink: #f2f5f8;
       --ink-2: #a8b1bc;
       --muted: #6d7681;
+      --muted-text: #7e8792;
 
       --grid: #23282e;
       --axis: #333a42;
@@ -74,10 +76,10 @@
 
       --up: #008300;
       --down: #e66767;
-      --neutral: #6d7681;
       --up-text: #0ca30c;
       --down-text: #e66767;
-      --ema: #93a5f4;
+      --ema: #2962ff;
+      --ema-text: #93a5f4;
       --ema-wash: rgb(147 165 244 / 12%);
 
       --focus: #3987e5;
@@ -95,6 +97,7 @@
     --ink: #f2f5f8;
     --ink-2: #a8b1bc;
     --muted: #6d7681;
+    --muted-text: #7e8792;
 
     --grid: #23282e;
     --axis: #333a42;
@@ -102,10 +105,10 @@
 
     --up: #008300;
     --down: #e66767;
-    --neutral: #6d7681;
     --up-text: #0ca30c;
     --down-text: #e66767;
-    --ema: #93a5f4;
+    --ema: #2962ff;
+    --ema-text: #93a5f4;
     --ema-wash: rgb(147 165 244 / 12%);
 
     --focus: #3987e5;
@@ -134,6 +137,12 @@
     max-width: 68ch;
   }
 
+  a {
+    color: var(--ema-text);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+
   :where(a):focus-visible,
   :where(button):focus-visible {
     outline: 2px solid var(--focus);
@@ -157,7 +166,7 @@
     font-weight: 500;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--ema);
+    color: var(--ema-text);
   }
 
   h1 {
@@ -213,7 +222,7 @@
 
   .fig span {
     font-size: 13px;
-    color: var(--muted);
+    color: var(--muted-text);
     line-height: 1.45;
   }
 
@@ -223,7 +232,7 @@
 
   .caption {
     font-size: 13px;
-    color: var(--muted);
+    color: var(--muted-text);
     max-width: 74ch;
   }
 
@@ -294,7 +303,7 @@
   .stage-file {
     font-family: var(--mono);
     font-size: 11.5px;
-    color: var(--ema);
+    color: var(--ema-text);
     word-break: break-word;
   }
 
@@ -324,7 +333,7 @@
     gap: 10px;
     font-family: var(--mono);
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--muted-text);
     margin-bottom: 26px;
   }
 
@@ -339,7 +348,7 @@
 
   .chain i {
     font-style: normal;
-    color: var(--ema);
+    color: var(--ema-text);
   }
 
   .group-head {
@@ -359,7 +368,7 @@
   .group-head .meta {
     font-family: var(--mono);
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--muted-text);
     font-variant-numeric: tabular-nums;
   }
 
@@ -386,7 +395,7 @@
     font-weight: 500;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-text);
     padding: 12px 16px;
     border-bottom: 1px solid var(--axis);
     background: var(--surface-2);
@@ -475,15 +484,27 @@
   }
 
   .flag.on {
-    color: var(--ema);
+    color: var(--ema-text);
     background: var(--ema-wash);
     border-color: color-mix(in srgb, var(--ema) 30%, transparent);
   }
 
   .flag.off {
-    color: var(--muted);
+    color: var(--muted-text);
     border-color: var(--axis);
     border-style: dashed;
+  }
+
+  /* A rule that ships off also ships FOLDED — the two flags mean different
+     things (usage vs density) but today the same ten rules carry both. */
+  .fold {
+    display: block;
+    margin-top: 5px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted-text);
+    white-space: nowrap;
   }
 
   /* A sketch of the shape, drawn the way the chart draws it: candle colours
@@ -567,7 +588,19 @@
   }
 
   .flow b { color: var(--ink); font-weight: 500; }
-  .flow i { color: var(--ema); font-style: normal; }
+
+  /* The reading's own colour grammar, lifted from Reading.svelte: tone colours
+     the BAR clause and nothing else, context is quiet, a named pattern is ink. */
+  .flow .bull { color: var(--up-text); }
+  .flow .bear { color: var(--down-text); }
+  .flow .neutral { color: var(--ink-2); }
+  .flow .caution { color: var(--ink); font-style: italic; }
+  .flow .ctx { color: var(--muted-text); }
+  .flow .pat { color: var(--ink); font-weight: 600; }
+  .flow .day { color: var(--muted-text); }
+
+  .scroller + .caption { margin-top: 12px; }
+  .flow i { color: var(--ema-text); font-style: normal; }
 
   ul {
     list-style: none;
@@ -600,12 +633,19 @@
   .r-pos { color: var(--up-text); font-weight: 500; }
   .r-neg { color: var(--down-text); font-weight: 500; }
 
+  /* Eight numeric columns, not five columns of prose: this one fits where the
+     catalogue's 1000px floor would force a sideways scroll for nothing. */
+  .scroller.narrow table { min-width: 620px; }
+  .scroller.narrow tbody td,
+  .scroller.narrow thead th { padding: 10px 14px; }
+  .scroller.narrow tbody td { vertical-align: middle; }
+
   footer {
     margin-top: 84px;
     padding-top: 26px;
     border-top: 1px solid var(--axis);
     font-size: 13px;
-    color: var(--muted);
+    color: var(--muted-text);
     display: flex;
     flex-wrap: wrap;
     gap: 6px 22px;
@@ -627,10 +667,11 @@
     <div class="eyebrow">Price Action Mark &middot; src/shared/marks/</div>
     <h1>The Marking Layer</h1>
     <p class="standfirst">
-      Thirty-one rules that read a daily tape the way Al Brooks describes it — the
-      special bars, the lines those bars form, and the entries those lines set up.
-      Rules propose candidates; <strong>the reader disposes</strong>, and only the
-      verdicts are ever written to disk.
+      Thirty-one rules that read a tape the way Al Brooks describes it — the
+      special bars, the lines those bars form, and the entries those lines set up
+      — plus one line of prose for every session. Rules propose candidates;
+      <strong>the reader disposes</strong>, and only the verdicts are ever
+      written to disk.
     </p>
   </header>
 
@@ -638,12 +679,15 @@
     <div class="fig"><b>31</b><span>rules, across three groups</span></div>
     <div class="fig"><b>6,550</b><span>ES=F sessions, to 2026-08-27</span></div>
     <div class="fig"><b>965</b><span>confirmed pivots</span></div>
-    <div class="fig"><b>0.56</b><span>marks per session, as shipped</span></div>
-    <div class="fig"><b>~45 ms</b><span>to run every rule, once</span></div>
+    <div class="fig"><b>0.71</b><span>marks per session, as shipped</span></div>
+    <div class="fig"><b>~37 ms</b><span>to run every rule, once</span></div>
   </div>
   <p class="caption">
     Counts are the committed fixture in <code>data/marks-golden.json</code> — the
     same numbers <code>npm&nbsp;run&nbsp;marks:check</code> holds the layer to.
+    The dataset is <strong>ES=F daily</strong>; the same rules run unchanged on
+    the five-minute series, and the density transfers — see
+    <a href="#timeframes">both bar sizes</a>.
   </p>
 
   <!-- ------------------------------------------------------------------ -->
@@ -674,6 +718,11 @@
         <p>One array. Push a <code>Rule</code> onto it and it appears in the panel, the menu, the CLI and the artifact.</p>
       </div>
       <div class="stage">
+        <div class="stage-file">marks/reading.ts</div>
+        <b>Reading</b>
+        <p>One line of prose per session, built from the marks <code>detect()</code> already produced &mdash; it names no pattern it did not import.</p>
+      </div>
+      <div class="stage">
         <div class="stage-file">chart/marks/draw.ts</div>
         <b>Geometry</b>
         <p>Marks become polylines in CSS pixels. The renderer strokes them; the hit test measures the same ones.</p>
@@ -693,9 +742,19 @@
         only thing that makes a rule testable at all.
       </p>
       <p>
-        Toggling a rule does not re-detect. The full pass is ~45&nbsp;ms; filtering
-        an already-computed result is <strong>0.26&nbsp;ms</strong>, so a checkbox
-        stays a checkbox rather than becoming 130&times; more expensive than it looks.
+        Toggling a rule does not re-detect. The full pass over 6,550 sessions is
+        ~37&nbsp;ms cold and ~15&nbsp;ms once the JIT is warm; filtering an
+        already-computed result is <strong>0.30&nbsp;ms</strong>, so a checkbox
+        stays a checkbox rather than becoming two orders of magnitude more
+        expensive than it looks.
+      </p>
+      <p>
+        The reading is hoisted the same way and for the same reason. The readout
+        asks for <em>one</em> bar's reading on every crosshair move, so
+        <code>readingIndex()</code> builds the date map once &mdash;
+        <strong>1.5&nbsp;ms</strong> &mdash; and <code>readAt()</code> is then a
+        pair of lookups at <strong>0.001&nbsp;ms</strong> a bar. Rebuilding that
+        map inline was 0.65&nbsp;ms <em>per pointer event</em>.
       </p>
     </div>
   </section>
@@ -727,16 +786,19 @@
         candles and marks in the same tokens, the tone the rule assigns, caution
         dashed rather than given a fourth hue, a bar label under a bullish mark and
         over a bearish one — and no text at all on the geometry, because the canvas
-        primitive draws none. Faint dashed guides are the sketch's own, marking the
-        level a pattern is measured against. The prices are invented; only the shapes
-        are the rule.
+        primitive draws none. <strong>Two kinds of dash</strong> appear and they
+        mean different things: a dash in the rule's own tone is the mark's
+        <em>second register</em> — an entry's stop and target rails, which the
+        reader can switch off — while a faint grey dash is the sketch's own guide,
+        marking a level the pattern is measured against and which the chart never
+        draws. The prices are invented; only the shapes are the rule.
       </p>
     </div>
 
     <!-- bars ---------------------------------------------------------- -->
     <div class="group-head">
       <h3>Bars &mdash; what a single session says</h3>
-      <div class="meta">15 rules &middot; 8,391 marks &middot; 10 on by default</div>
+      <div class="meta">15 rules &middot; 8,391 marks &middot; 9 on by default</div>
     </div>
 
     <div class="scroller">
@@ -758,7 +820,7 @@
             <td class="c-id">body &ge; 0.60</td>
             <td class="c-num">2,260</td>
             <td><div class="rate"><span class="bar"><i style="width:100%"></i></span><span class="pct">34.5%</span></div></td>
-            <td><span class="flag off">off</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-big-bar"><title id="fig-big-bar">A trend bar wider than 1.5 ATR beside ordinary sessions.</title><line x1="17.2" y1="37.77" x2="17.2" y2="47.87" stroke="var(--down)" stroke-width="1"/><rect x="13.7" y="43.54" width="7" height="2.88" fill="var(--down)"/><line x1="41.6" y1="40.65" x2="41.6" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="38.1" y="42.1" width="7" height="4.32" fill="var(--up)"/><line x1="66" y1="37.77" x2="66" y2="46.42" stroke="var(--down)" stroke-width="1"/><rect x="62.5" y="42.1" width="7" height="2.88" fill="var(--down)"/><line x1="90.4" y1="14.69" x2="90.4" y2="46.42" stroke="var(--up)" stroke-width="1"/><rect x="86.9" y="17.58" width="7" height="27.4" fill="var(--up)"/><line x1="114.8" y1="13.25" x2="114.8" y2="23.35" stroke="var(--down)" stroke-width="1"/><rect x="111.3" y="17.58" width="7" height="4.32" fill="var(--down)"/><text x="90.4" y="55.42" fill="var(--up)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">BIG</text></svg></td>
@@ -774,7 +836,7 @@
             <td class="c-id">body &le; 0.25</td>
             <td class="c-num">1,783</td>
             <td><div class="rate"><span class="bar"><i style="width:79%"></i></span><span class="pct">27.2%</span></div></td>
-            <td><span class="flag off">off</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-inside"><title id="fig-inside">A session held inside the previous high and low.</title><line x1="15.17" y1="26.29" x2="15.17" y2="39.34" stroke="var(--up)" stroke-width="1"/><rect x="11.67" y="29.55" width="7" height="3.27" fill="var(--up)"/><line x1="35.5" y1="23.03" x2="35.5" y2="36.08" stroke="var(--down)" stroke-width="1"/><rect x="32" y="29.55" width="7" height="3.27" fill="var(--down)"/><line x1="55.83" y1="13.25" x2="55.83" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="52.33" y="18.14" width="7" height="14.68" fill="var(--up)"/><line x1="76.17" y1="16.51" x2="76.17" y2="42.6" stroke="var(--down)" stroke-width="1"/><rect x="72.67" y="19.77" width="7" height="16.31" fill="var(--down)"/><line x1="96.5" y1="27.92" x2="96.5" y2="40.97" stroke="var(--up)" stroke-width="1"/><rect x="93" y="31.18" width="7" height="4.9" fill="var(--up)"/><line x1="116.83" y1="23.03" x2="116.83" y2="36.08" stroke="var(--up)" stroke-width="1"/><rect x="113.33" y="26.29" width="7" height="4.89" fill="var(--up)"/><line x1="48.83" y1="13.25" x2="103.5" y2="13.25" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="48.83" y1="50.75" x2="103.5" y2="50.75" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><text x="76.17" y="13.01" fill="var(--muted)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">ib</text></svg></td>
@@ -782,7 +844,7 @@
             <td class="c-id">&mdash;</td>
             <td class="c-num">777</td>
             <td><div class="rate"><span class="bar"><i style="width:34%"></i></span><span class="pct">11.9%</span></div></td>
-            <td><span class="flag off">off</span></td>
+            <td><span class="flag on">on</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-outside"><title id="fig-outside">A session taking out both sides of the one before.</title><line x1="15.17" y1="25.75" x2="15.17" y2="38.25" stroke="var(--up)" stroke-width="1"/><rect x="11.67" y="28.88" width="7" height="3.12" fill="var(--up)"/><line x1="35.5" y1="24.19" x2="35.5" y2="35.13" stroke="var(--down)" stroke-width="1"/><rect x="32" y="28.88" width="7" height="3.12" fill="var(--down)"/><line x1="55.83" y1="25.75" x2="55.83" y2="36.69" stroke="var(--up)" stroke-width="1"/><rect x="52.33" y="27.31" width="7" height="4.69" fill="var(--up)"/><line x1="76.17" y1="13.25" x2="76.17" y2="47.63" stroke="var(--down)" stroke-width="1"/><rect x="72.67" y="27.31" width="7" height="17.19" fill="var(--down)"/><line x1="96.5" y1="35.13" x2="96.5" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="93" y="38.25" width="7" height="6.25" fill="var(--up)"/><line x1="116.83" y1="32" x2="116.83" y2="42.94" stroke="var(--up)" stroke-width="1"/><rect x="113.33" y="35.13" width="7" height="3.12" fill="var(--up)"/><line x1="48.83" y1="25.75" x2="103.5" y2="25.75" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="48.83" y1="36.69" x2="103.5" y2="36.69" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><text x="76.17" y="9.75" fill="var(--muted)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">ob</text></svg></td>
@@ -790,7 +852,7 @@
             <td class="c-id">&mdash;</td>
             <td class="c-num">771</td>
             <td><div class="rate"><span class="bar"><i style="width:34%"></i></span><span class="pct">11.8%</span></div></td>
-            <td><span class="flag off">off</span></td>
+            <td><span class="flag on">on</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-ii"><title id="fig-ii">Two inside bars in a row: the range coils before it breaks.</title><line x1="17.2" y1="35.75" x2="17.2" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="13.7" y="39.5" width="7" height="3.75" fill="var(--up)"/><line x1="41.6" y1="24.5" x2="41.6" y2="47" stroke="var(--up)" stroke-width="1"/><rect x="38.1" y="28.25" width="7" height="11.25" fill="var(--up)"/><line x1="66" y1="13.25" x2="66" y2="50.75" stroke="var(--down)" stroke-width="1"/><rect x="62.5" y="28.25" width="7" height="18.75" fill="var(--down)"/><line x1="90.4" y1="17" x2="90.4" y2="48.87" stroke="var(--up)" stroke-width="1"/><rect x="86.9" y="20.75" width="7" height="26.25" fill="var(--up)"/><line x1="114.8" y1="18.88" x2="114.8" y2="45.12" stroke="var(--down)" stroke-width="1"/><rect x="111.3" y="20.75" width="7" height="22.5" fill="var(--down)"/><line x1="59" y1="13.25" x2="121.8" y2="13.25" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="59" y1="50.75" x2="121.8" y2="50.75" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><text x="114.8" y="15.38" fill="var(--muted)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">ii</text></svg></td>
@@ -822,7 +884,7 @@
             <td class="c-id">tail &le; 0.05</td>
             <td class="c-num">989</td>
             <td><div class="rate"><span class="bar"><i style="width:44%"></i></span><span class="pct">15.1%</span></div></td>
-            <td><span class="flag off">off</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-pin-bar"><title id="fig-pin-bar">One long tail rejecting the low; direction is the tail&rsquo;s opposite.</title><line x1="20.25" y1="13.25" x2="20.25" y2="24.5" stroke="var(--down)" stroke-width="1"/><rect x="16.75" y="18.88" width="7" height="3.75" fill="var(--down)"/><line x1="50.75" y1="17" x2="50.75" y2="28.25" stroke="var(--down)" stroke-width="1"/><rect x="47.25" y="22.63" width="7" height="3.75" fill="var(--down)"/><line x1="81.25" y1="20.75" x2="81.25" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="77.75" y="23.38" width="7" height="1.3" fill="var(--up)"/><line x1="111.75" y1="15.13" x2="111.75" y2="26.38" stroke="var(--up)" stroke-width="1"/><rect x="108.25" y="17" width="7" height="6.38" fill="var(--up)"/><text x="81.25" y="59.75" fill="var(--up)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">pin</text></svg></td>
@@ -830,7 +892,7 @@
             <td class="c-id">tail 0.60, 1 ATR</td>
             <td class="c-num">244</td>
             <td><div class="rate"><span class="bar"><i style="width:11%"></i></span><span class="pct">3.7%</span></div></td>
-            <td><span class="flag on">on</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-climax"><title id="fig-climax">An oversized bar ending a run — marked against the run, as exhaustion.</title><line x1="17.2" y1="46.34" x2="17.2" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="13.7" y="46.78" width="7" height="1.76" fill="var(--up)"/><line x1="41.6" y1="41.93" x2="41.6" y2="47.44" stroke="var(--up)" stroke-width="1"/><rect x="38.1" y="42.37" width="7" height="4.41" fill="var(--up)"/><line x1="66" y1="36.41" x2="66" y2="43.03" stroke="var(--up)" stroke-width="1"/><rect x="62.5" y="37.51" width="7" height="4.86" fill="var(--up)"/><line x1="90.4" y1="13.25" x2="90.4" y2="37.96" stroke="var(--up)" stroke-width="1"/><rect x="86.9" y="15.46" width="7" height="22.05" fill="var(--up)"/><line x1="114.8" y1="13.25" x2="114.8" y2="24.28" stroke="var(--down)" stroke-width="1"/><rect x="111.3" y="15.46" width="7" height="6.61" fill="var(--down)"/><text x="90.4" y="9.75" fill="var(--down)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">CLX</text></svg></td>
@@ -838,7 +900,7 @@
             <td class="c-id">2 ATR, run 3</td>
             <td class="c-num">38</td>
             <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.6%</span></div></td>
-            <td><span class="flag on">on</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-gap-bar"><title id="fig-gap-bar">An open clear of the previous range. Roll carry is excluded.</title><line x1="20.25" y1="39.5" x2="20.25" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="16.75" y="41.38" width="7" height="5.62" fill="var(--up)"/><line x1="50.75" y1="35.75" x2="50.75" y2="45.12" stroke="var(--up)" stroke-width="1"/><rect x="47.25" y="37.63" width="7" height="3.75" fill="var(--up)"/><line x1="81.25" y1="17" x2="81.25" y2="26.38" stroke="var(--up)" stroke-width="1"/><rect x="77.75" y="18.88" width="7" height="5.62" fill="var(--up)"/><line x1="111.75" y1="13.25" x2="111.75" y2="24.5" stroke="var(--up)" stroke-width="1"/><rect x="108.25" y="17" width="7" height="1.88" fill="var(--up)"/><line x1="43.75" y1="35.75" x2="88.25" y2="35.75" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="43.75" y1="24.5" x2="88.25" y2="24.5" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><text x="81.25" y="35.38" fill="var(--up)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">gap</text></svg></td>
@@ -846,7 +908,7 @@
             <td class="c-id">&mdash;</td>
             <td class="c-num">42</td>
             <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.6%</span></div></td>
-            <td><span class="flag on">on</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
             <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-breakout"><title id="fig-breakout">A trend bar closing beyond the range it had been held in.</title><line x1="15.17" y1="35.31" x2="15.17" y2="50.01" stroke="var(--down)" stroke-width="1"/><rect x="11.67" y="42.66" width="7" height="3.68" fill="var(--down)"/><line x1="35.5" y1="33.47" x2="35.5" y2="48.18" stroke="var(--up)" stroke-width="1"/><rect x="32" y="38.99" width="7" height="7.35" fill="var(--up)"/><line x1="55.83" y1="32.37" x2="55.83" y2="50.01" stroke="var(--down)" stroke-width="1"/><rect x="52.33" y="38.99" width="7" height="7.35" fill="var(--down)"/><line x1="76.17" y1="34.57" x2="76.17" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="72.67" y="37.15" width="7" height="9.19" fill="var(--up)"/><line x1="96.5" y1="33.1" x2="96.5" y2="46.34" stroke="var(--down)" stroke-width="1"/><rect x="93" y="37.15" width="7" height="5.51" fill="var(--down)"/><line x1="116.83" y1="13.25" x2="116.83" y2="44.5" stroke="var(--up)" stroke-width="1"/><rect x="113.33" y="15.09" width="7" height="27.57" fill="var(--up)"/><line x1="8.17" y1="32.37" x2="123.83" y2="32.37" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><text x="116.83" y="53.5" fill="var(--up)" font-family="var(--mono)" font-size="9.2" text-anchor="middle">BO</text></svg></td>
@@ -879,7 +941,7 @@
     <!-- lines --------------------------------------------------------- -->
     <div class="group-head">
       <h3>Lines &mdash; the shapes those bars build</h3>
-      <div class="meta">8 rules &middot; 980 marks &middot; all on by default</div>
+      <div class="meta">8 rules &middot; 980 marks &middot; 7 on by default</div>
     </div>
 
     <div class="scroller">
@@ -896,7 +958,7 @@
         </thead>
         <tbody>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-bull-channel"><title id="fig-bull-channel">Rising lows on one line, with the parallel rail and the band between.</title><line x1="12.63" y1="37.11" x2="12.63" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="9.13" y="39.84" width="7" height="8.18" fill="var(--up)"/><line x1="27.88" y1="33.7" x2="27.88" y2="47.34" stroke="var(--up)" stroke-width="1"/><rect x="24.38" y="36.43" width="7" height="8.18" fill="var(--up)"/><line x1="43.13" y1="30.3" x2="43.13" y2="43.93" stroke="var(--up)" stroke-width="1"/><rect x="39.63" y="33.02" width="7" height="8.18" fill="var(--up)"/><line x1="58.38" y1="26.89" x2="58.38" y2="40.52" stroke="var(--up)" stroke-width="1"/><rect x="54.88" y="29.61" width="7" height="8.19" fill="var(--up)"/><line x1="73.63" y1="23.48" x2="73.63" y2="37.11" stroke="var(--up)" stroke-width="1"/><rect x="70.13" y="26.2" width="7" height="8.19" fill="var(--up)"/><line x1="88.88" y1="20.07" x2="88.88" y2="33.7" stroke="var(--up)" stroke-width="1"/><rect x="85.38" y="22.8" width="7" height="8.18" fill="var(--up)"/><line x1="104.13" y1="16.66" x2="104.13" y2="30.3" stroke="var(--up)" stroke-width="1"/><rect x="100.63" y="19.39" width="7" height="8.18" fill="var(--up)"/><line x1="119.38" y1="13.25" x2="119.38" y2="26.89" stroke="var(--up)" stroke-width="1"/><rect x="115.88" y="15.98" width="7" height="8.18" fill="var(--up)"/><polygon points="12.63,50.75 119.38,26.89 119.38,13.25 12.63,37.11" fill="var(--up)" opacity="0.18"/><line x1="12.63" y1="50.75" x2="119.38" y2="26.89" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="12.63" y1="37.11" x2="119.38" y2="13.25" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-bull-channel"><title id="fig-bull-channel">Rising lows on one line, with the parallel rail and the band between.</title><line x1="12.63" y1="37.11" x2="12.63" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="9.13" y="39.84" width="7" height="8.18" fill="var(--up)"/><line x1="27.88" y1="33.7" x2="27.88" y2="47.34" stroke="var(--up)" stroke-width="1"/><rect x="24.38" y="36.43" width="7" height="8.18" fill="var(--up)"/><line x1="43.13" y1="30.3" x2="43.13" y2="43.93" stroke="var(--up)" stroke-width="1"/><rect x="39.63" y="33.02" width="7" height="8.18" fill="var(--up)"/><line x1="58.38" y1="26.89" x2="58.38" y2="40.52" stroke="var(--up)" stroke-width="1"/><rect x="54.88" y="29.61" width="7" height="8.19" fill="var(--up)"/><line x1="73.63" y1="23.48" x2="73.63" y2="37.11" stroke="var(--up)" stroke-width="1"/><rect x="70.13" y="26.2" width="7" height="8.19" fill="var(--up)"/><line x1="88.88" y1="20.07" x2="88.88" y2="33.7" stroke="var(--up)" stroke-width="1"/><rect x="85.38" y="22.8" width="7" height="8.18" fill="var(--up)"/><line x1="104.13" y1="16.66" x2="104.13" y2="30.3" stroke="var(--up)" stroke-width="1"/><rect x="100.63" y="19.39" width="7" height="8.18" fill="var(--up)"/><line x1="119.38" y1="13.25" x2="119.38" y2="26.89" stroke="var(--up)" stroke-width="1"/><rect x="115.88" y="15.98" width="7" height="8.18" fill="var(--up)"/><polygon points="12.63,50.75 119.38,26.89 119.38,13.25 12.63,37.11" fill="var(--up)" opacity="0.1"/><line x1="12.63" y1="50.75" x2="119.38" y2="26.89" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="12.63" y1="37.11" x2="119.38" y2="13.25" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Bull channel</b><span>Three or more rising lows on one line, tolerated to 0.4 ATR, with at most one close through it.</span><span class="c-id">bull-channel</span></td>
             <td class="c-id">3 touches</td>
             <td class="c-num">99</td>
@@ -904,7 +966,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-bear-channel"><title id="fig-bear-channel">The mirror: falling highs on one line.</title><line x1="12.63" y1="13.25" x2="12.63" y2="26.89" stroke="var(--down)" stroke-width="1"/><rect x="9.13" y="15.98" width="7" height="8.18" fill="var(--down)"/><line x1="27.88" y1="16.66" x2="27.88" y2="30.3" stroke="var(--down)" stroke-width="1"/><rect x="24.38" y="19.39" width="7" height="8.18" fill="var(--down)"/><line x1="43.13" y1="20.07" x2="43.13" y2="33.7" stroke="var(--down)" stroke-width="1"/><rect x="39.63" y="22.8" width="7" height="8.18" fill="var(--down)"/><line x1="58.38" y1="23.48" x2="58.38" y2="37.11" stroke="var(--down)" stroke-width="1"/><rect x="54.88" y="26.2" width="7" height="8.19" fill="var(--down)"/><line x1="73.63" y1="26.89" x2="73.63" y2="40.52" stroke="var(--down)" stroke-width="1"/><rect x="70.13" y="29.61" width="7" height="8.19" fill="var(--down)"/><line x1="88.88" y1="30.3" x2="88.88" y2="43.93" stroke="var(--down)" stroke-width="1"/><rect x="85.38" y="33.02" width="7" height="8.18" fill="var(--down)"/><line x1="104.13" y1="33.7" x2="104.13" y2="47.34" stroke="var(--down)" stroke-width="1"/><rect x="100.63" y="36.43" width="7" height="8.18" fill="var(--down)"/><line x1="119.38" y1="37.11" x2="119.38" y2="50.75" stroke="var(--down)" stroke-width="1"/><rect x="115.88" y="39.84" width="7" height="8.18" fill="var(--down)"/><polygon points="12.63,13.25 119.38,37.11 119.38,50.75 12.63,26.89" fill="var(--down)" opacity="0.18"/><line x1="12.63" y1="13.25" x2="119.38" y2="37.11" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="12.63" y1="26.89" x2="119.38" y2="50.75" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-bear-channel"><title id="fig-bear-channel">The mirror: falling highs on one line.</title><line x1="12.63" y1="13.25" x2="12.63" y2="26.89" stroke="var(--down)" stroke-width="1"/><rect x="9.13" y="15.98" width="7" height="8.18" fill="var(--down)"/><line x1="27.88" y1="16.66" x2="27.88" y2="30.3" stroke="var(--down)" stroke-width="1"/><rect x="24.38" y="19.39" width="7" height="8.18" fill="var(--down)"/><line x1="43.13" y1="20.07" x2="43.13" y2="33.7" stroke="var(--down)" stroke-width="1"/><rect x="39.63" y="22.8" width="7" height="8.18" fill="var(--down)"/><line x1="58.38" y1="23.48" x2="58.38" y2="37.11" stroke="var(--down)" stroke-width="1"/><rect x="54.88" y="26.2" width="7" height="8.19" fill="var(--down)"/><line x1="73.63" y1="26.89" x2="73.63" y2="40.52" stroke="var(--down)" stroke-width="1"/><rect x="70.13" y="29.61" width="7" height="8.19" fill="var(--down)"/><line x1="88.88" y1="30.3" x2="88.88" y2="43.93" stroke="var(--down)" stroke-width="1"/><rect x="85.38" y="33.02" width="7" height="8.18" fill="var(--down)"/><line x1="104.13" y1="33.7" x2="104.13" y2="47.34" stroke="var(--down)" stroke-width="1"/><rect x="100.63" y="36.43" width="7" height="8.18" fill="var(--down)"/><line x1="119.38" y1="37.11" x2="119.38" y2="50.75" stroke="var(--down)" stroke-width="1"/><rect x="115.88" y="39.84" width="7" height="8.18" fill="var(--down)"/><polygon points="12.63,13.25 119.38,37.11 119.38,50.75 12.63,26.89" fill="var(--down)" opacity="0.1"/><line x1="12.63" y1="13.25" x2="119.38" y2="37.11" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="12.63" y1="26.89" x2="119.38" y2="50.75" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Bear channel</b><span>The mirror: three or more falling highs on one line.</span><span class="c-id">bear-channel</span></td>
             <td class="c-id">3 touches</td>
             <td class="c-num">96</td>
@@ -912,7 +974,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-micro-channel"><title id="fig-micro-channel">Five bars each with a higher high and higher low, and no pullback to enter on.</title><line x1="15.17" y1="38.88" x2="15.17" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="11.67" y="41.26" width="7" height="2.37" fill="var(--up)"/><line x1="35.5" y1="34.14" x2="35.5" y2="48.38" stroke="var(--up)" stroke-width="1"/><rect x="32" y="36.98" width="7" height="8.55" fill="var(--up)"/><line x1="55.83" y1="28.91" x2="55.83" y2="43.16" stroke="var(--up)" stroke-width="1"/><rect x="52.33" y="31.76" width="7" height="8.55" fill="var(--up)"/><line x1="76.17" y1="23.69" x2="76.17" y2="37.93" stroke="var(--up)" stroke-width="1"/><rect x="72.67" y="26.54" width="7" height="8.55" fill="var(--up)"/><line x1="96.5" y1="18.47" x2="96.5" y2="32.71" stroke="var(--up)" stroke-width="1"/><rect x="93" y="21.32" width="7" height="8.54" fill="var(--up)"/><line x1="116.83" y1="13.25" x2="116.83" y2="27.49" stroke="var(--up)" stroke-width="1"/><rect x="113.33" y="16.1" width="7" height="8.54" fill="var(--up)"/><polygon points="35.5,48.38 116.83,27.49 116.83,13.25 35.5,34.14" fill="var(--up)" opacity="0.18"/><line x1="35.5" y1="48.38" x2="116.83" y2="27.49" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="35.5" y1="34.14" x2="116.83" y2="13.25" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-micro-channel"><title id="fig-micro-channel">Five bars each with a higher high and higher low, and no pullback to enter on.</title><line x1="15.17" y1="38.88" x2="15.17" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="11.67" y="41.26" width="7" height="2.37" fill="var(--up)"/><line x1="35.5" y1="34.14" x2="35.5" y2="48.38" stroke="var(--up)" stroke-width="1"/><rect x="32" y="36.98" width="7" height="8.55" fill="var(--up)"/><line x1="55.83" y1="28.91" x2="55.83" y2="43.16" stroke="var(--up)" stroke-width="1"/><rect x="52.33" y="31.76" width="7" height="8.55" fill="var(--up)"/><line x1="76.17" y1="23.69" x2="76.17" y2="37.93" stroke="var(--up)" stroke-width="1"/><rect x="72.67" y="26.54" width="7" height="8.55" fill="var(--up)"/><line x1="96.5" y1="18.47" x2="96.5" y2="32.71" stroke="var(--up)" stroke-width="1"/><rect x="93" y="21.32" width="7" height="8.54" fill="var(--up)"/><line x1="116.83" y1="13.25" x2="116.83" y2="27.49" stroke="var(--up)" stroke-width="1"/><rect x="113.33" y="16.1" width="7" height="8.54" fill="var(--up)"/><polygon points="35.5,48.38 116.83,27.49 116.83,13.25 35.5,34.14" fill="var(--up)" opacity="0.1"/><line x1="35.5" y1="48.38" x2="116.83" y2="27.49" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="35.5" y1="34.14" x2="116.83" y2="13.25" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Micro channel</b><span>Five or more consecutive bars each with a higher high and higher low, or the mirror. The strongest kind, and the one that offers no pullback entry.</span><span class="c-id">micro-channel</span></td>
             <td class="c-id">5 bars</td>
             <td class="c-num">238</td>
@@ -920,15 +982,15 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-spike-and-channel"><title id="fig-spike-and-channel">The steep run, then the shallower channel out of its end.</title><line x1="13.71" y1="39.54" x2="13.71" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="10.21" y="40.56" width="7" height="9.17" fill="var(--up)"/><line x1="31.14" y1="29.35" x2="31.14" y2="41.58" stroke="var(--up)" stroke-width="1"/><rect x="27.64" y="30.37" width="7" height="10.19" fill="var(--up)"/><line x1="48.57" y1="19.16" x2="48.57" y2="31.39" stroke="var(--up)" stroke-width="1"/><rect x="45.07" y="20.18" width="7" height="10.19" fill="var(--up)"/><line x1="66" y1="18.14" x2="66" y2="23.24" stroke="var(--up)" stroke-width="1"/><rect x="62.5" y="19.16" width="7" height="1.3" fill="var(--up)"/><line x1="83.43" y1="16.51" x2="83.43" y2="21.61" stroke="var(--up)" stroke-width="1"/><rect x="79.93" y="17.53" width="7" height="1.63" fill="var(--up)"/><line x1="100.86" y1="14.88" x2="100.86" y2="19.98" stroke="var(--up)" stroke-width="1"/><rect x="97.36" y="15.9" width="7" height="1.63" fill="var(--up)"/><line x1="118.29" y1="13.25" x2="118.29" y2="18.35" stroke="var(--up)" stroke-width="1"/><rect x="114.79" y="14.27" width="7" height="1.63" fill="var(--up)"/><line x1="13.71" y1="50.75" x2="48.57" y2="20.18" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><polygon points="66,23.24 118.29,18.35 118.29,13.25 66,18.14" fill="var(--up)" opacity="0.18"/><line x1="66" y1="23.24" x2="118.29" y2="18.35" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="66" y1="18.14" x2="118.29" y2="13.25" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-spike-and-channel"><title id="fig-spike-and-channel">The steep run, then the shallower channel out of its end.</title><line x1="13.71" y1="39.54" x2="13.71" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="10.21" y="40.56" width="7" height="9.17" fill="var(--up)"/><line x1="31.14" y1="29.35" x2="31.14" y2="41.58" stroke="var(--up)" stroke-width="1"/><rect x="27.64" y="30.37" width="7" height="10.19" fill="var(--up)"/><line x1="48.57" y1="19.16" x2="48.57" y2="31.39" stroke="var(--up)" stroke-width="1"/><rect x="45.07" y="20.18" width="7" height="10.19" fill="var(--up)"/><line x1="66" y1="18.14" x2="66" y2="23.24" stroke="var(--up)" stroke-width="1"/><rect x="62.5" y="19.16" width="7" height="1.3" fill="var(--up)"/><line x1="83.43" y1="16.51" x2="83.43" y2="21.61" stroke="var(--up)" stroke-width="1"/><rect x="79.93" y="17.53" width="7" height="1.63" fill="var(--up)"/><line x1="100.86" y1="14.88" x2="100.86" y2="19.98" stroke="var(--up)" stroke-width="1"/><rect x="97.36" y="15.9" width="7" height="1.63" fill="var(--up)"/><line x1="118.29" y1="13.25" x2="118.29" y2="18.35" stroke="var(--up)" stroke-width="1"/><rect x="114.79" y="14.27" width="7" height="1.63" fill="var(--up)"/><line x1="13.71" y1="50.75" x2="48.57" y2="20.18" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><polygon points="66,23.24 118.29,18.35 118.29,13.25 66,18.14" fill="var(--up)" opacity="0.1"/><line x1="66" y1="23.24" x2="118.29" y2="18.35" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="66" y1="18.14" x2="118.29" y2="13.25" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Spike and channel</b><span>Three or more trend bars covering 1.5 ATR, then a channel of at most 0.6&times; that slope. Marks where the trend stopped being one-way.</span><span class="c-id">spike-and-channel</span></td>
             <td class="c-id">1.5 ATR run</td>
             <td class="c-num">80</td>
             <td><div class="rate"><span class="bar"><i style="width:3%"></i></span><span class="pct">1.2%</span></div></td>
-            <td><span class="flag on">on</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-double-top"><title id="fig-double-top">Two highs within tolerance with a trough between them.</title><line x1="11.1" y1="44.58" x2="11.1" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="7.6" y="46.48" width="7" height="2.37" fill="var(--up)"/><line x1="23.3" y1="35.09" x2="23.3" y2="48.38" stroke="var(--up)" stroke-width="1"/><rect x="19.8" y="36.98" width="7" height="9.5" fill="var(--up)"/><line x1="35.5" y1="23.22" x2="35.5" y2="38.88" stroke="var(--up)" stroke-width="1"/><rect x="32" y="25.12" width="7" height="11.86" fill="var(--up)"/><line x1="47.7" y1="13.25" x2="47.7" y2="27.02" stroke="var(--up)" stroke-width="1"/><rect x="44.2" y="15.15" width="7" height="9.97" fill="var(--up)"/><line x1="59.9" y1="13.25" x2="59.9" y2="24.64" stroke="var(--down)" stroke-width="1"/><rect x="56.4" y="15.15" width="7" height="7.59" fill="var(--down)"/><line x1="72.1" y1="20.84" x2="72.1" y2="32.71" stroke="var(--down)" stroke-width="1"/><rect x="68.6" y="22.74" width="7" height="8.07" fill="var(--down)"/><line x1="84.3" y1="20.84" x2="84.3" y2="32.71" stroke="var(--up)" stroke-width="1"/><rect x="80.8" y="22.74" width="7" height="8.07" fill="var(--up)"/><line x1="96.5" y1="13.72" x2="96.5" y2="24.64" stroke="var(--up)" stroke-width="1"/><rect x="93" y="15.62" width="7" height="7.12" fill="var(--up)"/><line x1="108.7" y1="13.72" x2="108.7" y2="27.02" stroke="var(--down)" stroke-width="1"/><rect x="105.2" y="15.62" width="7" height="9.5" fill="var(--down)"/><line x1="120.9" y1="23.22" x2="120.9" y2="38.88" stroke="var(--down)" stroke-width="1"/><rect x="117.4" y="25.12" width="7" height="11.86" fill="var(--down)"/><polyline points="47.7,13.25 72.1,32.71 96.5,13.72" fill="none" stroke="var(--down)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-double-top"><title id="fig-double-top">The level two highs tested, drawn from the first peak on; the trough between them is the neckline.</title><line x1="11.1" y1="44.58" x2="11.1" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="7.6" y="46.48" width="7" height="2.37" fill="var(--up)"/><line x1="23.3" y1="35.09" x2="23.3" y2="48.38" stroke="var(--up)" stroke-width="1"/><rect x="19.8" y="36.98" width="7" height="9.5" fill="var(--up)"/><line x1="35.5" y1="23.22" x2="35.5" y2="38.88" stroke="var(--up)" stroke-width="1"/><rect x="32" y="25.12" width="7" height="11.86" fill="var(--up)"/><line x1="47.7" y1="13.25" x2="47.7" y2="27.02" stroke="var(--up)" stroke-width="1"/><rect x="44.2" y="15.15" width="7" height="9.97" fill="var(--up)"/><line x1="59.9" y1="13.25" x2="59.9" y2="24.64" stroke="var(--down)" stroke-width="1"/><rect x="56.4" y="15.15" width="7" height="7.59" fill="var(--down)"/><line x1="72.1" y1="20.84" x2="72.1" y2="32.71" stroke="var(--down)" stroke-width="1"/><rect x="68.6" y="22.74" width="7" height="8.07" fill="var(--down)"/><line x1="84.3" y1="20.84" x2="84.3" y2="32.71" stroke="var(--up)" stroke-width="1"/><rect x="80.8" y="22.74" width="7" height="8.07" fill="var(--up)"/><line x1="96.5" y1="13.72" x2="96.5" y2="24.64" stroke="var(--up)" stroke-width="1"/><rect x="93" y="15.62" width="7" height="7.12" fill="var(--up)"/><line x1="108.7" y1="13.72" x2="108.7" y2="27.02" stroke="var(--down)" stroke-width="1"/><rect x="105.2" y="15.62" width="7" height="9.5" fill="var(--down)"/><line x1="120.9" y1="23.22" x2="120.9" y2="38.88" stroke="var(--down)" stroke-width="1"/><rect x="117.4" y="25.12" width="7" height="11.86" fill="var(--down)"/><line x1="47.7" y1="32.71" x2="120.9" y2="32.71" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="47.7" y1="13.25" x2="120.9" y2="13.25" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Double top</b><span>Two highs within 0.5 ATR, 4&ndash;40 sessions apart, with a 1.5 ATR trough between them.</span><span class="c-id">double-top</span></td>
             <td class="c-id">0.5 ATR</td>
             <td class="c-num">112</td>
@@ -936,7 +998,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-double-bottom"><title id="fig-double-bottom">The mirror: two lows within tolerance with a peak between them.</title><line x1="11.1" y1="13.25" x2="11.1" y2="20.12" stroke="var(--up)" stroke-width="1"/><rect x="7.6" y="15.36" width="7" height="2.64" fill="var(--up)"/><line x1="23.3" y1="13.25" x2="23.3" y2="28.04" stroke="var(--down)" stroke-width="1"/><rect x="19.8" y="15.36" width="7" height="10.57" fill="var(--down)"/><line x1="35.5" y1="23.81" x2="35.5" y2="41.24" stroke="var(--down)" stroke-width="1"/><rect x="32" y="25.93" width="7" height="13.2" fill="var(--down)"/><line x1="47.7" y1="37.02" x2="47.7" y2="50.75" stroke="var(--down)" stroke-width="1"/><rect x="44.2" y="39.13" width="7" height="9.51" fill="var(--down)"/><line x1="59.9" y1="39.66" x2="59.9" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="56.4" y="41.77" width="7" height="6.87" fill="var(--up)"/><line x1="72.1" y1="29.1" x2="72.1" y2="43.88" stroke="var(--up)" stroke-width="1"/><rect x="68.6" y="31.21" width="7" height="10.56" fill="var(--up)"/><line x1="84.3" y1="29.1" x2="84.3" y2="43.88" stroke="var(--down)" stroke-width="1"/><rect x="80.8" y="31.21" width="7" height="10.56" fill="var(--down)"/><line x1="96.5" y1="39.66" x2="96.5" y2="50.22" stroke="var(--down)" stroke-width="1"/><rect x="93" y="41.77" width="7" height="6.34" fill="var(--down)"/><line x1="108.7" y1="37.02" x2="108.7" y2="50.22" stroke="var(--up)" stroke-width="1"/><rect x="105.2" y="39.13" width="7" height="8.98" fill="var(--up)"/><line x1="120.9" y1="23.81" x2="120.9" y2="41.24" stroke="var(--up)" stroke-width="1"/><rect x="117.4" y="25.93" width="7" height="13.2" fill="var(--up)"/><polyline points="47.7,50.75 72.1,29.1 96.5,50.22" fill="none" stroke="var(--up)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-double-bottom"><title id="fig-double-bottom">The mirror: the level two lows tested, with the peak between them as the neckline.</title><line x1="11.1" y1="13.25" x2="11.1" y2="20.12" stroke="var(--up)" stroke-width="1"/><rect x="7.6" y="15.36" width="7" height="2.64" fill="var(--up)"/><line x1="23.3" y1="13.25" x2="23.3" y2="28.04" stroke="var(--down)" stroke-width="1"/><rect x="19.8" y="15.36" width="7" height="10.57" fill="var(--down)"/><line x1="35.5" y1="23.81" x2="35.5" y2="41.24" stroke="var(--down)" stroke-width="1"/><rect x="32" y="25.93" width="7" height="13.2" fill="var(--down)"/><line x1="47.7" y1="37.02" x2="47.7" y2="50.75" stroke="var(--down)" stroke-width="1"/><rect x="44.2" y="39.13" width="7" height="9.51" fill="var(--down)"/><line x1="59.9" y1="39.66" x2="59.9" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="56.4" y="41.77" width="7" height="6.87" fill="var(--up)"/><line x1="72.1" y1="29.1" x2="72.1" y2="43.88" stroke="var(--up)" stroke-width="1"/><rect x="68.6" y="31.21" width="7" height="10.56" fill="var(--up)"/><line x1="84.3" y1="29.1" x2="84.3" y2="43.88" stroke="var(--down)" stroke-width="1"/><rect x="80.8" y="31.21" width="7" height="10.56" fill="var(--down)"/><line x1="96.5" y1="39.66" x2="96.5" y2="50.22" stroke="var(--down)" stroke-width="1"/><rect x="93" y="41.77" width="7" height="6.34" fill="var(--down)"/><line x1="108.7" y1="37.02" x2="108.7" y2="50.22" stroke="var(--up)" stroke-width="1"/><rect x="105.2" y="39.13" width="7" height="8.98" fill="var(--up)"/><line x1="120.9" y1="23.81" x2="120.9" y2="41.24" stroke="var(--up)" stroke-width="1"/><rect x="117.4" y="25.93" width="7" height="13.2" fill="var(--up)"/><line x1="47.7" y1="29.1" x2="120.9" y2="29.1" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="47.7" y1="50.75" x2="120.9" y2="50.75" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Double bottom</b><span>Two lows within 0.5 ATR, with a 1.5 ATR peak between them.</span><span class="c-id">double-bottom</span></td>
             <td class="c-id">0.5 ATR</td>
             <td class="c-num">79</td>
@@ -965,6 +1027,22 @@
 
     <div class="col">
       <div class="note">
+        <h3>A double is drawn as the level, not as the M</h3>
+        <p>
+          It was a three-point path — first peak, neckline pivot, second peak —
+          which traced what price did and named nothing. What the pattern is
+          <em>about</em> is the one price that was tested twice and held, so the
+          rule emits a <code>level</code>: the more extreme of the two peaks
+          (their mean would leave one poking through its own line, and they sit
+          within tolerance of each other anyway), running from the first peak to
+          <code>knownAt</code> so the line does not stop short of the sessions
+          that test it. The neckline is not lost — it is in the note, and
+          <code>dt-short</code> still projects the measured move from it. The id
+          is still built from the same two dates, so every verdict already on
+          disk still finds its mark.
+        </p>
+      </div>
+      <div class="note">
         <h3>A sliding window emits the same shape several times</h3>
         <p>
           Wedge and triangle scan five pivots at a time, so a genuinely coiling stretch
@@ -985,7 +1063,7 @@
     <!-- entries ------------------------------------------------------- -->
     <div class="group-head">
       <h3>Entries &mdash; what those shapes set up</h3>
-      <div class="meta">8 rules &middot; 1,655 marks &middot; 7 on by default</div>
+      <div class="meta">8 rules &middot; 1,655 marks &middot; 5 on by default</div>
     </div>
 
     <div class="scroller">
@@ -1002,15 +1080,15 @@
         </thead>
         <tbody>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-pullback-entry"><title id="fig-pullback-entry">A counted attempt to resume the trend: entry, risk box, target.</title><line x1="11.78" y1="44.5" x2="11.78" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="8.28" y="46.51" width="7" height="2.23" fill="var(--up)"/><line x1="25.33" y1="37.8" x2="25.33" y2="48.52" stroke="var(--up)" stroke-width="1"/><rect x="21.83" y="39.81" width="7" height="6.7" fill="var(--up)"/><line x1="38.89" y1="31.11" x2="38.89" y2="41.82" stroke="var(--up)" stroke-width="1"/><rect x="35.39" y="33.12" width="7" height="6.69" fill="var(--up)"/><line x1="52.44" y1="24.41" x2="52.44" y2="35.13" stroke="var(--up)" stroke-width="1"/><rect x="48.94" y="26.42" width="7" height="6.7" fill="var(--up)"/><line x1="66" y1="24.41" x2="66" y2="32.89" stroke="var(--down)" stroke-width="1"/><rect x="62.5" y="26.42" width="7" height="4.46" fill="var(--down)"/><line x1="79.56" y1="28.88" x2="79.56" y2="36.02" stroke="var(--down)" stroke-width="1"/><rect x="76.06" y="30.88" width="7" height="3.13" fill="var(--down)"/><line x1="93.11" y1="26.64" x2="93.11" y2="36.02" stroke="var(--up)" stroke-width="1"/><rect x="89.61" y="28.65" width="7" height="5.36" fill="var(--up)"/><line x1="106.67" y1="19.95" x2="106.67" y2="30.66" stroke="var(--up)" stroke-width="1"/><rect x="103.17" y="21.96" width="7" height="6.69" fill="var(--up)"/><line x1="120.22" y1="13.25" x2="120.22" y2="23.96" stroke="var(--up)" stroke-width="1"/><rect x="116.72" y="15.26" width="7" height="6.7" fill="var(--up)"/><rect x="79.56" y="30.21" width="40.66" height="6.25" fill="var(--up)" opacity="0.18"/><line x1="79.56" y1="30.21" x2="120.22" y2="30.21" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/><line x1="79.56" y1="17.71" x2="120.22" y2="17.71" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-pullback-entry"><title id="fig-pullback-entry">A counted attempt to resume the trend: entry, risk box, target.</title><line x1="11.78" y1="44.5" x2="11.78" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="8.28" y="46.51" width="7" height="2.23" fill="var(--up)"/><line x1="25.33" y1="37.8" x2="25.33" y2="48.52" stroke="var(--up)" stroke-width="1"/><rect x="21.83" y="39.81" width="7" height="6.7" fill="var(--up)"/><line x1="38.89" y1="31.11" x2="38.89" y2="41.82" stroke="var(--up)" stroke-width="1"/><rect x="35.39" y="33.12" width="7" height="6.69" fill="var(--up)"/><line x1="52.44" y1="24.41" x2="52.44" y2="35.13" stroke="var(--up)" stroke-width="1"/><rect x="48.94" y="26.42" width="7" height="6.7" fill="var(--up)"/><line x1="66" y1="24.41" x2="66" y2="32.89" stroke="var(--down)" stroke-width="1"/><rect x="62.5" y="26.42" width="7" height="4.46" fill="var(--down)"/><line x1="79.56" y1="28.88" x2="79.56" y2="36.02" stroke="var(--down)" stroke-width="1"/><rect x="76.06" y="30.88" width="7" height="3.13" fill="var(--down)"/><line x1="93.11" y1="26.64" x2="93.11" y2="36.02" stroke="var(--up)" stroke-width="1"/><rect x="89.61" y="28.65" width="7" height="5.36" fill="var(--up)"/><line x1="106.67" y1="19.95" x2="106.67" y2="30.66" stroke="var(--up)" stroke-width="1"/><rect x="103.17" y="21.96" width="7" height="6.69" fill="var(--up)"/><line x1="120.22" y1="13.25" x2="120.22" y2="23.96" stroke="var(--up)" stroke-width="1"/><rect x="116.72" y="15.26" width="7" height="6.7" fill="var(--up)"/><rect x="72.78" y="29.43" width="13.55" height="1.56" fill="var(--up)" opacity="0.1"/><rect x="72.78" y="29.43" width="13.55" height="1.56" fill="none" stroke="var(--up)" stroke-width="1.1" opacity="0.85"/><line x1="72.78" y1="36.46" x2="127" y2="36.46" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="72.78" y1="17.71" x2="127" y2="17.71" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Pullback entry (H1&ndash;H4 / L1&ndash;L4)</b><span>Every counted attempt to resume the trend. Around 800 over the series, so it ships off; the second entry is the subset worth watching.</span><span class="c-id">pullback-entry</span></td>
             <td class="c-id">cap 4</td>
             <td class="c-num">808</td>
             <td><div class="rate"><span class="bar"><i style="width:36%"></i></span><span class="pct">12.3%</span></div></td>
-            <td><span class="flag off">off</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-second-entry"><title id="fig-second-entry">The second attempt in the same leg — the subset worth watching.</title><line x1="11.78" y1="44.95" x2="11.78" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="8.28" y="46.81" width="7" height="2.08" fill="var(--up)"/><line x1="25.33" y1="38.73" x2="25.33" y2="48.68" stroke="var(--up)" stroke-width="1"/><rect x="21.83" y="40.6" width="7" height="6.21" fill="var(--up)"/><line x1="38.89" y1="32.52" x2="38.89" y2="42.46" stroke="var(--up)" stroke-width="1"/><rect x="35.39" y="34.38" width="7" height="6.22" fill="var(--up)"/><line x1="52.44" y1="32.52" x2="52.44" y2="39.15" stroke="var(--down)" stroke-width="1"/><rect x="48.94" y="34.38" width="7" height="2.9" fill="var(--down)"/><line x1="66" y1="31.69" x2="66" y2="39.15" stroke="var(--up)" stroke-width="1"/><rect x="62.5" y="33.55" width="7" height="3.73" fill="var(--up)"/><line x1="79.56" y1="27.34" x2="79.56" y2="35.42" stroke="var(--up)" stroke-width="1"/><rect x="76.06" y="29.2" width="7" height="4.35" fill="var(--up)"/><line x1="93.11" y1="27.34" x2="93.11" y2="34.59" stroke="var(--down)" stroke-width="1"/><rect x="89.61" y="29.2" width="7" height="3.53" fill="var(--down)"/><line x1="106.67" y1="25.27" x2="106.67" y2="34.59" stroke="var(--up)" stroke-width="1"/><rect x="103.17" y="27.13" width="7" height="5.6" fill="var(--up)"/><line x1="120.22" y1="19.05" x2="120.22" y2="29" stroke="var(--up)" stroke-width="1"/><rect x="116.72" y="20.92" width="7" height="6.21" fill="var(--up)"/><rect x="93.11" y="27.75" width="27.11" height="7.25" fill="var(--up)" opacity="0.18"/><line x1="93.11" y1="27.75" x2="120.22" y2="27.75" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/><line x1="93.11" y1="13.25" x2="120.22" y2="13.25" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-second-entry"><title id="fig-second-entry">The second attempt in the same leg — the subset worth watching.</title><line x1="11.78" y1="44.95" x2="11.78" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="8.28" y="46.81" width="7" height="2.08" fill="var(--up)"/><line x1="25.33" y1="38.73" x2="25.33" y2="48.68" stroke="var(--up)" stroke-width="1"/><rect x="21.83" y="40.6" width="7" height="6.21" fill="var(--up)"/><line x1="38.89" y1="32.52" x2="38.89" y2="42.46" stroke="var(--up)" stroke-width="1"/><rect x="35.39" y="34.38" width="7" height="6.22" fill="var(--up)"/><line x1="52.44" y1="32.52" x2="52.44" y2="39.15" stroke="var(--down)" stroke-width="1"/><rect x="48.94" y="34.38" width="7" height="2.9" fill="var(--down)"/><line x1="66" y1="31.69" x2="66" y2="39.15" stroke="var(--up)" stroke-width="1"/><rect x="62.5" y="33.55" width="7" height="3.73" fill="var(--up)"/><line x1="79.56" y1="27.34" x2="79.56" y2="35.42" stroke="var(--up)" stroke-width="1"/><rect x="76.06" y="29.2" width="7" height="4.35" fill="var(--up)"/><line x1="93.11" y1="27.34" x2="93.11" y2="34.59" stroke="var(--down)" stroke-width="1"/><rect x="89.61" y="29.2" width="7" height="3.53" fill="var(--down)"/><line x1="106.67" y1="25.27" x2="106.67" y2="34.59" stroke="var(--up)" stroke-width="1"/><rect x="103.17" y="27.13" width="7" height="5.6" fill="var(--up)"/><line x1="120.22" y1="19.05" x2="120.22" y2="29" stroke="var(--up)" stroke-width="1"/><rect x="116.72" y="20.92" width="7" height="6.21" fill="var(--up)"/><rect x="86.33" y="26.84" width="13.55" height="1.81" fill="var(--up)" opacity="0.1"/><rect x="86.33" y="26.84" width="13.55" height="1.81" fill="none" stroke="var(--up)" stroke-width="1.1" opacity="0.85"/><line x1="86.33" y1="35" x2="127" y2="35" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="86.33" y1="13.25" x2="127" y2="13.25" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Second entry (H2 / L2)</b><span>The second attempt to resume the trend, which Brooks treats as the highest-probability with-trend entry.</span><span class="c-id">second-entry</span></td>
             <td class="c-id">&mdash;</td>
             <td class="c-num">162</td>
@@ -1018,7 +1096,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-dt-short"><title id="fig-dt-short">Short the bar that turns the second peak; target is the measured move.</title><line x1="10.55" y1="43.43" x2="10.55" y2="49.38" stroke="var(--up)" stroke-width="1"/><rect x="7.33" y="45.26" width="6.43" height="2.29" fill="var(--up)"/><line x1="21.64" y1="34.29" x2="21.64" y2="47.09" stroke="var(--up)" stroke-width="1"/><rect x="18.42" y="36.12" width="6.43" height="9.14" fill="var(--up)"/><line x1="32.73" y1="22.85" x2="32.73" y2="37.95" stroke="var(--up)" stroke-width="1"/><rect x="29.51" y="24.68" width="6.43" height="11.44" fill="var(--up)"/><line x1="43.82" y1="13.25" x2="43.82" y2="26.51" stroke="var(--up)" stroke-width="1"/><rect x="40.6" y="15.08" width="6.43" height="9.6" fill="var(--up)"/><line x1="54.91" y1="13.25" x2="54.91" y2="24.23" stroke="var(--down)" stroke-width="1"/><rect x="51.69" y="15.08" width="6.43" height="7.32" fill="var(--down)"/><line x1="66" y1="20.57" x2="66" y2="32" stroke="var(--down)" stroke-width="1"/><rect x="62.78" y="22.4" width="6.43" height="7.77" fill="var(--down)"/><line x1="77.09" y1="20.57" x2="77.09" y2="32" stroke="var(--up)" stroke-width="1"/><rect x="73.87" y="22.4" width="6.43" height="7.77" fill="var(--up)"/><line x1="88.18" y1="13.71" x2="88.18" y2="24.23" stroke="var(--up)" stroke-width="1"/><rect x="84.96" y="15.54" width="6.43" height="6.86" fill="var(--up)"/><line x1="99.27" y1="13.71" x2="99.27" y2="26.51" stroke="var(--down)" stroke-width="1"/><rect x="96.05" y="15.54" width="6.43" height="9.14" fill="var(--down)"/><line x1="110.36" y1="22.85" x2="110.36" y2="37.95" stroke="var(--down)" stroke-width="1"/><rect x="107.14" y="24.68" width="6.43" height="11.44" fill="var(--down)"/><line x1="121.45" y1="34.29" x2="121.45" y2="44.8" stroke="var(--down)" stroke-width="1"/><rect x="118.23" y="36.12" width="6.43" height="6.86" fill="var(--down)"/><polyline points="43.82,13.25 66,32 88.18,13.71" fill="none" stroke="var(--down)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/><rect x="88.18" y="13.25" width="33.27" height="10.75" fill="var(--down)" opacity="0.18"/><line x1="88.18" y1="24" x2="121.45" y2="24" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/><line x1="88.18" y1="50.75" x2="121.45" y2="50.75" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-dt-short"><title id="fig-dt-short">Short the bar that turns the second peak; target is the measured move.</title><line x1="10.55" y1="43.43" x2="10.55" y2="49.38" stroke="var(--up)" stroke-width="1"/><rect x="7.33" y="45.26" width="6.43" height="2.29" fill="var(--up)"/><line x1="21.64" y1="34.29" x2="21.64" y2="47.09" stroke="var(--up)" stroke-width="1"/><rect x="18.42" y="36.12" width="6.43" height="9.14" fill="var(--up)"/><line x1="32.73" y1="22.85" x2="32.73" y2="37.95" stroke="var(--up)" stroke-width="1"/><rect x="29.51" y="24.68" width="6.43" height="11.44" fill="var(--up)"/><line x1="43.82" y1="13.25" x2="43.82" y2="26.51" stroke="var(--up)" stroke-width="1"/><rect x="40.6" y="15.08" width="6.43" height="9.6" fill="var(--up)"/><line x1="54.91" y1="13.25" x2="54.91" y2="24.23" stroke="var(--down)" stroke-width="1"/><rect x="51.69" y="15.08" width="6.43" height="7.32" fill="var(--down)"/><line x1="66" y1="20.57" x2="66" y2="32" stroke="var(--down)" stroke-width="1"/><rect x="62.78" y="22.4" width="6.43" height="7.77" fill="var(--down)"/><line x1="77.09" y1="20.57" x2="77.09" y2="32" stroke="var(--up)" stroke-width="1"/><rect x="73.87" y="22.4" width="6.43" height="7.77" fill="var(--up)"/><line x1="88.18" y1="13.71" x2="88.18" y2="24.23" stroke="var(--up)" stroke-width="1"/><rect x="84.96" y="15.54" width="6.43" height="6.86" fill="var(--up)"/><line x1="99.27" y1="13.71" x2="99.27" y2="26.51" stroke="var(--down)" stroke-width="1"/><rect x="96.05" y="15.54" width="6.43" height="9.14" fill="var(--down)"/><line x1="110.36" y1="22.85" x2="110.36" y2="37.95" stroke="var(--down)" stroke-width="1"/><rect x="107.14" y="24.68" width="6.43" height="11.44" fill="var(--down)"/><line x1="121.45" y1="34.29" x2="121.45" y2="44.8" stroke="var(--down)" stroke-width="1"/><rect x="118.23" y="36.12" width="6.43" height="6.86" fill="var(--down)"/><line x1="43.82" y1="32" x2="121.45" y2="32" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="43.82" y1="13.25" x2="121.45" y2="13.25" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><rect x="82.64" y="22.66" width="11.09" height="2.69" fill="var(--down)" opacity="0.1"/><rect x="82.64" y="22.66" width="11.09" height="2.69" fill="none" stroke="var(--down)" stroke-width="1.1" opacity="0.85"/><line x1="82.64" y1="13.25" x2="127" y2="13.25" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="82.64" y1="50.75" x2="127" y2="50.75" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Double top short</b><span>Short the bar that turns the second peak. Target is the measured move: the pattern height projected down from the neckline.</span><span class="c-id">dt-short</span></td>
             <td class="c-id">measured move</td>
             <td class="c-num">112</td>
@@ -1026,7 +1104,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-db-long"><title id="fig-db-long">Long the bar that turns the second trough, to the same projection.</title><line x1="10.55" y1="18.25" x2="10.55" y2="24.16" stroke="var(--up)" stroke-width="1"/><rect x="7.33" y="20.07" width="6.43" height="2.27" fill="var(--up)"/><line x1="21.64" y1="18.25" x2="21.64" y2="30.98" stroke="var(--down)" stroke-width="1"/><rect x="18.42" y="20.07" width="6.43" height="9.09" fill="var(--down)"/><line x1="32.73" y1="27.34" x2="32.73" y2="42.34" stroke="var(--down)" stroke-width="1"/><rect x="29.51" y="29.16" width="6.43" height="11.36" fill="var(--down)"/><line x1="43.82" y1="38.7" x2="43.82" y2="50.52" stroke="var(--down)" stroke-width="1"/><rect x="40.6" y="40.52" width="6.43" height="8.18" fill="var(--down)"/><line x1="54.91" y1="40.98" x2="54.91" y2="50.52" stroke="var(--up)" stroke-width="1"/><rect x="51.69" y="42.8" width="6.43" height="5.9" fill="var(--up)"/><line x1="66" y1="31.89" x2="66" y2="44.61" stroke="var(--up)" stroke-width="1"/><rect x="62.78" y="33.7" width="6.43" height="9.1" fill="var(--up)"/><line x1="77.09" y1="31.89" x2="77.09" y2="44.61" stroke="var(--down)" stroke-width="1"/><rect x="73.87" y="33.7" width="6.43" height="9.1" fill="var(--down)"/><line x1="88.18" y1="40.98" x2="88.18" y2="50.07" stroke="var(--down)" stroke-width="1"/><rect x="84.96" y="42.8" width="6.43" height="5.45" fill="var(--down)"/><line x1="99.27" y1="38.7" x2="99.27" y2="50.07" stroke="var(--up)" stroke-width="1"/><rect x="96.05" y="40.52" width="6.43" height="7.73" fill="var(--up)"/><line x1="110.36" y1="27.34" x2="110.36" y2="42.34" stroke="var(--up)" stroke-width="1"/><rect x="107.14" y="29.16" width="6.43" height="11.36" fill="var(--up)"/><line x1="121.45" y1="20.52" x2="121.45" y2="30.98" stroke="var(--up)" stroke-width="1"/><rect x="118.23" y="22.34" width="6.43" height="6.82" fill="var(--up)"/><polyline points="43.82,50.52 66,31.89 88.18,50.07" fill="none" stroke="var(--up)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/><rect x="88.18" y="40.3" width="33.27" height="10.45" fill="var(--up)" opacity="0.18"/><line x1="88.18" y1="40.3" x2="121.45" y2="40.3" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/><line x1="88.18" y1="13.25" x2="121.45" y2="13.25" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-db-long"><title id="fig-db-long">Long the bar that turns the second trough, to the same projection.</title><line x1="10.55" y1="18.25" x2="10.55" y2="24.16" stroke="var(--up)" stroke-width="1"/><rect x="7.33" y="20.07" width="6.43" height="2.27" fill="var(--up)"/><line x1="21.64" y1="18.25" x2="21.64" y2="30.98" stroke="var(--down)" stroke-width="1"/><rect x="18.42" y="20.07" width="6.43" height="9.09" fill="var(--down)"/><line x1="32.73" y1="27.34" x2="32.73" y2="42.34" stroke="var(--down)" stroke-width="1"/><rect x="29.51" y="29.16" width="6.43" height="11.36" fill="var(--down)"/><line x1="43.82" y1="38.7" x2="43.82" y2="50.52" stroke="var(--down)" stroke-width="1"/><rect x="40.6" y="40.52" width="6.43" height="8.18" fill="var(--down)"/><line x1="54.91" y1="40.98" x2="54.91" y2="50.52" stroke="var(--up)" stroke-width="1"/><rect x="51.69" y="42.8" width="6.43" height="5.9" fill="var(--up)"/><line x1="66" y1="31.89" x2="66" y2="44.61" stroke="var(--up)" stroke-width="1"/><rect x="62.78" y="33.7" width="6.43" height="9.1" fill="var(--up)"/><line x1="77.09" y1="31.89" x2="77.09" y2="44.61" stroke="var(--down)" stroke-width="1"/><rect x="73.87" y="33.7" width="6.43" height="9.1" fill="var(--down)"/><line x1="88.18" y1="40.98" x2="88.18" y2="50.07" stroke="var(--down)" stroke-width="1"/><rect x="84.96" y="42.8" width="6.43" height="5.45" fill="var(--down)"/><line x1="99.27" y1="38.7" x2="99.27" y2="50.07" stroke="var(--up)" stroke-width="1"/><rect x="96.05" y="40.52" width="6.43" height="7.73" fill="var(--up)"/><line x1="110.36" y1="27.34" x2="110.36" y2="42.34" stroke="var(--up)" stroke-width="1"/><rect x="107.14" y="29.16" width="6.43" height="11.36" fill="var(--up)"/><line x1="121.45" y1="20.52" x2="121.45" y2="30.98" stroke="var(--up)" stroke-width="1"/><rect x="118.23" y="22.34" width="6.43" height="6.82" fill="var(--up)"/><line x1="43.82" y1="31.89" x2="121.45" y2="31.89" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="43.82" y1="50.52" x2="121.45" y2="50.52" stroke="var(--up)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><rect x="82.64" y="38.99" width="11.09" height="2.61" fill="var(--up)" opacity="0.1"/><rect x="82.64" y="38.99" width="11.09" height="2.61" fill="none" stroke="var(--up)" stroke-width="1.1" opacity="0.85"/><line x1="82.64" y1="50.75" x2="127" y2="50.75" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="82.64" y1="13.25" x2="127" y2="13.25" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Double bottom long</b><span>Long the bar that turns the second trough. Target is the pattern height projected up from the neckline.</span><span class="c-id">db-long</span></td>
             <td class="c-id">measured move</td>
             <td class="c-num">79</td>
@@ -1034,7 +1112,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-wedge-reversal"><title id="fig-wedge-reversal">Traded against the third push, back to where the wedge began.</title><line x1="10.55" y1="44.28" x2="10.55" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="7.33" y="46.16" width="6.43" height="2.7" fill="var(--up)"/><line x1="21.64" y1="30.79" x2="21.64" y2="48.05" stroke="var(--up)" stroke-width="1"/><rect x="18.42" y="32.67" width="6.43" height="13.49" fill="var(--up)"/><line x1="32.73" y1="30.79" x2="32.73" y2="41.04" stroke="var(--down)" stroke-width="1"/><rect x="29.51" y="32.67" width="6.43" height="6.48" fill="var(--down)"/><line x1="43.82" y1="28.09" x2="43.82" y2="41.04" stroke="var(--up)" stroke-width="1"/><rect x="40.6" y="29.98" width="6.43" height="9.17" fill="var(--up)"/><line x1="54.91" y1="19.99" x2="54.91" y2="31.87" stroke="var(--up)" stroke-width="1"/><rect x="51.69" y="21.88" width="6.43" height="8.1" fill="var(--up)"/><line x1="66" y1="19.99" x2="66" y2="27.55" stroke="var(--down)" stroke-width="1"/><rect x="62.78" y="21.88" width="6.43" height="3.78" fill="var(--down)"/><line x1="77.09" y1="17.3" x2="77.09" y2="27.55" stroke="var(--up)" stroke-width="1"/><rect x="73.87" y="19.19" width="6.43" height="6.47" fill="var(--up)"/><line x1="88.18" y1="13.52" x2="88.18" y2="21.07" stroke="var(--up)" stroke-width="1"/><rect x="84.96" y="15.41" width="6.43" height="3.78" fill="var(--up)"/><line x1="99.27" y1="13.52" x2="99.27" y2="26.47" stroke="var(--down)" stroke-width="1"/><rect x="96.05" y="15.41" width="6.43" height="9.17" fill="var(--down)"/><line x1="110.36" y1="22.69" x2="110.36" y2="37.26" stroke="var(--down)" stroke-width="1"/><rect x="107.14" y="24.58" width="6.43" height="10.79" fill="var(--down)"/><line x1="121.45" y1="33.48" x2="121.45" y2="45.35" stroke="var(--down)" stroke-width="1"/><rect x="118.23" y="35.37" width="6.43" height="8.1" fill="var(--down)"/><line x1="21.64" y1="30.25" x2="88.18" y2="13.52" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="32.73" y1="41.04" x2="66" y2="27.55" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><rect x="88.18" y="13.25" width="33.27" height="9.17" fill="var(--down)" opacity="0.18"/><line x1="88.18" y1="22.42" x2="121.45" y2="22.42" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/><line x1="88.18" y1="46.16" x2="121.45" y2="46.16" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-wedge-reversal"><title id="fig-wedge-reversal">Traded against the third push, back to where the wedge began.</title><line x1="10.55" y1="44.28" x2="10.55" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="7.33" y="46.16" width="6.43" height="2.7" fill="var(--up)"/><line x1="21.64" y1="30.79" x2="21.64" y2="48.05" stroke="var(--up)" stroke-width="1"/><rect x="18.42" y="32.67" width="6.43" height="13.49" fill="var(--up)"/><line x1="32.73" y1="30.79" x2="32.73" y2="41.04" stroke="var(--down)" stroke-width="1"/><rect x="29.51" y="32.67" width="6.43" height="6.48" fill="var(--down)"/><line x1="43.82" y1="28.09" x2="43.82" y2="41.04" stroke="var(--up)" stroke-width="1"/><rect x="40.6" y="29.98" width="6.43" height="9.17" fill="var(--up)"/><line x1="54.91" y1="19.99" x2="54.91" y2="31.87" stroke="var(--up)" stroke-width="1"/><rect x="51.69" y="21.88" width="6.43" height="8.1" fill="var(--up)"/><line x1="66" y1="19.99" x2="66" y2="27.55" stroke="var(--down)" stroke-width="1"/><rect x="62.78" y="21.88" width="6.43" height="3.78" fill="var(--down)"/><line x1="77.09" y1="17.3" x2="77.09" y2="27.55" stroke="var(--up)" stroke-width="1"/><rect x="73.87" y="19.19" width="6.43" height="6.47" fill="var(--up)"/><line x1="88.18" y1="13.52" x2="88.18" y2="21.07" stroke="var(--up)" stroke-width="1"/><rect x="84.96" y="15.41" width="6.43" height="3.78" fill="var(--up)"/><line x1="99.27" y1="13.52" x2="99.27" y2="26.47" stroke="var(--down)" stroke-width="1"/><rect x="96.05" y="15.41" width="6.43" height="9.17" fill="var(--down)"/><line x1="110.36" y1="22.69" x2="110.36" y2="37.26" stroke="var(--down)" stroke-width="1"/><rect x="107.14" y="24.58" width="6.43" height="10.79" fill="var(--down)"/><line x1="121.45" y1="33.48" x2="121.45" y2="45.35" stroke="var(--down)" stroke-width="1"/><rect x="118.23" y="35.37" width="6.43" height="8.1" fill="var(--down)"/><line x1="21.64" y1="30.25" x2="88.18" y2="13.52" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><line x1="32.73" y1="41.04" x2="66" y2="27.55" stroke="var(--down)" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/><rect x="82.64" y="21.27" width="11.09" height="2.29" fill="var(--down)" opacity="0.1"/><rect x="82.64" y="21.27" width="11.09" height="2.29" fill="none" stroke="var(--down)" stroke-width="1.1" opacity="0.85"/><line x1="82.64" y1="13.25" x2="127" y2="13.25" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="82.64" y1="46.16" x2="127" y2="46.16" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Wedge reversal</b><span>Trade against the third push of a wedge. Target is the start of the wedge, which is where Brooks expects it to unwind to.</span><span class="c-id">wedge-reversal</span></td>
             <td class="c-id">wedge start</td>
             <td class="c-num">66</td>
@@ -1042,7 +1120,7 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-bo-pullback"><title id="fig-bo-pullback">The first bar to give ground after a breakout, entered with it.</title><line x1="12.63" y1="41.26" x2="12.63" y2="50.3" stroke="var(--down)" stroke-width="1"/><rect x="9.13" y="45.78" width="7" height="2.26" fill="var(--down)"/><line x1="27.88" y1="40.13" x2="27.88" y2="49.17" stroke="var(--up)" stroke-width="1"/><rect x="24.38" y="43.52" width="7" height="4.52" fill="var(--up)"/><line x1="43.13" y1="39.45" x2="43.13" y2="50.3" stroke="var(--down)" stroke-width="1"/><rect x="39.63" y="43.52" width="7" height="4.52" fill="var(--down)"/><line x1="58.38" y1="40.81" x2="58.38" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="54.88" y="42.39" width="7" height="5.65" fill="var(--up)"/><line x1="73.63" y1="27.71" x2="73.63" y2="43.52" stroke="var(--up)" stroke-width="1"/><rect x="70.13" y="28.84" width="7" height="13.55" fill="var(--up)"/><line x1="88.88" y1="28.16" x2="88.88" y2="34.48" stroke="var(--down)" stroke-width="1"/><rect x="85.38" y="28.84" width="7" height="4.52" fill="var(--down)"/><line x1="104.13" y1="23.19" x2="104.13" y2="34.03" stroke="var(--up)" stroke-width="1"/><rect x="100.63" y="24.32" width="7" height="9.04" fill="var(--up)"/><line x1="119.38" y1="18.67" x2="119.38" y2="25.45" stroke="var(--up)" stroke-width="1"/><rect x="115.88" y="19.8" width="7" height="4.52" fill="var(--up)"/><line x1="5.63" y1="39.45" x2="126.38" y2="39.45" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><rect x="88.88" y="27.71" width="30.5" height="7.23" fill="var(--up)" opacity="0.18"/><line x1="88.88" y1="27.71" x2="119.38" y2="27.71" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/><line x1="88.88" y1="13.25" x2="119.38" y2="13.25" stroke="var(--up)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-bo-pullback"><title id="fig-bo-pullback">The first bar to give ground after a breakout, entered with it.</title><line x1="12.63" y1="41.26" x2="12.63" y2="50.3" stroke="var(--down)" stroke-width="1"/><rect x="9.13" y="45.78" width="7" height="2.26" fill="var(--down)"/><line x1="27.88" y1="40.13" x2="27.88" y2="49.17" stroke="var(--up)" stroke-width="1"/><rect x="24.38" y="43.52" width="7" height="4.52" fill="var(--up)"/><line x1="43.13" y1="39.45" x2="43.13" y2="50.3" stroke="var(--down)" stroke-width="1"/><rect x="39.63" y="43.52" width="7" height="4.52" fill="var(--down)"/><line x1="58.38" y1="40.81" x2="58.38" y2="50.75" stroke="var(--up)" stroke-width="1"/><rect x="54.88" y="42.39" width="7" height="5.65" fill="var(--up)"/><line x1="73.63" y1="27.71" x2="73.63" y2="43.52" stroke="var(--up)" stroke-width="1"/><rect x="70.13" y="28.84" width="7" height="13.55" fill="var(--up)"/><line x1="88.88" y1="28.16" x2="88.88" y2="34.48" stroke="var(--down)" stroke-width="1"/><rect x="85.38" y="28.84" width="7" height="4.52" fill="var(--down)"/><line x1="104.13" y1="23.19" x2="104.13" y2="34.03" stroke="var(--up)" stroke-width="1"/><rect x="100.63" y="24.32" width="7" height="9.04" fill="var(--up)"/><line x1="119.38" y1="18.67" x2="119.38" y2="25.45" stroke="var(--up)" stroke-width="1"/><rect x="115.88" y="19.8" width="7" height="4.52" fill="var(--up)"/><line x1="5.63" y1="39.45" x2="126.38" y2="39.45" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><rect x="81.25" y="26.81" width="15.25" height="1.81" fill="var(--up)" opacity="0.1"/><rect x="81.25" y="26.81" width="15.25" height="1.81" fill="none" stroke="var(--up)" stroke-width="1.1" opacity="0.85"/><line x1="81.25" y1="34.94" x2="127" y2="34.94" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="81.25" y1="13.25" x2="127" y2="13.25" stroke="var(--up)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Breakout pullback</b><span>The first bar to pull back against a breakout within five sessions, entered in the breakout's direction.</span><span class="c-id">bo-pullback</span></td>
             <td class="c-id">5 sessions</td>
             <td class="c-num">282</td>
@@ -1050,26 +1128,60 @@
             <td><span class="flag on">on</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-failed-bo"><title id="fig-failed-bo">A breakout that closes back inside the range, faded the other way.</title><line x1="12.63" y1="24.5" x2="12.63" y2="32.83" stroke="var(--down)" stroke-width="1"/><rect x="9.13" y="28.67" width="7" height="2.08" fill="var(--down)"/><line x1="27.88" y1="23.46" x2="27.88" y2="31.79" stroke="var(--up)" stroke-width="1"/><rect x="24.38" y="26.58" width="7" height="4.17" fill="var(--up)"/><line x1="43.13" y1="22.83" x2="43.13" y2="32.83" stroke="var(--down)" stroke-width="1"/><rect x="39.63" y="26.58" width="7" height="4.17" fill="var(--down)"/><line x1="58.38" y1="24.08" x2="58.38" y2="33.25" stroke="var(--up)" stroke-width="1"/><rect x="54.88" y="25.54" width="7" height="5.21" fill="var(--up)"/><line x1="73.63" y1="14.08" x2="73.63" y2="26.58" stroke="var(--up)" stroke-width="1"/><rect x="70.13" y="15.12" width="7" height="10.42" fill="var(--up)"/><line x1="88.88" y1="13.67" x2="88.88" y2="25.33" stroke="var(--down)" stroke-width="1"/><rect x="85.38" y="15.12" width="7" height="9.38" fill="var(--down)"/><line x1="104.13" y1="23.67" x2="104.13" y2="32.83" stroke="var(--down)" stroke-width="1"/><rect x="100.63" y="24.5" width="7" height="7.29" fill="var(--down)"/><line x1="119.38" y1="30.75" x2="119.38" y2="38.04" stroke="var(--down)" stroke-width="1"/><rect x="115.88" y="31.79" width="7" height="5.21" fill="var(--down)"/><line x1="12.63" y1="22.83" x2="119.38" y2="22.83" stroke="var(--muted)" stroke-width="1.4" opacity="0.85" stroke-dasharray="3 2.5"/><rect x="88.88" y="13.25" width="30.5" height="12.5" fill="var(--down)" opacity="0.18"/><line x1="88.88" y1="25.75" x2="119.38" y2="25.75" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/><line x1="88.88" y1="50.75" x2="119.38" y2="50.75" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-failed-bo"><title id="fig-failed-bo">A breakout that closes back inside the range, faded the other way.</title><line x1="12.63" y1="24.5" x2="12.63" y2="32.83" stroke="var(--down)" stroke-width="1"/><rect x="9.13" y="28.67" width="7" height="2.08" fill="var(--down)"/><line x1="27.88" y1="23.46" x2="27.88" y2="31.79" stroke="var(--up)" stroke-width="1"/><rect x="24.38" y="26.58" width="7" height="4.17" fill="var(--up)"/><line x1="43.13" y1="22.83" x2="43.13" y2="32.83" stroke="var(--down)" stroke-width="1"/><rect x="39.63" y="26.58" width="7" height="4.17" fill="var(--down)"/><line x1="58.38" y1="24.08" x2="58.38" y2="33.25" stroke="var(--up)" stroke-width="1"/><rect x="54.88" y="25.54" width="7" height="5.21" fill="var(--up)"/><line x1="73.63" y1="14.08" x2="73.63" y2="26.58" stroke="var(--up)" stroke-width="1"/><rect x="70.13" y="15.12" width="7" height="10.42" fill="var(--up)"/><line x1="88.88" y1="13.67" x2="88.88" y2="25.33" stroke="var(--down)" stroke-width="1"/><rect x="85.38" y="15.12" width="7" height="9.38" fill="var(--down)"/><line x1="104.13" y1="23.67" x2="104.13" y2="32.83" stroke="var(--down)" stroke-width="1"/><rect x="100.63" y="24.5" width="7" height="7.29" fill="var(--down)"/><line x1="119.38" y1="30.75" x2="119.38" y2="38.04" stroke="var(--down)" stroke-width="1"/><rect x="115.88" y="31.79" width="7" height="5.21" fill="var(--down)"/><line x1="12.63" y1="22.83" x2="119.38" y2="22.83" stroke="var(--muted)" stroke-width="1.4" opacity="0.85" stroke-dasharray="3 2.5"/><rect x="81.25" y="24.19" width="15.25" height="3.12" fill="var(--down)" opacity="0.1"/><rect x="81.25" y="24.19" width="15.25" height="3.12" fill="none" stroke="var(--down)" stroke-width="1.1" opacity="0.85"/><line x1="81.25" y1="13.25" x2="127" y2="13.25" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="81.25" y1="50.75" x2="127" y2="50.75" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Failed breakout</b><span>A breakout that closes back inside the prior range within the window. Faded the other way.</span><span class="c-id">failed-bo</span></td>
             <td class="c-id">close inside</td>
             <td class="c-num">102</td>
             <td><div class="rate"><span class="bar"><i style="width:4%"></i></span><span class="pct">1.6%</span></div></td>
-            <td><span class="flag on">on</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
           <tr>
-            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-final-flag"><title id="fig-final-flag">A tight late-trend flag whose breakout closes back inside, faded.</title><line x1="11.78" y1="40.18" x2="11.78" y2="45.36" stroke="var(--up)" stroke-width="1"/><rect x="8.28" y="41.22" width="7" height="3.11" fill="var(--up)"/><line x1="25.33" y1="33.97" x2="25.33" y2="42.26" stroke="var(--up)" stroke-width="1"/><rect x="21.83" y="35" width="7" height="6.22" fill="var(--up)"/><line x1="38.89" y1="25.68" x2="38.89" y2="36.04" stroke="var(--up)" stroke-width="1"/><rect x="35.39" y="26.72" width="7" height="8.28" fill="var(--up)"/><line x1="52.44" y1="19.47" x2="52.44" y2="27.75" stroke="var(--up)" stroke-width="1"/><rect x="48.94" y="20.5" width="7" height="6.22" fill="var(--up)"/><line x1="66" y1="18.64" x2="66" y2="23.61" stroke="var(--down)" stroke-width="1"/><rect x="62.5" y="20.5" width="7" height="2.07" fill="var(--down)"/><line x1="79.56" y1="19.05" x2="79.56" y2="24.02" stroke="var(--up)" stroke-width="1"/><rect x="76.06" y="19.88" width="7" height="2.69" fill="var(--up)"/><line x1="93.11" y1="18.43" x2="93.11" y2="23.19" stroke="var(--down)" stroke-width="1"/><rect x="89.61" y="19.88" width="7" height="2.49" fill="var(--down)"/><line x1="106.67" y1="13.25" x2="106.67" y2="22.78" stroke="var(--up)" stroke-width="1"/><rect x="103.17" y="14.29" width="7" height="8.08" fill="var(--up)"/><line x1="120.22" y1="13.66" x2="120.22" y2="25.68" stroke="var(--down)" stroke-width="1"/><rect x="116.72" y="14.29" width="7" height="10.56" fill="var(--down)"/><line x1="59" y1="18.43" x2="127.22" y2="18.43" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="59" y1="24.02" x2="127.22" y2="24.02" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><rect x="120.22" y="13.46" width="12.2" height="12.43" fill="var(--down)" opacity="0.18"/><line x1="120.22" y1="25.89" x2="132.42" y2="25.89" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/><line x1="120.22" y1="50.75" x2="132.42" y2="50.75" stroke="var(--down)" stroke-width="1.4" opacity="0.85"/></svg></td>
+            <td class="c-fig"><svg class="fig" viewBox="0 0 132 64" role="img" aria-labelledby="fig-final-flag"><title id="fig-final-flag">A tight late-trend flag whose breakout closes back inside, faded.</title><line x1="11.78" y1="40.18" x2="11.78" y2="45.36" stroke="var(--up)" stroke-width="1"/><rect x="8.28" y="41.22" width="7" height="3.11" fill="var(--up)"/><line x1="25.33" y1="33.97" x2="25.33" y2="42.26" stroke="var(--up)" stroke-width="1"/><rect x="21.83" y="35" width="7" height="6.22" fill="var(--up)"/><line x1="38.89" y1="25.68" x2="38.89" y2="36.04" stroke="var(--up)" stroke-width="1"/><rect x="35.39" y="26.72" width="7" height="8.28" fill="var(--up)"/><line x1="52.44" y1="19.47" x2="52.44" y2="27.75" stroke="var(--up)" stroke-width="1"/><rect x="48.94" y="20.5" width="7" height="6.22" fill="var(--up)"/><line x1="66" y1="18.64" x2="66" y2="23.61" stroke="var(--down)" stroke-width="1"/><rect x="62.5" y="20.5" width="7" height="2.07" fill="var(--down)"/><line x1="79.56" y1="19.05" x2="79.56" y2="24.02" stroke="var(--up)" stroke-width="1"/><rect x="76.06" y="19.88" width="7" height="2.69" fill="var(--up)"/><line x1="93.11" y1="18.43" x2="93.11" y2="23.19" stroke="var(--down)" stroke-width="1"/><rect x="89.61" y="19.88" width="7" height="2.49" fill="var(--down)"/><line x1="106.67" y1="13.25" x2="106.67" y2="22.78" stroke="var(--up)" stroke-width="1"/><rect x="103.17" y="14.29" width="7" height="8.08" fill="var(--up)"/><line x1="120.22" y1="13.66" x2="120.22" y2="25.68" stroke="var(--down)" stroke-width="1"/><rect x="116.72" y="14.29" width="7" height="10.56" fill="var(--down)"/><line x1="59" y1="18.43" x2="127.22" y2="18.43" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><line x1="59" y1="24.02" x2="127.22" y2="24.02" stroke="var(--axis)" stroke-width="0.9" stroke-dasharray="2 2"/><rect x="113.44" y="24.34" width="13.55" height="3.11" fill="var(--down)" opacity="0.1"/><rect x="113.44" y="24.34" width="13.55" height="3.11" fill="none" stroke="var(--down)" stroke-width="1.1" opacity="0.85"/><line x1="113.44" y1="13.46" x2="130" y2="13.46" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/><line x1="113.44" y1="50.75" x2="130" y2="50.75" stroke="var(--down)" stroke-width="1.1" stroke-dasharray="5 4" opacity="0.85"/></svg></td>
             <td class="c-rule"><b>Final flag</b><span>A tight flag late in a trend whose breakout closes back inside within two sessions. Faded.</span><span class="c-id">final-flag</span></td>
             <td class="c-id">20+ bars in</td>
             <td class="c-num">44</td>
             <td><div class="rate"><span class="bar"><i style="width:2%"></i></span><span class="pct">0.7%</span></div></td>
-            <td><span class="flag on">on</span></td>
+            <td><span class="flag off">off</span><span class="fold">folded</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <div class="col">
+      <div class="note">
+        <h3>An entry is a band on the entry price; its stop and target are a switch</h3>
+        <p>
+          It used to draw three things at once — a filled box from entry to stop,
+          a line at the entry, a line at the target — of which the box and the
+          entry line said the same thing twice, and nothing was clickable but two
+          thin rails. Now the box <em>is</em> the entry: a band a quarter of the
+          risk thick, stroked as well as filled, <strong>one bar wide</strong>
+          over the signal bar. The thickness is in price rather than pixels, so
+          it means the same at every zoom; the width is one session because the
+          point of entry <em>is</em> a session; and the dashed rails are what
+          carry the duration, running on to where the trade resolved.
+        </p>
+        <p>
+          Raising the fill to make a one-bar box visible was the wrong lever, and
+          the stroke is what replaced it: <code>FILL_ALPHA</code> went to 0.18 for
+          exactly that reason and is back at <strong>0.1</strong> now, because the
+          wide marks are what a flat fill number is really set by. A channel band
+          covers about a third of the pane at the zoom a reader marks up at, and
+          the whole of it zoomed in &mdash; measured on the shipped series: 433
+          channel marks, spanning 4 to 101 bars, median 6. Anything that raises it
+          again has to answer for the wide case first.
+        </p>
+        <p>
+          The rails are a second register, not a second shape — a statement about
+          the mark the reader can switch off, which is the same argument
+          <code>caution</code> makes for being dashed rather than given a fourth
+          hue. The hit test measures them too, so clicking an entry's stop finds
+          that entry; switch them off and they are not in the shape to be found.
+          The band's interior is a hit as well, because at a wide viewport its
+          centre — the entry price, the exact thing the reader is aiming at —
+          sits further from either edge than the slop allows.
+        </p>
+      </div>
       <div class="note">
         <h3>Final flag cannot know it is final, and says so</h3>
         <p>
@@ -1101,15 +1213,19 @@
       <p>
         All 31 rules on produce <strong>11,026 marks over 6,550 sessions</strong> —
         1.68 a bar, which is unreadable by construction. The shipped defaults are
-        budgeted to <strong>0.56 per session</strong>, and
+        budgeted to <strong>0.71 per session</strong>, and
         <code>npm run marks -- --catalogue</code> prints the hit rate per rule so the
-        budget is checkable rather than felt.
+        budget is checkable rather than felt. Ten rules ship off; the twenty-one
+        that stay on account for 4,636 of those marks.
       </p>
       <p>
-        A rule firing on 10%+ of bars ships <code>defaultOn: false</code>. Six do:
-        <code>trend-bar</code> at 34.5%, <code>doji</code> at 27.2%,
-        <code>shaved</code>, <code>inside</code>, <code>outside</code> and
-        <code>pullback-entry</code>.
+        Density is the usual reason. A rule firing on 10%+ of bars ships
+        <code>defaultOn: false</code>: <code>trend-bar</code> at 34.5%,
+        <code>doji</code> at 27.2%, <code>shaved</code> at 15.1% and
+        <code>pullback-entry</code> at 12.3%. But it is no longer the only reason.
+        <code>climax</code> fires 38 times in twenty-six years — 0.6%, nowhere near
+        the density that hid the other four — and ships off on
+        <strong>usage</strong> alone, the first rule to do so.
       </p>
 
       <div class="note">
@@ -1123,10 +1239,47 @@
       </div>
 
       <p>
+        The budget moved once since: <code>inside</code> and <code>outside</code>
+        were switched <em>on</em>, taking it from 0.56 to 0.71. Both fire on about
+        12% of sessions — over the 10% line — and both were kept anyway, because
+        an inside bar is a fact about the session rather than an interpretation of
+        it, and the reading names it in prose whether the mark is drawn or not.
+      </p>
+
+      <div class="note">
+        <h3>Two flags, and they have to move together</h3>
+        <p>
+          <code>defaultOn</code> is a <strong>density</strong> decision;
+          <code>Rule.tier</code> is a <strong>usage</strong> one, and it decides
+          whether the rules card lists a rule or folds it behind a
+          <code>+5&nbsp;▾</code> chip on its group heading. They mean different
+          things — <code>gap-bar</code> fires 42 times and <code>final-flag</code>
+          44, so neither is off for density — but a folded rule the reader has
+          switched on is <em>promoted back into the list</em>, keeping the quieter
+          name. So <code>tier: 'extra'</code> on its own only makes a rule quieter;
+          for one to actually leave the list, both flags have to move. Ten rules
+          carry both today, and they are the same ten in each case.
+        </p>
+        <p>
+          Absent means core, so a rule opts <em>in</em> to being quiet and the
+          other twenty-one need no line. Nothing in the marking layer reads
+          <code>tier</code>: detection, the counts,
+          <code>--catalogue</code> and <code>marks:check</code> are untouched by
+          it. And the reader can move any rule off the tier it ships with, in a
+          modal rules sheet that lists all 31 with a <em>Show</em> box, a
+          <em>Fold</em> box, the outcome in words, and the density figures the
+          card has no room for.
+        </p>
+      </div>
+
+      <p>
         Bar labels are a close-up feature. Three-character labels at 11px mono are
-        ~20px wide, so below <strong>24px a bar</strong> adjacent labels overlap into
-        garbage. They render at 1M only, and the readout says <em>"zoom in for bar
-        marks"</em> everywhere else rather than letting them silently vanish.
+        ~20px wide, so below <strong>24px a bar</strong> adjacent labels overlap
+        into garbage. The test is <strong>pixels per bar, not the name of a
+        range</strong>: on daily that works out to the 1M preset and nothing wider,
+        but 1M of five-minute bars is 6,320 of them, so intraday needs 1D or
+        shorter before a label appears. The readout says <em>"zoom in for bar
+        marks"</em> the rest of the time rather than letting them silently vanish.
         Geometry is not subject to that and draws at every zoom.
       </p>
     </div>
@@ -1193,29 +1346,258 @@
         one tick beyond the signal bar, the protective stop one tick beyond its other
         end, a target — and then a walk-forward result.
       </p>
-      <p>Three decisions in that walk are deliberately scored against the trader:</p>
+      <p>Four decisions in that walk are deliberately scored against the trader:</p>
       <ul>
+        <li><strong>The order goes in at <code>knownAt</code>, not at the signal bar.</strong> Three rules anchor on a swing pivot, which needs three sessions to its right to confirm, so their own <code>knownAt</code> is three sessions later than the bar they name. See below — this one was wrong for a whole release.</li>
         <li><strong>A bar containing both stop and target is a loss.</strong> Daily OHLC cannot say which came first, and assuming the good one is how a backtest talks itself into an edge. <code>ambiguous</code> counts them so the number stays auditable.</li>
         <li><strong>A bar that gapped through the entry fills at the open</strong>, not the order price.</li>
         <li><strong>The entry order is live for exactly one bar.</strong> Leaving it working turns every failed setup into a different, later trade nobody took.</li>
       </ul>
     </div>
 
+    <div class="scroller narrow">
+      <table>
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Signals</th>
+            <th>Filled</th>
+            <th>Target hit</th>
+            <th>Win %</th>
+            <th>Average</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="c-id">pullback-entry</td>
+            <td class="c-num">808</td>
+            <td class="c-num">808</td>
+            <td class="c-num">215</td>
+            <td class="c-num">27%</td>
+            <td class="c-num"><span class="r-neg">&minus;0.124&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">bo-pullback</td>
+            <td class="c-num">282</td>
+            <td class="c-num">138</td>
+            <td class="c-num">31</td>
+            <td class="c-num">22%</td>
+            <td class="c-num"><span class="r-neg">&minus;0.300&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">second-entry</td>
+            <td class="c-num">162</td>
+            <td class="c-num">162</td>
+            <td class="c-num">39</td>
+            <td class="c-num">24%</td>
+            <td class="c-num"><span class="r-neg">&minus;0.186&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">dt-short</td>
+            <td class="c-num">112</td>
+            <td class="c-num">87</td>
+            <td class="c-num">27</td>
+            <td class="c-num">31%</td>
+            <td class="c-num"><span class="r-pos">+0.147&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">failed-bo</td>
+            <td class="c-num">102</td>
+            <td class="c-num">76</td>
+            <td class="c-num">25</td>
+            <td class="c-num">33%</td>
+            <td class="c-num"><span class="r-pos">+0.157&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">db-long</td>
+            <td class="c-num">79</td>
+            <td class="c-num">74</td>
+            <td class="c-num">18</td>
+            <td class="c-num">24%</td>
+            <td class="c-num"><span class="r-pos">+0.084&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">wedge-reversal</td>
+            <td class="c-num">66</td>
+            <td class="c-num">58</td>
+            <td class="c-num">28</td>
+            <td class="c-num">48%</td>
+            <td class="c-num"><span class="r-neg">&minus;0.182&thinsp;R</span></td>
+          </tr>
+          <tr>
+            <td class="c-id">final-flag</td>
+            <td class="c-num">44</td>
+            <td class="c-num">32</td>
+            <td class="c-num">13</td>
+            <td class="c-num">41%</td>
+            <td class="c-num"><span class="r-pos">+0.462&thinsp;R</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caption">
+      <code>npm run marks -- --trades</code>, the whole 6,550-session series. Win %
+      is of filled trades. Every signal is counted, including the ones that never
+      filled — those score 0R rather than being dropped, which is why
+      <code>bo-pullback</code> fills 138 of 282.
+    </p>
+
     <div class="note col">
-      <h3>Measured over 3,000 sessions, the mechanical 2R target loses</h3>
+      <h3>Measured over the whole series, the mechanical 2R target loses</h3>
       <p>
-        <code>second-entry</code> fills 75/75 and wins 28%, which at 2R is
-        <span class="r-neg">&minus;0.085R</span> a trade; a 2R exit needs better than
-        33%. The rules that come out positive are the measured-move ones —
-        <code>dt-short</code> at <span class="r-pos">+1.65R</span> average,
-        <code>db-long</code> at <span class="r-pos">+1.10R</span> — because their
-        target is the pattern's own projection rather than a multiple.
+        <code>second-entry</code> fills 162/162 and wins 24%, which at 2R is
+        <span class="r-neg">&minus;0.186R</span> a trade; a 2R exit needs better
+        than 33%. Only four of the eight come out positive, and the best of them
+        &mdash; <code>final-flag</code> at <span class="r-pos">+0.462R</span> &mdash;
+        is a fade rather than a measured move.
       </p>
       <p>
         <code>DEFAULT_TARGET_R</code> is left at 2 on purpose. Tuning it until the
         table looked better would be curve-fitting a review tool. The number is a
         finding about these setups on daily ES, and it is supposed to be visible.
       </p>
+    </div>
+
+    <div class="note col">
+      <h3>The order goes in at <code>knownAt</code> &mdash; and for a whole release it did not</h3>
+      <p>
+        <code>dt-short</code>, <code>db-long</code> and <code>wedge-reversal</code>
+        anchor on a swing pivot, which needs <code>strength</code> bars to its
+        right, so their <code>knownAt</code> is three sessions after the signal
+        bar they name. The walk-forward ran from the signal bar anyway. All
+        <strong>257</strong> of their marks quoted the outcome of an order nobody
+        could have placed, two sessions early.
+      </p>
+      <p>
+        Almost the entire edge was that head start. Measured over the whole series
+        either side of the fix: <code>dt-short</code>
+        <span class="r-pos">+0.873R</span> a mark became
+        <span class="r-pos">+0.114R</span>, <code>db-long</code>
+        <span class="r-pos">+0.601R</span> became
+        <span class="r-pos">+0.079R</span>, and <code>wedge-reversal</code>
+        <span class="r-pos">+0.345R</span> became
+        <span class="r-neg">&minus;0.160R</span> &mdash; which changes its sign.
+        (Those are that run's figures; the table above is today's, on the current
+        fixture.) An earlier version of this page quoted the first set.
+      </p>
+      <p>
+        <code>trade()</code> now takes an <code>orderAt</code> separate from the
+        signal bar, and <code>--check</code> re-derives every entry's walk from
+        the mark's own dates and fails if the note disagrees. Verified to have
+        teeth: putting the walk back on the signal bar reports
+        <em>"wedge-reversal:2000-11-30 quotes an outcome an order placed at
+        2000-12-05 did not have"</em>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="reading">
+    <div class="col">
+      <h2>Every session also gets a line of prose</h2>
+      <p class="lede">
+        The same layer that draws the marks writes the reading. It names no
+        pattern it did not import &mdash; which is the only reason the chart and
+        the sentence beside it cannot come to disagree.
+      </p>
+    </div>
+
+    <div class="flow"><span class="day">2000-09-18</span>  <span class="caution">bear trend bar, first session of a new contract, so the change into it is carry</span><span class="ctx"> — trading range</span>
+<span class="day">2000-09-19</span>  <span class="bull">bull trend bar, shaved bottom, inside the bar before</span><span class="ctx"> — trading range</span> — <span class="pat">two-bar reversal</span>
+<span class="day">2000-09-26</span>  <span class="bear">bear trend bar, shaved bottom</span><span class="ctx"> — trading range</span>
+<span class="day">2026-08-27</span>  <span class="neutral">small doji, 0.5x ATR</span><span class="ctx"> — always-in long</span></div>
+
+    <div class="col">
+      <p>
+        Three clauses: the <strong>bar itself</strong>, the <strong>context</strong>
+        around it, and the <strong>patterns</strong> that closed on it. Only the
+        first is coloured by the bar's direction &mdash; the other two are
+        statements about the market <em>around</em> the bar, and painting them its
+        direction would claim they agreed with it. A suspect print or a contract
+        start is <code>caution</code>, which is what that tone is for.
+      </p>
+      <p>
+        The adjectives read <code>BIG_ATR</code>, <code>DOJI_BODY</code>,
+        <code>SHAVED_TAIL</code>, <code>PIN_TAIL</code> and
+        <code>isTrendBar</code> straight out of
+        <code>rules/bars.ts</code>, and the composite patterns are not re-derived
+        at all: the reading takes the marks <code>detect()</code> already produced
+        and names them by their rule labels. A second idea of what a breakout is
+        would drift the day <code>BREAKOUT_LOOKBACK</code> moved.
+      </p>
+
+      <div class="note">
+        <h3>A mark joins a reading only if <code>knownAt === at</code></h3>
+        <p>
+          A double top is not readable on the day of its second peak, and a
+          bar-by-bar reading that names it there claims foresight.
+          Confirmation-lagged patterns stay the tape's business, where the chip
+          prints the date it became knowable. <code>--check</code> asserts it
+          rather than trusting it: every phrase in a reading has to be a rule that
+          fired on that bar <em>and</em> was knowable at its close. Verified to
+          have teeth &mdash; dropping the filter reports <em>"reading at
+          2000-10-24 names bear-channel, knowable only at 2000-10-27"</em> and
+          exits 1.
+        </p>
+      </div>
+
+      <div class="note">
+        <h3><code>STATED</code> drops the clause, never the rule</h3>
+        <p>
+          Eight rules say what an earlier clause has already said &mdash;
+          <code>big-bar</code> adds nothing to a leading "big" &mdash; so they are
+          dropped from the pattern clause. Without the set a line reads
+          <em>"bull trend bar, shaved top — trend bar, big trend bar, shaved
+          bar"</em>. What survives is exactly the composite set: reversal bar,
+          ii/ioi, climax, breakout, follow-through, two-bar reversal.
+        </p>
+      </div>
+
+      <p>
+        The reading is built from the <strong>unfiltered</strong> marks. A rule
+        toggle changes what is drawn; it does not change what a bar did. Keying
+        the prose to the enabled set would drop the "breakout" clause the moment
+        the reader hid the arrows, which is a lie about the session.
+      </p>
+      <p>
+        Measured over the whole series: the longest reading is
+        <strong>172 characters</strong>, and 8 of 6,550 carry nothing but the
+        bar's own body. <code>npm run marks -- --read</code> prints both figures,
+        because a reading that wraps to two lines has stopped being a line.
+      </p>
+
+      <div class="note">
+        <h3>The tape is one list, and the pattern clause is rendered as the marks</h3>
+        <p>
+          <em>Marks in view</em> and <em>Bar reading</em> were two newest-first
+          lists over the same viewport, overlapping by construction &mdash; a
+          reading names the patterns knowable at that close, and the mark list was
+          listing those same patterns for the same bar. They are now one tape: a
+          row per session, the reading as the row, and its marks as chips
+          <em>beside</em> the sentence, taking the pattern clause's place. The
+          words stop being said twice and become clickable.
+        </p>
+        <p>
+          Three cases fall out of that and all three are meant. A mark the prose
+          does <em>not</em> name is a chip on its own &mdash; either
+          <code>STATED</code> already covered it, or it was not knowable at that
+          close, and the second kind prints the date it became knowable. A pattern
+          the prose names with <em>no</em> mark behind it stays as dim text: the
+          rule is switched off, or the mark was dropped, which is rule state made
+          visible rather than a discrepancy papered over. A session with neither
+          is one line of prose, which at the shipped density is a little over half
+          of them.
+        </p>
+        <p>
+          The old tab became a <strong>filter</strong> &mdash; All / Marked /
+          Unresolved &mdash; because it now asks "how much of the tape?" rather
+          than "which list?". <em>Unresolved</em> counts sessions holding a mark
+          with no verdict, so it empties as the reader works: it is the marking
+          loop's finish line. One cap, <code>TAPE_CAP</code> 300, because it is
+          one list &mdash; and the header says so, since a mark anchored older
+          than the newest 300 sessions in view has no row to sit on.
+        </p>
+      </div>
     </div>
   </section>
 
@@ -1224,17 +1606,48 @@
     <div class="col">
       <h2>Rules propose, the reader disposes</h2>
       <p class="lede">
-        Click a mark on the chart to keep it, or use Keep / Drop in the mark list. A
+        Click a mark on the chart to keep it, or use Keep / Drop on the tape. A
         dropped mark disappears from every view — keeping it visible-but-faded would
         mean dismissing a rule's noise never quietens the chart.
       </p>
       <p>
-        Verdicts persist to <code>%APPDATA%/price-action-mark/marks/&lt;symbol&gt;.json</code>,
-        keyed by the mark's stable id. Verdicts for marks that no longer regenerate are
+        Verdicts persist to <code>marks/&lt;symbol&gt;.json</code> under the app's
+        userData directory —
+        <code>~/Library/Application&nbsp;Support/price-action-mark/</code> on macOS,
+        <code>%APPDATA%\price-action-mark\</code> on Windows — keyed by the mark's
+        stable id. Verdicts for marks that no longer regenerate are
         <strong>kept, not dropped</strong>: thresholds move, and a mark that vanishes
         today comes back when a tolerance is loosened. They cost a few bytes, and
         dropping them would silently discard decisions the reader made.
       </p>
+      <p>
+        Two gestures, two meanings. Clicking a mark <em>on the canvas</em> toggles
+        Keep; clicking one <em>on the tape</em> highlights it on the chart. "Show me
+        where this is" is not "I stand behind this", so they stay separate — and a
+        canvas click also reveals the mark in the tape, scrolled into view, which
+        is what closes the loop between the two surfaces.
+      </p>
+
+      <div class="note">
+        <h3>The store is keyed by symbol <em>and window</em>, because a daily date names two different bars</h3>
+        <p>
+          A mark id is <code>rule:date</code>, and on a daily chart
+          <code>2026-08-28</code> is the whole 23-hour Globex day in ETH and
+          09:30&ndash;16:15 New York in RTH. Measured against the shipped feed:
+          over the 42 sessions the two windows share, <strong>23 of the RTH daily
+          chart's 53 marks carry an id an ETH daily mark also carries, and all 23
+          name bars whose OHLC differs</strong> — so one store for both meant a
+          Keep made in one window silently landed on a different bar in the other.
+        </p>
+        <p>
+          <code>markScope()</code> appends the window slug for an
+          <em>aggregate only</em>. Intraday keys already carry a time of day, so
+          RTH and ETH there name the very same five-minute bar and rightly share a
+          store; the feed's own daily series keeps the bare symbol, so every
+          verdict already on disk is still found. RTH daily gets its own
+          <code>ES_F_rth.json</code>.
+        </p>
+      </div>
     </div>
 
     <div class="flow col">mark up in the desktop app
@@ -1250,9 +1663,20 @@
         candidate; one built with verdicts opens on exactly the marks its author kept,
         while a viewer who switches back to all candidates keeps that choice locally.
       </p>
+      <p>
+        That path is guarded at build time, because <code>data/marks.json</code> is
+        a flat verdict map with no record of which window produced it. An RTH daily
+        export dropped over the ETH daily snapshot published marks the author never
+        confirmed, onto bars they never saw — verified end to end: three RTH
+        verdicts produced a confirmed-only page showing three ETH bars, silently.
+        <code>inline-artifact.ts</code> now compares the store's symbol against the
+        snapshot's <code>markScope</code> and <strong>refuses the build</strong>.
+        Only a store that carries verdicts is judged, so the shipped empty one
+        still builds.
+      </p>
 
       <div class="note">
-        <h3>Both settings maps are sparse, and it matters twice</h3>
+        <h3>The settings maps are sparse, and sparse has two halves</h3>
         <p>
           <code>settings.marks.rules</code> stores only the ids the reader moved off
           the rule's own default. Persisting all 31 booleans would freeze today's
@@ -1260,12 +1684,91 @@
           anyone who had already run the app.
         </p>
         <p>
+          Writing sparsely is only half of it: the merge has to <strong>delete</strong>
+          too. <code>toggleRule</code> once only ever added, so a rule switched off
+          and back on stayed pinned to today's answer for ever — exactly the failure
+          the sparseness exists to prevent. It now drops a key whose value agrees
+          with <code>defaultOn</code>, and the field-wise merge drops what an
+          incoming record leaves out. <code>marks.folded</code> has always needed
+          both halves, because taking a fold back <em>is</em> a key going away.
+        </p>
+        <p>
           <code>marks.show</code> is sparse for the same reason, and it bit twice: a
           stored value has to mean "the viewer chose this", never "this was the default
           when they first loaded" — otherwise a first-time viewer sees every candidate
           instead of the author's marks, which is the one case the publish path exists for.
+          <code>marks.stopTarget</code> follows the same rule and is stored only
+          when it is off.
         </p>
       </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="timeframes">
+    <div class="col">
+      <h2>The same rules on both bar sizes</h2>
+      <p class="lede">
+        Daily and five-minute. The marking layer needed almost no change for the
+        second one, and the reason is a single decision made early.
+      </p>
+      <p>
+        <strong><code>Dataset.d[i]</code> is an opaque sortable string.</strong> A
+        daily bar is <code>2026-08-28</code>, an intraday one
+        <code>2026-08-28T13:45:00Z</code>. Both are ISO 8601, so <code>&lt;</code>
+        and <code>&gt;</code> order them, a <code>Map</code> indexes them,
+        <code>markId(rule, at)</code> keys a verdict on them, and the viewport
+        test is untouched. Every consumer that treats a bar's date as a
+        <em>handle</em> rather than a date needed no change at all: the rules, the
+        canvas primitive, the mark store, the reading.
+      </p>
+      <p>
+        The dials are in <strong>bars</strong>, not days &mdash; pivot strength 3,
+        <code>BREAKOUT_LOOKBACK</code> 20, <code>ATR_PERIOD</code> 20 &mdash; so
+        they run on five-minute data unchanged, and the density transfers better
+        than expected. Measured on a 60-day five-minute pull: a pivot every
+        <strong>6.7 bars</strong> against 6.8 on daily, and the same
+        <strong>0.71 marks a bar</strong> the daily defaults are budgeted to, so
+        the budget still needs no second set of numbers. <code>--check</code>
+        passes on that file too, including the no-lookahead test.
+      </p>
+
+      <div class="note">
+        <h3>Inherited, not chosen</h3>
+        <p>
+          Nobody has swept <code>--tune</code> on intraday. The dials transfer and
+          the density lands in the right place, but they were chosen against
+          twenty-six years of daily bars and that is the only evidence there is
+          for them. The golden fixture is daily and says so rather than reporting
+          four failures that mean <em>"wrong dataset"</em>: run against an
+          intraday file it prints <em>"fixture not compared: it holds the daily
+          series"</em> and checks nothing else.
+        </p>
+      </div>
+
+      <p>
+        The session window &mdash; RTH or ETH &mdash; <strong>filters the
+        dataset</strong> rather than hiding bars on the chart, and that matters
+        here more than anywhere. Metrics, structure, ATR, the rules and the
+        readings all see RTH bars only; an RTH chart whose ATR was computed over
+        the overnight is not an RTH chart. Measured: 11,609 bars become 3,402,
+        <strong>81 a session, every session</strong>, and <code>--check</code>
+        passes on the filtered series. The consequence is that the bar before an
+        open crosses the overnight and <code>gap</code> fires there, which is
+        correct, and exactly how a daily series already behaves across a night.
+      </p>
+      <p>
+        Two things that look like details and are not.
+        <strong><code>rolls</code> is rebuilt, not remapped</strong> &mdash; the
+        indices are positions in <code>d</code>, and dropping 71% of the bars
+        moves every one of them. And rolls are a <em>calendar</em> fact, so the
+        expiry arithmetic works off the day part of the key:
+        <code>contractStarts</code> steps to the first bar of the next
+        <em>session</em>, not <code>i&nbsp;+&nbsp;1</code>, because five minutes
+        after an expiry is still the expiring contract. On a daily series both
+        reduce to exactly what they did before, and
+        <code>marks:check</code> passing unchanged is what proves it.
+      </p>
     </div>
   </section>
 
@@ -1278,7 +1781,7 @@
         subtly too loose looks exactly like one that is working.
       </p>
       <ul>
-        <li><strong>Tune against the text oracle.</strong> <code>npm run marks</code> prints the same numbers the rules see, for any span — <code>--rules</code>, <code>--catalogue</code>, <code>--trades</code>, <code>--structure</code>, <code>--tune</code>.</li>
+        <li><strong>Tune against the text oracle.</strong> <code>npm run marks</code> prints the same numbers the rules see, for any span — <code>--rules</code>, <code>--catalogue</code>, <code>--trades</code>, <code>--structure</code>, <code>--read</code>, <code>--tune</code>.</li>
         <li><strong>Pick the patterns by eye before writing the rule that finds them.</strong> It is the only way a detector is tested against something other than itself. The eight in <code>data/marks-golden.json</code> were read off the 2025 pivot list by hand; seven then matched the rule's own arithmetic exactly.</li>
         <li><strong><code>npm run marks:check</code> is the regression guard.</strong> It holds the per-rule counts, those eight dates and the structure dials, and <code>--golden</code> rewrites it — deliberately a separate command, so drift has to be accepted on purpose.</li>
         <li><strong>Counts are compared only when the dataset fingerprint matches</strong>, because <code>npm run data</code> legitimately changes them. The hand-picked dates are history and are checked either way.</li>
@@ -1295,8 +1798,16 @@
       </div>
 
       <p>
-        The check also asserts <strong>mark ids are unique, per rule</strong> — a rule
-        can break that without trying. Two breakouts on consecutive sessions find the
+        <code>--check</code> has grown as the layer has, and each invariant is
+        there because something broke it: the structure has no lookahead, every
+        entry's walk starts at the date its own mark says it was knowable, every
+        phrase in a reading is a rule that was knowable at that close, and mark
+        ids are unique per rule. All four are shown failing above, in the section
+        that introduced them &mdash; a guard nobody has watched fail is a guard
+        nobody knows works.
+      </p>
+      <p>
+        That last one is the one a rule can break <strong>without trying</strong>. Two breakouts on consecutive sessions find the
         same first pullback, so <code>bo-pullback</code> once emitted two marks
         carrying one id: two identical rows, one verdict covering both, and a keyed
         <code>{#each}</code> that throws outright. Both rules now claim their signal
@@ -1312,14 +1823,15 @@
     <div class="col">
       <h2>What comes next is drawing</h2>
       <p class="lede">
-        The detection layer is done. What is left is marks the reader makes by hand —
-        and everything it needs is already in place, built that way on purpose.
+        Detection is done, and so is the reading. What is left is marks the reader
+        makes by hand — and everything it needs is already in place, built that way
+        on purpose.
       </p>
       <ul>
-        <li><code>Mark</code> already carries <code>source: 'manual'</code> and <code>MarkStore</code> already carries a <code>manual</code> array that is read on load and never written. Hand-drawn marks are not a storage-format change, and no file on disk needs migrating.</li>
+        <li><code>Mark</code> already carries <code>source: 'manual'</code> and <code>MarkStore</code> already carries a <code>manual</code> array &mdash; but <strong><code>coerceStore()</code> returns <code>manual: []</code> unconditionally</strong>, on load and on save alike, so today the field is <em>reserved</em> rather than round-tripped. The serialised shape is already right and no file on disk needs migrating, which is the part that matters; the one function that has to change is <code>coerceStore</code>, and it has to validate what it lets through &mdash; a manual mark is the first thing in that file a reader could hand-edit into any shape.</li>
         <li><code>MarkPrimitive.hitTest()</code> already returns the id of whatever is under the cursor, which is the selection half of a drawing tool.</li>
         <li><code>shapeOf</code> is pure and consumed by both the renderer and the hit test, so a drag handle placed against one is placed against the other by construction.</li>
-        <li>The five geometry kinds — <code>segment</code>, <code>channel</code>, <code>level</code>, <code>path</code>, <code>trade</code> — all draw already. A tool has to produce one, not teach the renderer a new shape.</li>
+        <li>The five geometry kinds — <code>segment</code>, <code>channel</code>, <code>level</code>, <code>path</code>, <code>trade</code> — all draw already. A tool has to produce one, not teach the renderer a new shape. <code>path</code> is the one nothing emits any more, since a double became a level; it is kept <em>for</em> the drawing tool, not left behind by accident.</li>
       </ul>
 
       <div class="note">
@@ -1337,7 +1849,7 @@
   <footer>
     <span>Price Action Mark &middot; the marking layer</span>
     <span>ES=F daily, 6,550 sessions to 2026-08-27</span>
-    <span>Counts from <code>data/marks-golden.json</code></span>
+    <span>Counts from <code>data/marks-golden.json</code>; walk-forward from <code>npm run marks -- --trades</code></span>
   </footer>
 
 </div>

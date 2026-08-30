@@ -1,0 +1,1813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The algorithm behind every marking rule in Price Action Mark: exact predicates, thresholds, guards, emitted geometry and measured hit rates for all 31 rules.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, h4, p, ul, ol, figure, dl, dd { margin: 0; padding: 0; }
+  ul, ol { list-style: none; }
+  img, svg { max-width: 100%; display: block; }
+</style>
+<title>Marking Rule Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ------------------------------------------------------------------ */
+  /* Tokens, lifted from src/renderer/styles/tokens.css. Three scopes,   */
+  /* exactly as the app declares them: bare :root, the dark media query, */
+  /* and the explicit stamp. Miss one and the toggle and the OS setting  */
+  /* disagree. --muted is the MARK; --muted-text is anything read.       */
+  /* ------------------------------------------------------------------ */
+  :root {
+    color-scheme: light;
+
+    --plane: #eef2f6;
+    --surface: #fbfcfd;
+    --surface-2: #f4f7fa;
+
+    --ink: #0c1015;
+    --ink-2: #4d5560;
+    --muted: #828b96;
+    --muted-text: #676f7a;
+
+    --grid: #e2e7ec;
+    --axis: #c9d1d9;
+
+    --up: #006300;
+    --down: #e34948;
+    --up-text: #006300;
+    --down-text: #cc3131;
+    --ema: #4338ca;
+    --ema-text: #4338ca;
+    --ema-wash: rgb(67 56 202 / 9%);
+
+    --focus: #2874d0;
+
+    --sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
+
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --plane: #0b0d10;
+      --surface: #15181c;
+      --surface-2: #1b1f24;
+
+      --ink: #f2f5f8;
+      --ink-2: #a8b1bc;
+      --muted: #6d7681;
+      --muted-text: #7e8792;
+
+      --grid: #23282e;
+      --axis: #333a42;
+
+      --up: #008300;
+      --down: #e66767;
+      --up-text: #0ca30c;
+      --down-text: #e66767;
+      --ema: #2962ff;
+      --ema-text: #93a5f4;
+      --ema-wash: rgb(147 165 244 / 12%);
+
+      --focus: #3987e5;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --plane: #0b0d10;
+    --surface: #15181c;
+    --surface-2: #1b1f24;
+
+    --ink: #f2f5f8;
+    --ink-2: #a8b1bc;
+    --muted: #6d7681;
+    --muted-text: #7e8792;
+
+    --grid: #23282e;
+    --axis: #333a42;
+
+    --up: #008300;
+    --down: #e66767;
+    --up-text: #0ca30c;
+    --down-text: #e66767;
+    --ema: #2962ff;
+    --ema-text: #93a5f4;
+    --ema-wash: rgb(147 165 244 / 12%);
+
+    --focus: #3987e5;
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  body {
+    background: var(--plane);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15.5px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1240px; margin: 0 auto; padding: 0 24px 96px; }
+  .col { max-width: 70ch; }
+
+  a { color: var(--ema-text); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  :where(a, button):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* --- masthead ----------------------------------------------------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 64px 0 32px;
+    border-bottom: 1px solid var(--axis);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ema-text);
+  }
+
+  h1 {
+    font-size: clamp(32px, 4.6vw, 47px);
+    line-height: 1.06;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    max-width: 18ch;
+  }
+
+  .standfirst { font-size: 18px; line-height: 1.55; color: var(--ink-2); max-width: 64ch; }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* --- the two-column manual ---------------------------------------- */
+
+  .shell { display: block; }
+
+  @media (min-width: 1060px) {
+    .shell {
+      display: grid;
+      grid-template-columns: 232px minmax(0, 1fr);
+      gap: 56px;
+      align-items: start;
+    }
+    .rail { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; padding: 40px 0; }
+  }
+
+  .rail { padding: 32px 0 0; }
+
+  .rail h2 {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+    margin: 22px 0 8px;
+  }
+  .rail h2:first-child { margin-top: 0; }
+
+  .rail ol { display: flex; flex-direction: column; gap: 1px; }
+
+  .rail a {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    text-decoration: none;
+    padding: 3px 7px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+  }
+  .rail a:hover { background: var(--surface); color: var(--ink); }
+  .rail a.on { border-left-color: var(--ema); }
+  .rail a.off { border-left-color: var(--axis); border-left-style: dashed; color: var(--muted-text); }
+  .rail a em { font-style: normal; font-size: 10.5px; color: var(--muted-text); font-variant-numeric: tabular-nums; }
+
+  /* --- sections ----------------------------------------------------- */
+
+  section { padding-top: 60px; scroll-margin-top: 16px; }
+
+  h2.sec {
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.018em;
+    line-height: 1.22;
+    text-wrap: balance;
+    margin-bottom: 8px;
+  }
+
+  h3 { font-size: 17.5px; font-weight: 600; letter-spacing: -0.008em; margin-bottom: 6px; }
+
+  .lede { font-size: 16.5px; color: var(--ink-2); margin-bottom: 26px; }
+
+  p { margin-bottom: 14px; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 620; }
+  em.i { font-style: italic; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.875em;
+    background: var(--surface-2);
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+    padding: 0.1em 0.34em;
+  }
+
+  /* --- prose lists --------------------------------------------------- */
+
+  ul.bullets { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+  ul.bullets li { position: relative; padding-left: 18px; color: var(--ink-2); }
+  ul.bullets li::before {
+    content: "";
+    position: absolute;
+    left: 2px; top: 0.66em;
+    width: 7px; height: 1px;
+    background: var(--ema);
+  }
+  ul.bullets li strong { color: var(--ink); }
+
+  /* --- code blocks --------------------------------------------------- */
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.72;
+    background: var(--surface);
+    border: 1px solid var(--grid);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin: 0 0 14px;
+    overflow-x: auto;
+    color: var(--ink);
+    white-space: pre;
+    tab-size: 2;
+  }
+  pre .c { color: var(--muted-text); }
+  pre .k { color: var(--ema-text); }
+  pre .n { color: var(--ink-2); }
+  pre b { font-weight: 600; }
+
+  /* --- definition grid ----------------------------------------------- */
+
+  .defs {
+    display: grid;
+    grid-template-columns: minmax(0, 168px) minmax(0, 1fr);
+    gap: 1px 0;
+    background: var(--grid);
+    border: 1px solid var(--grid);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .defs dt, .defs dd {
+    background: var(--surface);
+    padding: 9px 14px;
+    font-size: 13.5px;
+  }
+  .defs dt { font-family: var(--mono); font-size: 12px; color: var(--ema-text); }
+  .defs dd { color: var(--ink-2); }
+  .defs dd strong { color: var(--ink); }
+
+  /* --- tables --------------------------------------------------------- */
+
+  .scroller {
+    overflow-x: auto;
+    border: 1px solid var(--axis);
+    border-radius: var(--radius);
+    background: var(--surface);
+    margin-bottom: 12px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--axis);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.m, th.m { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  td.num { text-align: right; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .caption { font-size: 12.5px; color: var(--muted-text); max-width: 78ch; }
+  .caption code { font-size: 12px; }
+
+  /* --- the rule card -------------------------------------------------- */
+  /* The left rail is not decoration: SOLID means the rule paints the      */
+  /* chart out of the box, DASHED means it ships off and folded.           */
+
+  .rule {
+    background: var(--surface);
+    border: 1px solid var(--grid);
+    border-left: 3px solid var(--ema);
+    border-radius: var(--radius);
+    padding: 20px 22px 22px;
+    margin-top: 20px;
+    scroll-margin-top: 16px;
+  }
+  .rule.off { border-left-color: var(--axis); border-left-style: dashed; }
+
+  .rule-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 4px;
+  }
+  .rule-head h3 { margin: 0; font-size: 19px; }
+  .rule-id { font-family: var(--mono); font-size: 12.5px; color: var(--ema-text); }
+
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .pill.on { color: var(--ema-text); background: var(--ema-wash); border-color: color-mix(in srgb, var(--ema) 30%, transparent); }
+  .pill.off { color: var(--muted-text); border-color: var(--axis); border-style: dashed; }
+
+  .blurb { color: var(--ink-2); font-size: 14.5px; margin-bottom: 14px; max-width: 72ch; }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    gap: 1px;
+    background: var(--grid);
+    border: 1px solid var(--grid);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .fact { background: var(--surface-2); padding: 9px 12px; display: flex; flex-direction: column; gap: 1px; }
+  .fact b { font-family: var(--mono); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .fact span {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+  }
+
+  h4 {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+    margin: 0 0 7px;
+  }
+  .rule h4 + pre, .rule h4 + .defs, .rule h4 + ul { margin-top: 0; }
+  .rule > * + h4 { margin-top: 16px; }
+
+  ul.notes { display: flex; flex-direction: column; gap: 7px; }
+  ul.notes li {
+    position: relative;
+    padding-left: 16px;
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+  ul.notes li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0.62em;
+    width: 6px; height: 1px;
+    background: var(--muted);
+  }
+  ul.notes li strong { color: var(--ink); }
+
+  .r-pos { color: var(--up-text); font-weight: 500; }
+  .r-neg { color: var(--down-text); font-weight: 500; }
+
+  /* --- figure ---------------------------------------------------------- */
+
+  figure { margin: 0 0 16px; }
+  figure svg { width: 100%; height: auto; background: var(--surface); border: 1px solid var(--grid); border-radius: var(--radius-sm); }
+  figcaption { font-size: 12.5px; color: var(--muted-text); margin-top: 8px; max-width: 74ch; }
+
+  footer {
+    margin-top: 76px;
+    padding-top: 24px;
+    border-top: 1px solid var(--axis);
+    font-size: 12.5px;
+    color: var(--muted-text);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+  }
+  footer code { font-size: 12px; }
+
+  @media (max-width: 620px) {
+    .masthead { padding-top: 44px; }
+    section { padding-top: 48px; }
+    .rule { padding: 16px 15px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<header class="masthead">
+  <div class="eyebrow">Price Action Mark · src/shared/marks/</div>
+  <h1>Marking Rule Reference</h1>
+  <p class="standfirst">
+    The algorithm behind each of the thirty-one rules: the exact predicate it
+    evaluates, the guard it declines bars under, the geometry it emits, and what
+    it measured over 6,550 sessions of <strong>ES=F</strong> daily bars. Written
+    against the source, not against the design notes — where the two disagree,
+    this follows the code.
+  </p>
+</header>
+
+<div class="shell">
+<nav class="rail" aria-label="Rule index">
+<h2>Bars · 15</h2><ol>
+<li><a class="off" href="#trend-bar">trend-bar<em>34.5%</em></a></li>
+<li><a class="on" href="#big-bar">big-bar<em>6.9%</em></a></li>
+<li><a class="off" href="#doji">doji<em>27.2%</em></a></li>
+<li><a class="on" href="#inside">inside<em>11.9%</em></a></li>
+<li><a class="on" href="#outside">outside<em>11.8%</em></a></li>
+<li><a class="on" href="#ii">ii<em>0.6%</em></a></li>
+<li><a class="on" href="#ioi">ioi<em>0.4%</em></a></li>
+<li><a class="on" href="#reversal-bar">reversal-bar<em>5.2%</em></a></li>
+<li><a class="off" href="#shaved">shaved<em>15.1%</em></a></li>
+<li><a class="off" href="#pin-bar">pin-bar<em>3.7%</em></a></li>
+<li><a class="off" href="#climax">climax<em>0.6%</em></a></li>
+<li><a class="off" href="#gap-bar">gap-bar<em>0.6%</em></a></li>
+<li><a class="on" href="#breakout">breakout<em>5.3%</em></a></li>
+<li><a class="on" href="#follow-through">follow-through<em>0.7%</em></a></li>
+<li><a class="on" href="#two-bar-reversal">two-bar-reversal<em>3.6%</em></a></li>
+</ol>
+<h2>Lines · 8</h2><ol>
+<li><a class="on" href="#bull-channel">bull-channel<em>1.5%</em></a></li>
+<li><a class="on" href="#bear-channel">bear-channel<em>1.5%</em></a></li>
+<li><a class="on" href="#micro-channel">micro-channel<em>3.6%</em></a></li>
+<li><a class="off" href="#spike-and-channel">spike-and-channel<em>1.2%</em></a></li>
+<li><a class="on" href="#double-top">double-top<em>1.7%</em></a></li>
+<li><a class="on" href="#double-bottom">double-bottom<em>1.2%</em></a></li>
+<li><a class="on" href="#wedge">wedge<em>2.0%</em></a></li>
+<li><a class="on" href="#triangle">triangle<em>2.2%</em></a></li>
+</ol>
+<h2>Entries · 8</h2><ol>
+<li><a class="off" href="#pullback-entry">pullback-entry<em>12.3%</em></a></li>
+<li><a class="on" href="#second-entry">second-entry<em>2.5%</em></a></li>
+<li><a class="on" href="#dt-short">dt-short<em>1.7%</em></a></li>
+<li><a class="on" href="#db-long">db-long<em>1.2%</em></a></li>
+<li><a class="on" href="#wedge-reversal">wedge-reversal<em>1.0%</em></a></li>
+<li><a class="on" href="#bo-pullback">bo-pullback<em>4.3%</em></a></li>
+<li><a class="off" href="#failed-bo">failed-bo<em>1.6%</em></a></li>
+<li><a class="off" href="#final-flag">final-flag<em>0.7%</em></a></li>
+</ol>
+</nav>
+
+<main>
+
+<section id="pipeline">
+  <div class="col">
+    <h2 class="sec">A rule is a pure function of one context</h2>
+    <p class="lede">
+      Every rule has the same shape: it receives a <code>Ctx</code> built once
+      per dataset and returns an array of marks. It reads nothing else, keeps no
+      state, and cannot see the reader’s settings.
+    </p>
+  </div>
+  <pre>interface Rule {
+  id, group, label, blurb, phrase?
+  defaultOn: boolean        <span class="c">// density: does it paint the chart out of the box</span>
+  tier?: &#x27;extra&#x27;            <span class="c">// usage: does the rules card fold it away</span>
+  detect(ctx: Ctx): Mark[]
+}
+
+interface Ctx {
+  data    <span class="c">// the Dataset: d[], o[], h[], l[], c[], v[], rolls[]</span>
+  m       <span class="c">// Metrics  — one pass of per-bar columns</span>
+  s       <span class="c">// Structure — pivots, legs, trend, pullback</span>
+  tick    <span class="c">// minimum price increment, from instrument.ts (0.25 for ES)</span>
+  tol     <span class="c">// multiplier on every ATR tolerance; 1 by default</span>
+}
+
+buildCtx(data, opts) = {
+  m = metrics(data)
+  s = structure(m, { strength, minSwingAtr })
+}</pre>
+  <div class="col">
+    <p>
+      <code>detect()</code> runs the enabled rules <strong>in registry
+      order</strong>, concatenates their output, drops any mark whose id has
+      already been seen, and sorts the result by <code>at</code> then by rule
+      id. The sort belongs to detection rather than to whoever consumed it: the
+      chart wants markers in time order, the tape reads top-down, and the CLI
+      report is a table.
+    </p>
+    <p>
+      The dedupe is a <strong>backstop, not the mechanism</strong>. Rules are
+      expected to produce distinct ids and each is fixed when it does not —
+      <code>--check</code> asserts uniqueness <em class="i">per rule</em>,
+      because checking <code>detect()</code>’s output would only prove the
+      backstop works.
+    </p>
+    <h3><code>tol</code> scales ATR tolerances and nothing else</h3>
+    <p>
+      Above 1 it loosens every rule at once. Look down the <em class="i">scaled
+      by tol</em> column below and the pattern is exact: every threshold
+      denominated in ATRs takes it, and every ratio, count and bar-window does
+      not. The one deliberate exception is
+      <code>DEFAULT_MIN_SWING_ATR</code>, which is a structure option rather
+      than a rule threshold and is applied without it.
+    </p>
+  </div>
+</section>
+
+<section id="metrics">
+  <div class="col">
+    <h2 class="sec">The columns every rule is written in</h2>
+    <p class="lede">
+      <code>metrics()</code> makes one pass over the dataset and produces the
+      per-bar quantities that "trend bar", "doji", "shaved", "big" and "gap" are
+      definitions over. Typed arrays, computed exactly once — thirty-one rules
+      each rebuilding this over 6,550 bars would be thirty-one times the work
+      for identical numbers.
+    </p>
+  </div>
+  <div class="scroller">
+    <table>
+      <thead><tr><th class="m">Column</th><th>Definition</th></tr></thead>
+      <tbody><tr><td class="m">high, low</td><td>the printed extremes, <strong>widened</strong> to enclose open and close</td></tr>
+<tr><td class="m">range</td><td><code>high − low</code>. Zero is possible: a limit-locked session prints one price</td></tr>
+<tr><td class="m">body</td><td><code>|close − open|</code></td></tr>
+<tr><td class="m">bodyPct</td><td><code>body ÷ range</code>, 0…1. Zero where range is zero</td></tr>
+<tr><td class="m">upperTail</td><td><code>high − max(open, close)</code></td></tr>
+<tr><td class="m">lowerTail</td><td><code>min(open, close) − low</code></td></tr>
+<tr><td class="m">upperTailPct,<br>lowerTailPct</td><td>each tail ÷ range</td></tr>
+<tr><td class="m">closePos</td><td><code>(close − low) ÷ range</code>: 0 on the low, 1 on the high. <strong>0.5</strong> where the bar has no range</td></tr>
+<tr><td class="m">dir</td><td><code>+1</code> close above open, <code>−1</code> below, <code>0</code> exactly equal</td></tr>
+<tr><td class="m">tr</td><td>true range, with the gap component <strong>dropped at a contract start</strong></td></tr>
+<tr><td class="m">atr</td><td>Wilder ATR over <code>tr</code>. <strong>NaN</strong> through the 20-bar warm-up</td></tr>
+<tr><td class="m">rangeAtr</td><td><code>range ÷ atr</code> — "big" is only ever relative. NaN through the warm-up</td></tr>
+<tr><td class="m">isRoll</td><td>1 at the expiry sessions the chart marks</td></tr>
+<tr><td class="m">isContractStart</td><td>1 at the first session of a new contract — <strong>one bar after</strong> <code>isRoll</code></td></tr>
+<tr><td class="m">suspect</td><td>1 where the printed high/low did not enclose the printed open/close</td></tr>
+<tr><td class="m">gap</td><td><code>+1</code> gap up, <code>−1</code> gap down, 0 otherwise. Always 0 at a contract start</td></tr></tbody>
+    </table>
+  </div>
+  <div class="col">
+    <h3>Three things here are not arithmetic</h3>
+    <ul class="bullets">
+      <li><strong>Contract-aware true range, on the right bar.</strong> The gap
+      across a contract change is carry. <code>Dataset.rolls</code> holds the
+      <em class="i">expiry</em> sessions; the discontinuity is the session
+      after, where the new front month opens. So <code>tr</code> and
+      <code>gap</code> are suppressed at <code>contractStarts()</code>, one bar
+      later. The chart marks 2024-12-20 and the +2.77% of carry lands on
+      2024-12-23 — getting this off by one leaves the carry in ATR while
+      suppressing a real move next to it.</li>
+      <li><strong>Self-consistent extremes.</strong> On ten of the 6,550
+      sessions the feed prints a close outside its own high/low — eight are
+      quarterly expiries carrying the settlement price, and two are plain dirt.
+      Left alone they push <code>closePos</code> past 1 and would fire
+      <code>shaved</code> and <code>reversal-bar</code> on a bad print. So
+      <code>m.high</code> and <code>m.low</code> are the printed extremes
+      <em class="i">widened</em> to enclose open and close, every ratio is
+      computed against those, and <code>suspect</code> marks where the widening
+      was needed. <strong>Rules read <code>m.high</code> / <code>m.low</code>,
+      never <code>data.h</code> / <code>data.l</code></strong>, so the
+      correction cannot be bypassed by accident.</li>
+      <li><strong>Nothing is skipped here.</strong> <code>isRoll</code> and
+      <code>suspect</code> are reported, not acted on. A bar rule wants to
+      decline those sessions; a line rule legitimately spans them.</li>
+    </ul>
+    <h3>The two guards</h3>
+    <p>
+      Which of the two a rule uses is the single most consequential line in it,
+      and the reason there are two is that a session can be unusable for two
+      unrelated reasons.
+    </p>
+  </div>
+  <pre>usable(m, i)      =  m.suspect[i] === 0
+
+comparable(m, i)  =  i &gt; 0
+                  &amp;&amp; m.suspect[i] === 0
+                  &amp;&amp; m.suspect[i - 1] === 0
+                  &amp;&amp; m.isContractStart[i] === 0</pre>
+  <div class="col">
+    <ul class="bullets">
+      <li><strong><code>usable</code></strong> — the bar’s own geometry can be
+      trusted. Enough for any rule reading one bar: <code>trend-bar</code>,
+      <code>big-bar</code>, <code>doji</code>, <code>shaved</code>,
+      <code>pin-bar</code>, <code>climax</code>, <code>gap-bar</code>.</li>
+      <li><strong><code>comparable</code></strong> — and so can its comparison
+      against the session before it. Required by everything that reads
+      <code>i − 1</code>: <code>inside</code>, <code>outside</code>,
+      <code>ii</code>, <code>ioi</code>, <code>reversal-bar</code>,
+      <code>breakout</code>, <code>follow-through</code>,
+      <code>two-bar-reversal</code>, and every entry rule’s scan.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="structure">
+  <div class="col">
+    <h2 class="sec">Structure: pivots, always-in, and the pullback count</h2>
+    <p class="lede">
+      Everything in the lines and entries groups is written against this rather
+      than against raw bars. Brooks reads swings by eye; the eye is not
+      available here, so a strength-<em class="i">N</em> fractal stands in.
+    </p>
+  </div>
+  <pre>fractals(m, strength):
+  for i in [strength, n - strength):
+    isHigh = for all k in 1..strength:  high[i] &gt;  high[i-k]   <span class="c">// STRICT left</span>
+                                    and high[i] &gt;= high[i+k]   <span class="c">// inclusive right</span>
+    isLow  = the mirror
+
+    <span class="c">// An outside bar can satisfy both. It is one bar and cannot be two</span>
+    <span class="c">// pivots, so the LARGER TAIL decides which extreme was rejected.</span>
+    if isHigh and isLow:
+      upperTail[i] &gt;= lowerTail[i] ? isLow = false : isHigh = false
+
+    emit { i, kind, price, confirmedAt: i + strength }</pre>
+  <div class="col">
+    <p>
+      The left/right asymmetry is what resolves a plateau: where two adjacent
+      bars share a high, the earlier one is the pivot and the later one fails
+      its own left test. Without it a flat top emits a pivot per bar.
+    </p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 760 216" role="img" aria-labelledby="fig-pivot-t">
+<title id="fig-pivot-t">A strength-3 swing high at bar 5 is not confirmed until bar 8, three sessions later.</title>
+<rect x="171.6" y="22.0" width="432.8" height="144.0" fill="var(--ema)" opacity="0.07"/>
+<line x1="171.6" y1="44.3" x2="604.4" y2="44.3" stroke="var(--ema)" stroke-width="1.2" stroke-dasharray="4 3"/>
+<line x1="71.6" y1="126.7" x2="71.6" y2="152.1" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="58.3" y="131.5" width="26.6" height="14.3" fill="var(--up)"/>
+<line x1="134.9" y1="107.7" x2="134.9" y2="136.2" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="121.6" y="112.4" width="26.6" height="19.0" fill="var(--up)"/>
+<line x1="198.2" y1="88.7" x2="198.2" y2="115.6" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="184.9" y="95.0" width="26.6" height="17.4" fill="var(--up)"/>
+<line x1="261.5" y1="76.0" x2="261.5" y2="99.8" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="248.2" y="80.7" width="26.6" height="14.3" fill="var(--up)"/>
+<line x1="324.7" y1="63.3" x2="324.7" y2="85.5" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="311.4" y="72.8" width="26.6" height="7.9" fill="var(--up)"/>
+<line x1="388.0" y1="44.3" x2="388.0" y2="77.6" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="374.7" y="64.9" width="26.6" height="7.9" fill="var(--up)"/>
+<line x1="451.3" y1="57.0" x2="451.3" y2="83.9" stroke="var(--down)" stroke-width="1.6"/>
+<rect x="438.0" y="64.9" width="26.6" height="14.3" fill="var(--down)"/>
+<line x1="514.5" y1="69.6" x2="514.5" y2="96.6" stroke="var(--down)" stroke-width="1.6"/>
+<rect x="501.3" y="79.1" width="26.6" height="12.7" fill="var(--down)"/>
+<line x1="577.8" y1="83.9" x2="577.8" y2="110.9" stroke="var(--down)" stroke-width="1.6"/>
+<rect x="564.5" y="91.8" width="26.6" height="12.7" fill="var(--down)"/>
+<line x1="641.1" y1="96.6" x2="641.1" y2="118.8" stroke="var(--up)" stroke-width="1.6"/>
+<rect x="627.8" y="99.8" width="26.6" height="4.8" fill="var(--up)"/>
+<line x1="704.4" y1="91.8" x2="704.4" y2="112.4" stroke="var(--down)" stroke-width="1.6"/>
+<rect x="691.1" y="99.8" width="26.6" height="9.5" fill="var(--down)"/>
+<circle cx="388.0" cy="34.3" r="3.6" fill="var(--ema)"/>
+<line x1="577.8" y1="22.0" x2="577.8" y2="168.0" stroke="var(--focus)" stroke-width="1.6"/>
+<text x="388.0" y="184.0" fill="var(--ema-text)" text-anchor="middle" font-family="var(--mono)" font-size="10.5">at</text>
+<text x="388.0" y="197.0" fill="var(--muted-text)" text-anchor="middle" font-family="var(--mono)" font-size="9.5">bar 5</text>
+<text x="577.8" y="184.0" fill="var(--focus)" text-anchor="middle" font-family="var(--mono)" font-size="10.5">knownAt</text>
+<text x="577.8" y="197.0" fill="var(--muted-text)" text-anchor="middle" font-family="var(--mono)" font-size="9.5">bar 8</text>
+<text x="293.1" y="17.0" fill="var(--muted-text)" text-anchor="middle" font-family="var(--mono)" font-size="9.5">3 bars left</text>
+<text x="482.9" y="17.0" fill="var(--muted-text)" text-anchor="middle" font-family="var(--mono)" font-size="9.5">3 bars right</text>
+</svg>
+    <figcaption>
+      A strength-3 swing high. The pivot is at bar 5, but it is not a swing high
+      until three bars have printed to its right without exceeding it — so
+      <code>confirmedAt</code> is bar 8. Every shape anchored on a pivot
+      inherits that lag as its <code>knownAt</code>, and every entry anchored on
+      one places its order there rather than at the signal bar.
+    </figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>The reduction is streaming, not global</h3>
+    <p>
+      Raw fractals do not alternate — runs of two or three highs with no low
+      between them are ordinary. They are folded into an alternating sequence
+      <strong>in confirmation order</strong>, and <code>trend</code>,
+      <code>pullback</code> and <code>lastPivot</code> are written from the
+      reduction’s state at each bar. Nothing later than bar <em class="i">i</em>
+      can reach back and change what bar <em class="i">i</em> knew.
+    </p>
+  </div>
+  <pre>admit(kept, p):
+  last = kept.last
+  if none:              kept.push(p)
+  else if same kind:    if p is the further extreme, REPLACE last
+  else:                 floor = isFinite(atr[p.i]) ? atr[p.i] * minSwingAtr : 0
+                        if |p.price - last.price| &gt;= floor:  kept.push(p)
+
+readTrend(kept):                             <span class="c">// the last FOUR pivots</span>
+  fewer than 4                         -&gt; 0
+  not exactly 2 highs and 2 lows       -&gt; 0
+  higher high AND higher low           -&gt; +1   always-in long
+  lower  high AND lower  low           -&gt; -1   always-in short
+  otherwise                            -&gt;  0   trading range</pre>
+  <div class="col">
+    <p>
+      Doing that reduction as a global fixed point instead would let a swing in
+      2012 delete a pivot from 2011, and every <code>trend</code> value before
+      it would silently become a fact from the future. <code>--check</code>
+      proves the absence of lookahead rather than asserting it: it rebuilds the
+      whole structure from the series with its last 500 sessions removed and
+      requires every earlier <code>trend</code> and <code>pullback</code> value
+      to be identical. <strong>0 of 6,050 drift</strong>, against 3,981 non-zero
+      values compared.
+    </p>
+    <p>
+      One consequence is worth holding on to: <code>pivots</code> and
+      <code>legs</code> are the reading <em class="i">as of the last bar</em>,
+      while <code>trend</code>, <code>pullback</code> and <code>lastPivot</code>
+      are the causal per-bar record. They can disagree about the recent past,
+      and that disagreement is correct.
+    </p>
+    <h3>The pullback counter</h3>
+  </div>
+  <pre>per bar, once the trend state is known and unchanged:
+
+  bull (trend === +1):
+    pulling AND high[i] &gt; high[i-1]  -&gt;  count = min(count + 1, 4)
+                                         pullback[i] = +count      <span class="c">// H1..H4</span>
+                                         pulling = false
+    high[i] &lt; high[i-1]              -&gt;  pulling = true
+    high[i] &gt; legExtreme             -&gt;  legExtreme = high[i]
+                                         count = 0                 <span class="c">// RESET</span>
+
+  bear: the mirror, writing -count   <span class="c">// L1..L4</span>
+
+  a change of trend state resets count, pulling and legExtreme,
+  and nothing is counted on the bar the state flipped</pre>
+  <div class="col">
+    <p>
+      The reset at a new swing extreme, rather than only on an attempt bar, is
+      what keeps the distribution honest: the leg resumed, so whatever comes
+      next is a fresh pullback starting at H1. Without it the count runs away
+      through a grinding trend and everything piles into the H4 bucket. The
+      healthy shape is a geometric decay — currently 529 / 167 / 70 / 66.
+    </p>
+  </div>
+</section>
+
+<section id="fitting">
+  <div class="col">
+    <h2 class="sec">Fitting a line, and asking something of it</h2>
+    <p class="lede">
+      Channel, wedge, triangle and spike-and-channel are the same two moves —
+      fit a line through some pivots, then ask something about the result — and
+      differ only in which pivots go in and what is demanded of the slopes.
+      Keeping the fitting in one file means the tolerance, the touch test and
+      the break test have one definition each.
+    </p>
+  </div>
+  <pre>fitLine(points)          <span class="c">// ordinary least squares over (bar index, price)</span>
+                        <span class="c">// null for fewer than 2 points, or zero variance in i</span>
+lineThrough(a, b)       <span class="c">// the exact line through two points</span>
+priceOn(line, i)        <span class="c">// intercept + slope * i</span>
+
+measure(line, m, from, to, side, tol, close):
+  side = +1  the line is a FLOOR tested by lows
+  side = -1  the line is a CEILING tested by highs
+
+  for i in [from, to]:
+    at      = priceOn(line, i)
+    extreme = side === 1 ? low[i] : high[i]
+    gap     = side === 1 ? extreme - at : at - extreme    <span class="c">// negative = past it</span>
+
+    |gap| &lt;= tol                    -&gt;  touches++
+    gap &lt; -excursion                -&gt;  excursion = -gap
+    side === 1 ? close[i] &lt; at - tol
+               : close[i] &gt; at + tol -&gt;  breaks++         <span class="c">// on the CLOSE</span>
+
+envelopeOffset(line, m, from, to, side)
+  <span class="c">// the parallel offset that encloses every bar on the other side</span></pre>
+  <div class="col">
+    <ul class="bullets">
+      <li><strong>Everything works in (bar index, price).</strong> Not dates,
+      because a line has to be evaluated between and beyond its anchors; not
+      pixels, because a rule must give the same answer at every zoom.</li>
+      <li><strong>A break is measured on the close, not the extreme.</strong> A
+      wick through a trendline is what trendlines are for; counting those as
+      breaks rejects every real channel on the chart.</li>
+      <li><code>excursion</code> is computed and returned but no rule currently
+      reads it. It is the furthest any bar reached past the line, kept for a
+      quality test that has not been written.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="trade">
+  <div class="col">
+    <h2 class="sec">From signal bar to trade</h2>
+    <p class="lede">
+      Brooks defines the entry mechanically — a stop order one tick beyond the
+      signal bar, the protective stop one tick beyond its other end — so the
+      prices are not a judgement call. <strong>The entry rules do no arithmetic
+      of their own</strong>, which is why "where is the stop" has one answer
+      across all eight of them.
+    </p>
+  </div>
+  <pre>planFor(ctx, signal, dir, target?):
+  entry  = long ? high[signal] + tick : low[signal]  - tick
+  stop   = long ? low[signal]  - tick : high[signal] + tick
+  risk   = |entry - stop|                      <span class="c">// must be &gt; 0</span>
+  target = target ?? entry ± DEFAULT_TARGET_R * risk        <span class="c">// 2R</span>
+
+walkForward(ctx, plan, orderAt):
+  <span class="c">// 1. THE ORDER IS LIVE FOR EXACTLY ONE BAR</span>
+  for i in (orderAt, orderAt + FILL_WINDOW]:
+    touched = long ? high[i] &gt;= entry : low[i] &lt;= entry
+    if touched:
+      fill  = long ? max(open[i], entry) : min(open[i], entry)   <span class="c">// GAPS TAKE THE OPEN</span>
+      start = i
+  no fill  -&gt;  { outcome: &#x27;no fill&#x27;, r: 0 }
+
+  <span class="c">// 2. R is measured from what was actually PAID</span>
+  risk = |fill - stop|
+
+  <span class="c">// 3. resolve, in this order, from the fill bar onward</span>
+  for i from start:
+    i &gt; start &amp;&amp; isContractStart[i]  -&gt;  &#x27;open&#x27;, scored at close[i-1]
+    hitStop                          -&gt;  &#x27;stop&#x27;,   ambiguous = hitTarget
+    hitTarget                        -&gt;  &#x27;target&#x27;
+  never resolved                     -&gt;  &#x27;open&#x27;, scored at the last close</pre>
+  <div class="col">
+    <ul class="bullets">
+      <li><strong>A bar containing both stop and target is a loss.</strong>
+      Daily OHLC cannot say which came first, and assuming the good one is how a
+      backtest talks itself into an edge. <code>ambiguous</code> counts them so
+      the number stays auditable rather than buried.</li>
+      <li><strong>A bar that gapped through the entry fills at the open</strong>,
+      not the order price — and R is measured from the fill, so a bad fill costs
+      the trade rather than being rounded away.</li>
+      <li><strong>The order is live for exactly one bar.</strong> A buy stop
+      above yesterday’s high is an order for today; leaving it working for a
+      week turns every failed setup into a different, later trade nobody
+      took.</li>
+      <li><strong>The walk is lookahead by construction.</strong> Nothing that
+      decides whether a mark <em class="i">exists</em> may read it — it is
+      confined to the mark’s <code>note</code> and its <code>through</code>
+      date.</li>
+      <li><strong><code>orderAt</code> is not always the signal bar.</strong>
+      Five rules sign at their signal bar’s close; the three anchored on a swing
+      pivot — <code>dt-short</code>, <code>db-long</code>,
+      <code>wedge-reversal</code> — pass the confirmation bar, three sessions
+      later.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="constants">
+  <div class="col">
+    <h2 class="sec">Every threshold, in one place</h2>
+    <p class="lede">
+      They are judgement calls dressed as numbers, and burying them inside the
+      predicates would make them impossible to tune against
+      <code>npm run marks</code>. Each is a named constant at the top of its
+      file.
+    </p>
+  </div>
+  <div class="scroller">
+    <table>
+      <thead><tr>
+        <th class="m">File</th><th class="m">Constant</th><th class="m">Value</th>
+        <th class="m">Units</th><th class="m">Scaled by tol</th><th>What it decides</th>
+      </tr></thead>
+      <tbody>
+      <tr><td class="m">bars.ts</td><td class="m">TREND_BODY</td><td class="num">0.60</td><td class="m">ratio</td><td class="m">—</td><td>body ÷ range at or above which a bar is a trend bar</td></tr><tr><td class="m">bars.ts</td><td class="m">DOJI_BODY</td><td class="num">0.25</td><td class="m">ratio</td><td class="m">—</td><td>body ÷ range at or below which a bar is a doji</td></tr><tr><td class="m">bars.ts</td><td class="m">BIG_ATR</td><td class="num">1.5</td><td class="m">ATR</td><td class="m">yes</td><td>range in ATRs that makes a trend bar big</td></tr><tr><td class="m">bars.ts</td><td class="m">CLIMAX_ATR</td><td class="num">2</td><td class="m">ATR</td><td class="m">yes</td><td>range in ATRs that makes a bar climactic</td></tr><tr><td class="m">bars.ts</td><td class="m">CLIMAX_RUN</td><td class="num">3</td><td class="m">bars</td><td class="m">—</td><td>same-direction bars before a large one reads as exhaustion</td></tr><tr><td class="m">bars.ts</td><td class="m">SHAVED_TAIL</td><td class="num">0.05</td><td class="m">ratio</td><td class="m">—</td><td>tail ÷ range at or below which an end is shaved</td></tr><tr><td class="m">bars.ts</td><td class="m">PIN_TAIL</td><td class="num">0.60</td><td class="m">ratio</td><td class="m">—</td><td>tail ÷ range at or above which a tail is a pin</td></tr><tr><td class="m">bars.ts</td><td class="m">PIN_MIN_ATR</td><td class="num">1</td><td class="m">ATR</td><td class="m">yes</td><td>floor under a pin bar’s own size</td></tr><tr><td class="m">bars.ts</td><td class="m">REVERSAL_CLOSE</td><td class="num">2⁄3</td><td class="m">ratio</td><td class="m">—</td><td>closePos a reversal bar must reach</td></tr><tr><td class="m">bars.ts</td><td class="m">REVERSAL_LOOKBACK</td><td class="num">10</td><td class="m">bars</td><td class="m">—</td><td>window a reversal bar’s extreme must be the extreme of</td></tr><tr><td class="m">bars.ts</td><td class="m">BREAKOUT_LOOKBACK</td><td class="num">20</td><td class="m">bars</td><td class="m">—</td><td>sessions a breakout has to clear</td></tr><tr><td class="m">bars.ts</td><td class="m">BREAKOUT_MIN_ATR</td><td class="num">1</td><td class="m">ATR</td><td class="m">yes</td><td>floor under a breakout bar’s own size</td></tr><tr><td class="m">bars.ts</td><td class="m">TWO_BAR_MATCH</td><td class="num">0.60</td><td class="m">ratio</td><td class="m">—</td><td>smaller body ÷ larger, for a two-bar reversal</td></tr><tr><td class="m">lines.ts</td><td class="m">CHANNEL_TOL_ATR</td><td class="num">0.4</td><td class="m">ATR</td><td class="m">yes</td><td>distance from a trendline that counts as a touch</td></tr><tr><td class="m">lines.ts</td><td class="m">CHANNEL_MIN_TOUCHES</td><td class="num">3</td><td class="m">count</td><td class="m">—</td><td>touches below which the line is drawn through nothing</td></tr><tr><td class="m">lines.ts</td><td class="m">CHANNEL_MAX_BREAKS</td><td class="num">1</td><td class="m">count</td><td class="m">—</td><td>closes beyond the line before it stops being a channel</td></tr><tr><td class="m">lines.ts</td><td class="m">MICRO_MIN_BARS</td><td class="num">5</td><td class="m">bars</td><td class="m">—</td><td>consecutive non-overlapping bars for a micro channel</td></tr><tr><td class="m">lines.ts</td><td class="m">DT_TOL_ATR</td><td class="num">0.5</td><td class="m">ATR</td><td class="m">yes</td><td>how close two peaks must be to be one level</td></tr><tr><td class="m">lines.ts</td><td class="m">DT_MIN_BARS</td><td class="num">4</td><td class="m">bars</td><td class="m">—</td><td>closer than this and it is one swing, not two</td></tr><tr><td class="m">lines.ts</td><td class="m">DT_MAX_BARS</td><td class="num">40</td><td class="m">bars</td><td class="m">—</td><td>further and they are unrelated visits to a level</td></tr><tr><td class="m">lines.ts</td><td class="m">DT_TROUGH_ATR</td><td class="num">1.5</td><td class="m">ATR</td><td class="m">yes</td><td>depth the retracement between them must reach</td></tr><tr><td class="m">lines.ts</td><td class="m">WEDGE_SHRINK</td><td class="num">0.85</td><td class="m">ratio</td><td class="m">—</td><td>each push as a share of the one before</td></tr><tr><td class="m">lines.ts</td><td class="m">SPIKE_MIN_BARS</td><td class="num">3</td><td class="m">bars</td><td class="m">—</td><td>consecutive same-direction bars in a spike</td></tr><tr><td class="m">lines.ts</td><td class="m">SPIKE_MIN_ATR</td><td class="num">1.5</td><td class="m">ATR</td><td class="m">yes</td><td>ground the spike must cover, in total</td></tr><tr><td class="m">lines.ts</td><td class="m">SPIKE_MEAN_BODY</td><td class="num">0.50</td><td class="m">ratio</td><td class="m">—</td><td>mean bodyPct across the run</td></tr><tr><td class="m">lines.ts</td><td class="m">SPIKE_SLOPE_RATIO</td><td class="num">0.6</td><td class="m">ratio</td><td class="m">—</td><td>channel slope as a share of the spike’s</td></tr><tr><td class="m">lines.ts</td><td class="m">SPIKE_CHANNEL_WINDOW</td><td class="num">60</td><td class="m">bars</td><td class="m">—</td><td>sessions after the spike to look for the channel in</td></tr><tr><td class="m">entries.ts</td><td class="m">BO_PULLBACK_WINDOW</td><td class="num">5</td><td class="m">bars</td><td class="m">—</td><td>sessions in which the first pullback still counts</td></tr><tr><td class="m">entries.ts</td><td class="m">FAILED_BO_WINDOW</td><td class="num">2</td><td class="m">bars</td><td class="m">—</td><td>sessions to close back inside the range</td></tr><tr><td class="m">entries.ts</td><td class="m">FLAG_MIN_BARS</td><td class="num">3</td><td class="m">bars</td><td class="m">—</td><td>shortest flag</td></tr><tr><td class="m">entries.ts</td><td class="m">FLAG_MAX_BARS</td><td class="num">10</td><td class="m">bars</td><td class="m">—</td><td>longest flag</td></tr><tr><td class="m">entries.ts</td><td class="m">FLAG_MAX_ATR</td><td class="num">2</td><td class="m">ATR</td><td class="m">yes</td><td>height the whole flag must fit inside</td></tr><tr><td class="m">entries.ts</td><td class="m">FLAG_TREND_BARS</td><td class="num">20</td><td class="m">bars</td><td class="m">—</td><td>bars the trend must already have run</td></tr><tr><td class="m">entries.ts</td><td class="m">FLAG_FAIL_WINDOW</td><td class="num">2</td><td class="m">bars</td><td class="m">—</td><td>sessions for the breakout to close back inside</td></tr><tr><td class="m">structure.ts</td><td class="m">DEFAULT_STRENGTH</td><td class="num">3</td><td class="m">bars</td><td class="m">—</td><td>bars either side a swing extreme must not be exceeded by</td></tr><tr><td class="m">structure.ts</td><td class="m">DEFAULT_MIN_SWING_ATR</td><td class="num">1</td><td class="m">ATR</td><td class="m">no</td><td>counter-swing below which a leg is noise</td></tr><tr><td class="m">structure.ts</td><td class="m">MAX_PULLBACK</td><td class="num">4</td><td class="m">count</td><td class="m">—</td><td>Brooks stops counting attempts at four</td></tr><tr><td class="m">trade.ts</td><td class="m">DEFAULT_TARGET_R</td><td class="num">2</td><td class="m">R</td><td class="m">—</td><td>target where the pattern implies no measured move</td></tr><tr><td class="m">trade.ts</td><td class="m">FILL_WINDOW</td><td class="num">1</td><td class="m">bars</td><td class="m">—</td><td>sessions the entry order stays live</td></tr><tr><td class="m">indicators.ts</td><td class="m">ATR_PERIOD</td><td class="num">20</td><td class="m">bars</td><td class="m">—</td><td>Wilder ATR period; every relative size is against it</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">
+    Values read from the source. <code>ATR_PERIOD</code> is matched to
+    <code>EMA_PERIOD</code> so "one session" means the same span to the chart
+    and to the rules.
+  </p>
+</section>
+
+<section id="bars">
+  <div class="col">
+    <h2 class="sec">Bars — what a single session says</h2>
+    <p class="lede">
+      Fifteen tests over the metric columns, none needing market structure.
+      Every one of them is knowable at the bar’s own close, so
+      <code>at</code> and <code>knownAt</code> are equal throughout the group.
+    </p>
+  </div>
+  <article class="rule off" id="trend-bar">
+<div class="rule-head">
+<h3>Trend bar</h3>
+<span class="rule-id">trend-bar</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">The body occupies most of the range: one side won the session with little argument.</p>
+<div class="facts"><div class="fact"><b>2,260</b><span>marks</span></div><div class="fact"><b>34.5%</b><span>of sessions</span></div><div class="fact"><b>87</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ▲ ▼</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i)                     <span class="c">// suspect[i] === 0</span>
+bodyPct[i] &gt;= TREND_BODY      <span class="c">// 0.60</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The base predicate for four other rules. <code>isTrendBar()</code> is exported and imported by <code>big-bar</code>, <code>shaved</code>, <code>follow-through</code>, <code>two-bar-reversal</code> and <code>breakoutIndices</code> rather than restated — there is one definition of a trend bar.</li>
+<li>No <code>comparable</code> guard: the test reads one bar only, so a contract start is fine.</li>
+<li>The densest rule in the set at 34.5% of sessions, which is why it ships off and folded.</li>
+</ul>
+</article><article class="rule" id="big-bar">
+<div class="rule-head">
+<h3>Big trend bar</h3>
+<span class="rule-id">big-bar</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">A trend bar wide enough to matter against the recent average range.</p>
+<div class="facts"><div class="fact"><b>450</b><span>marks</span></div><div class="fact"><b>6.9%</b><span>of sessions</span></div><div class="fact"><b>17</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · BIG</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i)
+bodyPct[i] &gt;= TREND_BODY           <span class="c">// 0.60</span>
+rangeAtr[i] &gt;= BIG_ATR * tol       <span class="c">// 1.5 x ATR(20)</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>"Big" is only ever relative. <code>rangeAtr = range / atr</code>, and <code>atr</code> is <b>NaN</b> through the 20-bar warm-up — NaN loses every comparison, so a warm-up bar can never satisfy the threshold by accident.</li>
+<li>The note carries the measured multiple, e.g. <code>2.3 x ATR</code>.</li>
+</ul>
+</article><article class="rule off" id="doji">
+<div class="rule-head">
+<h3>Doji</h3>
+<span class="rule-id">doji</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">A one-bar trading range: the close finished near the open however far price travelled.</p>
+<div class="facts"><div class="fact"><b>1,783</b><span>marks</span></div><div class="fact"><b>27.2%</b><span>of sessions</span></div><div class="fact"><b>69</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ·</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i)
+range[i] !== 0                <span class="c">// a limit-locked bar is neither</span>
+bodyPct[i] &lt;= DOJI_BODY       <span class="c">// 0.25</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The zero-range exclusion is explicit. A bar that printed one price has <code>bodyPct = 0</code> and would otherwise be the most doji-like bar in the series.</li>
+<li><code>DOJI_BODY</code> is also the ceiling <code>pin-bar</code> imposes and the floor <code>reversal-bar</code> requires a bar to clear.</li>
+</ul>
+</article><article class="rule" id="inside">
+<div class="rule-head">
+<h3>Inside bar</h3>
+<span class="rule-id">inside</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The whole session fits inside the one before it — the market paused.</p>
+<div class="facts"><div class="fact"><b>777</b><span>marks</span></div><div class="fact"><b>11.9%</b><span>of sessions</span></div><div class="fact"><b>30</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ib</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>comparable(i)                 <span class="c">// and NOT a contract start</span>
+isInside(i)                   <span class="c">// high[i] &lt;= high[i-1] &amp;&amp; low[i] &gt;= low[i-1]</span>
+!isInside(i - 1)              <span class="c">// the last bar of a run belongs to ii / iii</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Both bounds are <strong>inclusive</strong>: an exact equal high still counts as inside.</li>
+<li>The <code>comparable</code> guard is the point of the rule’s existence in this form — "inside the previous bar" means nothing when the previous bar is a different contract.</li>
+<li>The run-suppression hands two- and three-bar runs to <code>ii</code>, so the two rules never both label one bar.</li>
+</ul>
+</article><article class="rule" id="outside">
+<div class="rule-head">
+<h3>Outside bar</h3>
+<span class="rule-id">outside</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The session engulfed the one before it at both ends.</p>
+<div class="facts"><div class="fact"><b>771</b><span>marks</span></div><div class="fact"><b>11.8%</b><span>of sessions</span></div><div class="fact"><b>30</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ob</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>comparable(i)
+isOutside(i)                  <span class="c">// high[i] &gt; high[i-1] &amp;&amp; low[i] &lt; low[i-1]</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Both bounds are <strong>strict</strong> here, the mirror of <code>inside</code>’s inclusive ones — a bar equalling one extreme is neither inside nor outside.</li>
+<li>An outside bar can satisfy both fractal tests in <code>structure.ts</code>; there the larger tail decides which extreme the market rejected.</li>
+</ul>
+</article><article class="rule" id="ii">
+<div class="rule-head">
+<h3>ii / iii</h3>
+<span class="rule-id">ii</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Two or three consecutive inside bars — a coil, and breakout mode.</p>
+<div class="facts"><div class="fact"><b>40</b><span>marks</span></div><div class="fact"><b>0.6%</b><span>of sessions</span></div><div class="fact"><b>2</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ii, iii</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>comparable(i) &amp;&amp; comparable(i - 1)
+isInside(i) &amp;&amp; isInside(i - 1)
+!isInside(i + 1)              <span class="c">// emit on the LAST bar of the run, once</span>
+three = i &gt;= 3 &amp;&amp; comparable(i - 2) &amp;&amp; isInside(i - 2)</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Emitted on the last bar of the run and only there, so a four-bar coil produces one mark, not three.</li>
+<li>The forward look at <code>i + 1</code> is not lookahead in the sense that matters — the rule is about a completed run, and at the last bar of the series <code>high[n]</code> is <code>undefined</code>, which makes the comparison false and the run complete.</li>
+<li>Only <code>ii</code> and <code>iii</code> are distinguished; a fourth inside bar re-labels the run rather than adding a mark.</li>
+</ul>
+</article><article class="rule" id="ioi">
+<div class="rule-head">
+<h3>ioi</h3>
+<span class="rule-id">ioi</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Inside, outside, inside — the tightest of the coil patterns.</p>
+<div class="facts"><div class="fact"><b>26</b><span>marks</span></div><div class="fact"><b>0.4%</b><span>of sessions</span></div><div class="fact"><b>1</b><span>a year</span></div><div class="fact"><b>comparable ×3</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ioi</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>comparable(i) &amp;&amp; comparable(i - 1) &amp;&amp; comparable(i - 2)
+isInside(i) &amp;&amp; isOutside(i - 1) &amp;&amp; isInside(i - 2)</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>All three bars are guarded, not just the signal bar: the pattern is a statement about two comparisons, and either could straddle a contract change.</li>
+<li>The rarest rule in the set at 26 marks in twenty-six years.</li>
+</ul>
+</article><article class="rule" id="reversal-bar">
+<div class="rule-head">
+<h3>Reversal bar</h3>
+<span class="rule-id">reversal-bar</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Takes out the previous extreme, then closes back through it in the far third of its own range — and does so at a genuine extreme.</p>
+<div class="facts"><div class="fact"><b>340</b><span>marks</span></div><div class="fact"><b>5.2%</b><span>of sessions</span></div><div class="fact"><b>13</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · R▲ R▼</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>comparable(i) &amp;&amp; range[i] !== 0
+bodyPct[i] &gt; DOJI_BODY                     <span class="c">// a doji that dipped is not a reversal</span>
+
+bull =  low[i] &lt; low[i-1]
+     &amp;&amp; dir[i] &gt; 0
+     &amp;&amp; closePos[i] &gt;= REVERSAL_CLOSE      <span class="c">// 2/3</span>
+     &amp;&amp; close[i] &gt; close[i-1]
+     &amp;&amp; isExtreme(i, &#x27;low&#x27;)
+
+bear =  high[i] &gt; high[i-1]
+     &amp;&amp; dir[i] &lt; 0
+     &amp;&amp; closePos[i] &lt;= 1 - REVERSAL_CLOSE  <span class="c">// 1/3</span>
+     &amp;&amp; close[i] &lt; close[i-1]
+     &amp;&amp; isExtreme(i, &#x27;high&#x27;)
+
+isExtreme(i, &#x27;low&#x27;)  =  no k in [i-10, i-1] with low[k]  &lt;= low[i]
+isExtreme(i, &#x27;high&#x27;) =  no k in [i-10, i-1] with high[k] &gt;= high[i]</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The context test is what makes the rule mean "a turn". Without it the pattern fires on any strong close that dipped first — one session in six, 22% of the series. With it, <strong>5.2%</strong>.</li>
+<li><code>REVERSAL_LOOKBACK</code> is a plain 10-bar window and deliberately <em class="i">not</em> a swing pivot: a pivot is not confirmable for another three bars, and this rule promises to be readable at the close.</li>
+<li>The comparisons in <code>isExtreme</code> are non-strict (<code>&lt;=</code>, <code>&gt;=</code>), so a tie with any bar in the window disqualifies it.</li>
+<li>The close-against-close test is separate from <code>closePos</code>: the bar must both finish in the far third of its own range <em class="i">and</em> beyond the previous close.</li>
+</ul>
+</article><article class="rule off" id="shaved">
+<div class="rule-head">
+<h3>Shaved bar</h3>
+<span class="rule-id">shaved</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">A trend bar with essentially no tail at one end — no pullback happened inside the session.</p>
+<div class="facts"><div class="fact"><b>989</b><span>marks</span></div><div class="fact"><b>15.1%</b><span>of sessions</span></div><div class="fact"><b>38</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · ▔ ▁ ▮</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i) &amp;&amp; range[i] !== 0
+bodyPct[i] &gt;= TREND_BODY                   <span class="c">// only a trend bar&#x27;s missing tail says anything</span>
+top    = upperTailPct[i] &lt;= SHAVED_TAIL    <span class="c">// 0.05</span>
+bottom = lowerTailPct[i] &lt;= SHAVED_TAIL
+top || bottom</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Shaved at both ends emits <code>▮</code>, one mark rather than two.</li>
+<li>The trend-bar precondition is deliberate: a doji with no tail at one end is a common and meaningless shape.</li>
+<li>This is one of the three rules the <code>suspect</code> guard exists for — a settlement close printed outside the bar’s own range produces a tail of exactly zero.</li>
+</ul>
+</article><article class="rule off" id="pin-bar">
+<div class="rule-head">
+<h3>Pin bar</h3>
+<span class="rule-id">pin-bar</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">One long tail with a small body: price went somewhere and was rejected.</p>
+<div class="facts"><div class="fact"><b>244</b><span>marks</span></div><div class="fact"><b>3.7%</b><span>of sessions</span></div><div class="fact"><b>9</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · pin</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i) &amp;&amp; range[i] !== 0
+bodyPct[i] &lt;= DOJI_BODY                    <span class="c">// 0.25</span>
+rangeAtr[i] &gt;= PIN_MIN_ATR * tol           <span class="c">// 1 x ATR</span>
+upper = upperTailPct[i] &gt;= PIN_TAIL        <span class="c">// 0.60</span>
+lower = lowerTailPct[i] &gt;= PIN_TAIL
+upper !== lower                            <span class="c">// exactly one; a symmetric doji is neither</span>
+
+tone = lower ? bull : bear                 <span class="c">// the tail is REJECTED price</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The <code>upper !== lower</code> test rejects both the no-tail case and the two-tailed doji in one comparison.</li>
+<li>Direction is the tail’s <strong>opposite</strong>: a long lower tail is a bullish pin.</li>
+<li>The ATR floor took the rule from 14.2% of sessions to 3.7%. A long tail on a session smaller than average is not a rejection of anything; it is a quiet day.</li>
+</ul>
+</article><article class="rule off" id="climax">
+<div class="rule-head">
+<h3>Climax</h3>
+<span class="rule-id">climax</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">An outsized bar ending a run of same-direction bars — exhaustion rather than strength.</p>
+<div class="facts"><div class="fact"><b>38</b><span>marks</span></div><div class="fact"><b>0.6%</b><span>of sessions</span></div><div class="fact"><b>1</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · CLX</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i)
+rangeAtr[i] &gt;= CLIMAX_ATR * tol            <span class="c">// 2 x ATR</span>
+dir[i] !== 0
+
+run = 1
+for k = i-1 downwards while dir[k] === dir[i]
+                        and isContractStart[k+1] === 0:  run++
+run &gt;= CLIMAX_RUN                          <span class="c">// 3</span>
+
+tone = dir &gt; 0 ? bear : bull               <span class="c">// exhaustion reads AGAINST the run</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The tone is inverted on purpose. A climactic bull bar is a bearish mark.</li>
+<li>A contract start breaks the run: the bars either side of one are not the same instrument, so they are not one push.</li>
+<li>The <strong>first rule to ship off on usage rather than density</strong> — 38 marks is 0.6% of sessions, nowhere near the level that hid <code>trend-bar</code>. It is off because a folded rule that is switched on is promoted back into the list, so both flags have to move for a rule to leave it.</li>
+</ul>
+</article><article class="rule off" id="gap-bar">
+<div class="rule-head">
+<h3>Gap</h3>
+<span class="rule-id">gap-bar</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">The session opened clear of the previous session’s entire range.</p>
+<div class="facts"><div class="fact"><b>42</b><span>marks</span></div><div class="fact"><b>0.6%</b><span>of sessions</span></div><div class="fact"><b>2</b><span>a year</span></div><div class="fact"><b>usable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · gap</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>usable(i)
+gap[i] !== 0
+
+<span class="c">// gap is computed in metrics(), not here:</span>
+gap[i] =  +1  if low[i]  &gt; high[i-1]
+          -1  if high[i] &lt; low[i-1]
+           0  otherwise, ALWAYS 0 at i = 0 and at a contract start</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The exclusion that matters is upstream. <code>metrics()</code> forces <code>gap</code> to zero at every contract start, because 2024-12-23 is a textbook gap up by every geometric test and a tradable gap by none — it is carry.</li>
+<li>That suppression is keyed on <code>contractStarts()</code>, not <code>Dataset.rolls</code>. The two differ by one bar and only one of them is the discontinuity.</li>
+<li>Measured on the true gap: a whole-range gap on a daily continuous future is rare, 42 in twenty-six years.</li>
+</ul>
+</article><article class="rule" id="breakout">
+<div class="rule-head">
+<h3>Breakout</h3>
+<span class="rule-id">breakout</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">A trend bar that closed beyond the extreme of the previous twenty sessions.</p>
+<div class="facts"><div class="fact"><b>349</b><span>marks</span></div><div class="fact"><b>5.3%</b><span>of sessions</span></div><div class="fact"><b>13</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · BO</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// breakoutIndices(ctx) — the shared definition</span>
+for i from BREAKOUT_LOOKBACK:                  <span class="c">// 20</span>
+  comparable(i)
+  bodyPct[i] &gt;= TREND_BODY                     <span class="c">// 0.60</span>
+  rangeAtr[i] &gt;= BREAKOUT_MIN_ATR * tol        <span class="c">// 1 x ATR</span>
+
+  hi = max(high[k]) for k in [i-20, i-1]       <span class="c">// the window EXCLUDES i:</span>
+  lo = min(low[k])  for k in [i-20, i-1]       <span class="c">// a bar cannot break out of itself</span>
+
+  close[i] &gt; hi  -&gt;  dir = +1
+  close[i] &lt; lo  -&gt;  dir = -1</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Measured on the <strong>close</strong>, not the high. A wick through the twenty-day high is not a breakout.</li>
+<li>The ATR floor matters more than it looks: in a trending market the 20-session high is taken out constantly by bars nobody noticed.</li>
+<li><code>breakoutIndices()</code> is exported and consumed by <code>follow-through</code>, <code>bo-pullback</code> and <code>failed-bo</code>. Re-running the rule and parsing its dates back into indices would couple them through their output format rather than their logic.</li>
+</ul>
+</article><article class="rule" id="follow-through">
+<div class="rule-head">
+<h3>Follow-through</h3>
+<span class="rule-id">follow-through</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">A second trend bar the same way, immediately after a breakout. Its absence is the more useful signal.</p>
+<div class="facts"><div class="fact"><b>45</b><span>marks</span></div><div class="fact"><b>0.7%</b><span>of sessions</span></div><div class="fact"><b>2</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · FT</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>dir = breakouts[i - 1]        <span class="c">// a breakout on the PREVIOUS bar</span>
+dir !== undefined
+comparable(i)
+bodyPct[i] &gt;= TREND_BODY
+dir[i] === dir                <span class="c">// same direction as the breakout</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Strictly the next bar. A trend bar two sessions later is not follow-through.</li>
+<li>Only 45 of 349 breakouts get one — which is the finding, and the reason the rule is worth having on a chart even at 0.7%.</li>
+</ul>
+</article><article class="rule" id="two-bar-reversal">
+<div class="rule-head">
+<h3>Two-bar reversal</h3>
+<span class="rule-id">two-bar-reversal</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Opposed trend bars of comparable size, the second undoing the first.</p>
+<div class="facts"><div class="fact"><b>237</b><span>marks</span></div><div class="fact"><b>3.6%</b><span>of sessions</span></div><div class="fact"><b>9</b><span>a year</span></div><div class="fact"><b>comparable + usable(i−1)</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>bar · 2BR</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>comparable(i) &amp;&amp; usable(i - 1)
+bodyPct[i] &gt;= TREND_BODY &amp;&amp; bodyPct[i-1] &gt;= TREND_BODY
+dir[i] !== 0 &amp;&amp; dir[i-1] === -dir[i]
+
+larger  = max(body[i], body[i-1])
+smaller = min(body[i], body[i-1])
+larger !== 0 &amp;&amp; smaller / larger &gt;= TWO_BAR_MATCH    <span class="c">// 0.60</span>
+
+tone = dir[i]                 <span class="c">// the SECOND bar names the direction</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The size match is on <strong>bodies</strong>, not ranges: the pattern is about one session’s move being given back, and the tails are not the move.</li>
+<li>Both bars must be trend bars, so a big bar reversed by a doji is not one.</li>
+</ul>
+</article>
+</section>
+
+<section id="lines">
+  <div class="col">
+    <h2 class="sec">Lines — the shapes those bars build</h2>
+    <p class="lede">
+      Eight rules over <code>ctx.s.pivots</code> rather than raw bars — with one
+      exception, <code>micro-channel</code>, which reads bars directly and is
+      therefore the only shape here readable on the day it completes. For the
+      other seven, <code>knownAt</code> is the confirmation date of the
+      <strong>last pivot the pattern depends on</strong>, never the date of its
+      own last point.
+    </p>
+  </div>
+  <article class="rule" id="bull-channel">
+<div class="rule-head">
+<h3>Bull channel</h3>
+<span class="rule-id">bull-channel</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">A least-squares trendline through a run of rising swing lows, with the parallel that encloses the highs.</p>
+<div class="facts"><div class="fact"><b>99</b><span>marks</span></div><div class="fact"><b>1.5%</b><span>of sessions</span></div><div class="fact"><b>4</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>channel</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// runs(pivots, &#x27;low&#x27;, +1): consecutive LOW pivots each strictly higher</span>
+<span class="c">// than the last. A run ends where one is not; runs of &gt;= 2 are kept and</span>
+<span class="c">// sorted LONGEST FIRST.</span>
+
+for run in runs, longest first:
+  skip if [run.first.i, run.last.i] overlaps an already-claimed range
+
+  line = fitLine(run)                        <span class="c">// ordinary least squares over (i, price)</span>
+  atr  = atr[run.last.i]                     <span class="c">// must be finite</span>
+  tol  = atr * CHANNEL_TOL_ATR * ctx.tol     <span class="c">// 0.4 x ATR</span>
+
+  q = measure(line, from=run.first.i, to=run.last.i, side=+1, tol, close)
+  q.touches &gt;= CHANNEL_MIN_TOUCHES           <span class="c">// 3</span>
+  q.breaks  &lt;= CHANNEL_MAX_BREAKS            <span class="c">// 1</span>
+
+  claim [first.i, last.i]
+  emit channel  from priceOn(line, first.i)  to priceOn(line, last.i)
+                offset = envelopeOffset(...) <span class="c">// the parallel enclosing every high</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The line is fitted by <strong>OLS through the pivots</strong>, not drawn between the first and last of them, so a middle touch that overshoots pulls the line rather than being ignored.</li>
+<li>Longest-first with claimed ranges is what stops one channel being emitted three times through fewer of its own touches.</li>
+<li><code>knownAt</code> is the largest <code>confirmedAt</code> in the run — the channel is not readable until its last pivot confirms, three sessions after it printed.</li>
+<li>A <em class="i">touch</em> is within <code>0.4 × ATR</code> either side. A <em class="i">break</em> is a <strong>close</strong> beyond the line by more than that tolerance — a wick through a trendline is what trendlines are for.</li>
+</ul>
+</article><article class="rule" id="bear-channel">
+<div class="rule-head">
+<h3>Bear channel</h3>
+<span class="rule-id">bear-channel</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The mirror: a line through falling swing highs with the parallel below it.</p>
+<div class="facts"><div class="fact"><b>96</b><span>marks</span></div><div class="fact"><b>1.5%</b><span>of sessions</span></div><div class="fact"><b>4</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>channel</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// Identical to bull-channel with:</span>
+<span class="c">//   kind = &#x27;high&#x27;, dir = -1, side = -1</span>
+<span class="c">// so the run is consecutive HIGH pivots each strictly lower than the last,</span>
+<span class="c">// the line is a ceiling tested by highs, and a break is a close ABOVE it.</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Generated by the same factory as <code>bull-channel</code> — <code>channelRule(id, dir)</code> — so the two cannot drift apart. Every threshold is shared.</li>
+<li><code>side</code> flips what <code>measure()</code> reads: <code>+1</code> tests lows against a floor, <code>−1</code> tests highs against a ceiling.</li>
+</ul>
+</article><article class="rule" id="micro-channel">
+<div class="rule-head">
+<h3>Micro channel</h3>
+<span class="rule-id">micro-channel</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Five or more consecutive bars each making a higher high and a higher low, or the mirror — the strongest trend there is, and the one that offers no pullback entry.</p>
+<div class="facts"><div class="fact"><b>238</b><span>marks</span></div><div class="fact"><b>3.6%</b><span>of sessions</span></div><div class="fact"><b>9</b><span>a year</span></div><div class="fact"><b>raw bars</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>channel</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>start from 1, scanning forward:
+  up   = high[s] &gt; high[s-1] &amp;&amp; low[s] &gt; low[s-1]
+  down = high[s] &lt; high[s-1] &amp;&amp; low[s] &lt; low[s-1]
+  neither -&gt; s++, continue
+
+  extend end while the next bar continues the pattern
+                AND isContractStart[end+1] === 0
+
+  a    = s - 1                               <span class="c">// the run INCLUDES its reference bar</span>
+  bars = end - a + 1
+  bars &gt;= MICRO_MIN_BARS                     <span class="c">// 5</span>
+
+  line = lineThrough( (a, low[a]), (end, low[end]) )     <span class="c">// highs when down</span>
+  emit channel, offset = envelopeOffset(...)
+  s = end + 1                                <span class="c">// runs never overlap</span></pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The only line rule that reads <strong>raw bars rather than pivots</strong>, and therefore the only one whose <code>knownAt</code> equals its <code>at</code> — every bar in the run is readable at its own close.</li>
+<li>The line is drawn <strong>through two endpoints</strong>, not fitted: the run is by definition monotone, so there is nothing for a regression to average.</li>
+<li>The run is anchored one bar back at <code>a = start − 1</code>, because the first "higher high and higher low" is a statement about the bar before it.</li>
+<li>A contract start terminates the run rather than being skipped, since the comparison across it is meaningless.</li>
+</ul>
+</article><article class="rule off" id="spike-and-channel">
+<div class="rule-head">
+<h3>Spike and channel</h3>
+<span class="rule-id">spike-and-channel</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">A run of same-direction bars covering real ground, followed by a channel of distinctly shallower slope. It names the session where a trend stopped being one-way.</p>
+<div class="facts"><div class="fact"><b>80</b><span>marks</span></div><div class="fact"><b>1.2%</b><span>of sessions</span></div><div class="fact"><b>3</b><span>a year</span></div><div class="fact"><b>bars + pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>segment + channel</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>scan i forward:
+  dir = dir[i]; dir === 0 -&gt; i++, continue
+  extend end while dir[end+1] === dir and isContractStart[end+1] === 0
+
+  bars     = end - i + 1
+  travel   = |close[end] - open[i]|
+  meanBody = mean(bodyPct[i..end])
+
+  bars &gt;= SPIKE_MIN_BARS                     <span class="c">// 3</span>
+  travel &gt;= SPIKE_MIN_ATR * atr[end] * tol   <span class="c">// 1.5 x ATR, over the RUN</span>
+  meanBody &gt;= SPIKE_MEAN_BODY                <span class="c">// 0.50, averaged</span>
+
+  spikeSlope = (close[end] - open[i]) / bars
+
+  <span class="c">// the channel: same-side pivots in the 60 sessions after the spike</span>
+  after = pivots of kind (dir &gt; 0 ? &#x27;low&#x27; : &#x27;high&#x27;)
+          with end &lt; p.i &lt;= end + SPIKE_CHANNEL_WINDOW
+  after.length &gt;= 2
+  line = fitLine(after)
+  sign(line.slope) === sign(spikeSlope)
+  |line.slope| &lt; |spikeSlope| * SPIKE_SLOPE_RATIO       <span class="c">// 0.6</span>
+
+  q = measure(line, end, after.last.i, side, 0.4 x ATR, close)
+  q.touches &gt;= 3 &amp;&amp; q.breaks &lt;= 1
+
+  emit TWO marks: segment (open[i] -&gt; close[end]) + channel
+  i = after.last.i + 1</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li><strong>A spike is judged as a run, not bar by bar.</strong> Requiring every bar in it to clear the trend-bar body threshold is a stricter reading than Brooks means and finds five in twenty-six years; testing the run’s total travel and its <em class="i">average</em> body lands at 2.4 a year.</li>
+<li>Two marks, not one, because a single shape would hide the very thing worth seeing — the change in slope.</li>
+<li>The only composite shape: it needs a bar-level notion (a run of trend bars) as well as a fit over pivots.</li>
+<li>The scan jumps past the whole channel on a hit, so a spike and its channel are claimed together.</li>
+</ul>
+</article><article class="rule" id="double-top">
+<div class="rule-head">
+<h3>Double top</h3>
+<span class="rule-id">double-top</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Two swing highs at effectively the same price with a real trough between them.</p>
+<div class="facts"><div class="fact"><b>112</b><span>marks</span></div><div class="fact"><b>1.7%</b><span>of sessions</span></div><div class="fact"><b>4</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>level</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// findDoubles(ctx, &#x27;high&#x27;) — shared with dt-short</span>
+for consecutive HIGH pivots a, b:
+  span = b.i - a.i
+  DT_MIN_BARS &lt;= span &lt;= DT_MAX_BARS         <span class="c">// 4 .. 40</span>
+  atr = atr[b.i]                             <span class="c">// must be finite</span>
+
+  |b.price - a.price| &lt;= DT_TOL_ATR * atr * tol          <span class="c">// 0.5 x ATR</span>
+
+  middle = the first pivot strictly between them of the OTHER kind
+  middle exists
+  depth = min(a.price, b.price) - middle.price
+  depth &gt;= DT_TROUGH_ATR * atr * tol         <span class="c">// 1.5 x ATR</span>
+
+emit level  price = max(a.price, b.price)    <span class="c">// the MORE EXTREME peak</span>
+            fromD = a.date
+            toD   = knownAt</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li><strong>Drawn as the level, not as the M.</strong> The three-point zigzag traced what price did and named nothing; what the pattern is about is the one price that was tested twice and held.</li>
+<li>The price is the more extreme of the two peaks, not their mean — at the mean one peak pokes through its own line and reads as a line drawn wrong. They sit within <code>0.5 × ATR</code> of each other by definition, so the choice moves the line under half an ATR either way.</li>
+<li>The trough requirement is what stops every pause at a level being a double top.</li>
+<li>The id is built from the two peak dates, so the geometry change kept every verdict already on disk.</li>
+</ul>
+</article><article class="rule" id="double-bottom">
+<div class="rule-head">
+<h3>Double bottom</h3>
+<span class="rule-id">double-bottom</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The mirror: two swing lows at one price with a real peak between them.</p>
+<div class="facts"><div class="fact"><b>79</b><span>marks</span></div><div class="fact"><b>1.2%</b><span>of sessions</span></div><div class="fact"><b>3</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>level</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// Identical to double-top with kind = &#x27;low&#x27;:</span>
+depth = middle.price - max(a.price, b.price)
+emit level  price = min(a.price, b.price)</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Same factory, <code>doubleRule(id, kind)</code>, and the same <code>findDoubles()</code> search — so the tolerance can only move for both at once.</li>
+<li>Rarer than the top (79 against 112) on a series with a secular upward drift, where lows are made in fast panics that rarely retest cleanly.</li>
+</ul>
+</article><article class="rule" id="wedge">
+<div class="rule-head">
+<h3>Wedge</h3>
+<span class="rule-id">wedge</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Three pushes the same way, each smaller than the last, with both boundaries leaning the same way and converging. Price is still making progress; it is running out of it.</p>
+<div class="facts"><div class="fact"><b>132</b><span>marks</span></div><div class="fact"><b>2.0%</b><span>of sessions</span></div><div class="fact"><b>5</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>2 × segment</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// findWedges(ctx) — shared with wedge-reversal</span>
+for each sliding window of FIVE alternating pivots:
+  skip if the window overlaps an already-claimed range
+
+  pushes = the 3 pivots of the window&#x27;s FIRST kind
+  pulls  = the 2 of the other kind
+  pushLine = fitLine(pushes);  pullLine = fitLine(pulls)
+
+  up   = pushes[0].kind === &#x27;high&#x27;
+  legs = [ pushes[1].price - pushes[0].price,
+           pushes[2].price - pushes[1].price ]
+
+  forward:  all legs &gt; 0 (up)  or  all legs &lt; 0 (down)
+  |legs[1]| &lt;= |legs[0]| * WEDGE_SHRINK      <span class="c">// 0.85 — each push smaller</span>
+
+  sign(pushLine.slope) === sign(pullLine.slope)          <span class="c">// SAME way</span>
+  endGap &lt; startGap                          <span class="c">// ...and converging</span>
+
+emit TWO segments: the push line and the pull line</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>A wedge and a triangle are read from the <strong>same five-pivot window</strong> and differ only in what they ask of the two slopes: a wedge wants them parallel-ish and converging, a triangle wants them opposed.</li>
+<li>Two segments rather than one zigzag, because the zigzag through the pivots is identical for both shapes and the whole distinction lives in where the boundaries are heading.</li>
+<li>A sliding window means a genuinely coiling stretch satisfies the predicate at four consecutive positions; the claimed-range list keeps the earliest complete reading — the one a trader would have drawn first.</li>
+<li>The two segments share an id stem and differ by a <code>push</code> / <code>pull</code> suffix.</li>
+</ul>
+</article><article class="rule" id="triangle">
+<div class="rule-head">
+<h3>Triangle</h3>
+<span class="rule-id">triangle</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Lower highs against higher lows: the boundaries slope opposite ways and the range closes. Price is going nowhere.</p>
+<div class="facts"><div class="fact"><b>144</b><span>marks</span></div><div class="fact"><b>2.2%</b><span>of sessions</span></div><div class="fact"><b>6</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>2 × segment</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>for each sliding window of FIVE alternating pivots:
+  skip if it overlaps an already-claimed range
+  pushes / pulls / pushLine / pullLine as for wedge
+
+  pushLine.slope !== 0 &amp;&amp; pullLine.slope !== 0            <span class="c">// a flat side is not a triangle</span>
+  sign(pushLine.slope) !== sign(pullLine.slope)           <span class="c">// OPPOSITE ways</span>
+
+  highs = whichever line runs through the HIGH pivots
+  lows  = the other
+  highs.slope &lt; 0 &amp;&amp; lows.slope &gt; 0                       <span class="c">// contracting only</span>
+
+  startGap = priceOn(highs, w[0].i) - priceOn(lows, w[0].i)
+  endGap   = priceOn(highs, w[4].i) - priceOn(lows, w[4].i)
+  endGap &gt; 0 &amp;&amp; endGap &lt; startGap                         <span class="c">// closes, without crossing</span>
+
+emit TWO segments, tone neutral</pre>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The only shape rule with a <strong>neutral</strong> tone: a triangle makes no directional claim, which is the whole point of it.</li>
+<li><code>endGap &gt; 0</code> rejects a window whose boundaries have already crossed by the last pivot — that is not a triangle, it is two lines fitted to noise.</li>
+<li>The explicit <code>highs.slope &lt; 0 &amp;&amp; lows.slope &gt; 0</code> test excludes ascending and descending triangles by design; only the symmetrical, contracting case is detected.</li>
+</ul>
+</article>
+</section>
+
+<section id="entries">
+  <div class="col">
+    <h2 class="sec">Entries — what those shapes set up</h2>
+    <p class="lede">
+      Eight rules that find a signal bar and hand it to <code>planFor</code>.
+      Every pattern they consume is <strong>imported rather than
+      re-derived</strong> — <code>breakoutIndices</code>,
+      <code>findDoubles</code>, <code>findWedges</code>. An entry rule with its
+      own idea of what a double bottom is would drift from the shape rule the
+      first time a tolerance moved, and the chart would draw one thing and trade
+      another.
+    </p>
+  </div>
+  <article class="rule off" id="pullback-entry">
+<div class="rule-head">
+<h3>Pullback entry (H1–H4 / L1–L4)</h3>
+<span class="rule-id">pullback-entry</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">Every counted attempt to resume the trend. The second entry is the subset worth watching, which is why this one ships off.</p>
+<div class="facts"><div class="fact"><b>808</b><span>marks</span></div><div class="fact"><b>12.3%</b><span>of sessions</span></div><div class="fact"><b>31</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>for i where s.pullback[i] !== 0:
+  n      = |s.pullback[i]|                   <span class="c">// 1..4, capped at MAX_PULLBACK</span>
+  long   = s.pullback[i] &gt; 0
+  signal = i - 1                             <span class="c">// the bar the count traded through</span>
+  comparable(i)
+
+  plan   = planFor(signal, long ? &#x27;long&#x27; : &#x27;short&#x27;)
+  walk   = walkForward(plan, orderAt = signal)</pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>i − 1, the bar the count trades through</dd>
+<dt>direction</dt><dd>with the trend — long on H, short on L</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>default 2R</dd>
+<dt>order placed</dt><dd>the signal bar</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">808</b><span>signals</span></div><div class="fact"><b class="">808</b><span>filled</span></div><div class="fact"><b class="">215</b><span>target hit</span></div><div class="fact"><b class="">27%</b><span>win rate</span></div><div class="fact"><b class="r-neg">−0.124 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The fills are guaranteed by construction: <code>s.pullback[i]</code> only increments on a bar that has <em class="i">already</em> exceeded the previous bar’s extreme, so the stop order one tick beyond it was necessarily touched. 808 signals, 808 fills.</li>
+<li>That is also why this rule cannot be used to judge entry quality on its own — it measures what the target did, not whether the entry triggered.</li>
+<li>The pullback counter lives in <code>structure.ts</code> and resets at every new swing extreme, not only on an attempt bar. Without that reset the count runs away through a grinding trend and everything piles into H4.</li>
+</ul>
+</article><article class="rule" id="second-entry">
+<div class="rule-head">
+<h3>Second entry (H2 / L2)</h3>
+<span class="rule-id">second-entry</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The second attempt to resume the trend, which Brooks treats as the highest-probability with-trend entry.</p>
+<div class="facts"><div class="fact"><b>162</b><span>marks</span></div><div class="fact"><b>2.5%</b><span>of sessions</span></div><div class="fact"><b>6</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// Exactly pullbackEntries(ctx, &#x27;second-entry&#x27;, only = 2)</span>
+for i where |s.pullback[i]| === 2:
+  ... identical to pullback-entry ...</pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>i − 1</dd>
+<dt>direction</dt><dd>with the trend</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>default 2R</dd>
+<dt>order placed</dt><dd>the signal bar</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">162</b><span>signals</span></div><div class="fact"><b class="">162</b><span>filled</span></div><div class="fact"><b class="">39</b><span>target hit</span></div><div class="fact"><b class="">24%</b><span>win rate</span></div><div class="fact"><b class="r-neg">−0.186 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li>A strict subset of <code>pullback-entry</code>, produced by the same function with an <code>only</code> filter — so the two can never disagree about what an H2 is.</li>
+<li>The measured result is the finding this tool exists to surface: <strong>162 fills, 24% winners, −0.186R a trade at a mechanical 2R target</strong>. A 2R exit needs better than 33% to break even.</li>
+<li>That is a statement about the exit, not the entry. The measured-move rules below use the pattern’s own projection and come out positive on the same series.</li>
+</ul>
+</article><article class="rule" id="dt-short">
+<div class="rule-head">
+<h3>Double top short</h3>
+<span class="rule-id">dt-short</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Short the bar that turns the second peak. The target is the measured move — the pattern’s height projected down from the neckline.</p>
+<div class="facts"><div class="fact"><b>112</b><span>marks</span></div><div class="fact"><b>1.7%</b><span>of sessions</span></div><div class="fact"><b>4</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>for each double in findDoubles(ctx, &#x27;high&#x27;):       <span class="c">// the SHARED search</span>
+  signal    = b.i                            <span class="c">// the second peak IS the signal bar</span>
+  height    = |b.price - middle.price|
+  target    = middle.price - height          <span class="c">// measured move from the neckline</span>
+  orderAt   = min(b.confirmedAt, n - 1)      <span class="c">// = b.i + strength</span>
+
+  plan = planFor(signal, &#x27;short&#x27;, target)
+         entry = low[signal]  - tick
+         stop  = high[signal] + tick
+  walk = walkForward(plan, orderAt)          <span class="c">// NOT from signal</span></pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>the second peak, b.i</dd>
+<dt>direction</dt><dd>short</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>middle.price − |b.price − middle.price|</dd>
+<dt>order placed</dt><dd>b.confirmedAt — three sessions later</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">112</b><span>signals</span></div><div class="fact"><b class="">87</b><span>filled</span></div><div class="fact"><b class="">27</b><span>target hit</span></div><div class="fact"><b class="">31%</b><span>win rate</span></div><div class="fact"><b class="r-pos">+0.147 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li><strong>The order goes in at <code>knownAt</code>, not at the signal bar</strong> — and for a whole release it did not. A swing pivot needs <code>strength</code> bars to its right, so this setup is not readable until three sessions after the peak it names.</li>
+<li>All 257 marks across this rule, <code>db-long</code> and <code>wedge-reversal</code> quoted the outcome of an order nobody could have placed. Almost the entire edge was that head start: measured either side of the fix, <span class="r-pos">+0.873R</span> a mark became <span class="r-pos">+0.114R</span>.</li>
+<li>The prices still come from the signal bar — one tick beyond each end of the second peak — because that is where Brooks puts them. Only the walk’s start date moved.</li>
+<li>25 of 112 never fill: the entry sits below a swing high and price does not always come back for it within the one-bar window.</li>
+<li><code>--check</code> re-derives every entry’s walk from the mark’s own dates and fails if the note disagrees.</li>
+</ul>
+</article><article class="rule" id="db-long">
+<div class="rule-head">
+<h3>Double bottom long</h3>
+<span class="rule-id">db-long</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The mirror: long the bar that turns the second trough, targeting the height projected up from the neckline.</p>
+<div class="facts"><div class="fact"><b>79</b><span>marks</span></div><div class="fact"><b>1.2%</b><span>of sessions</span></div><div class="fact"><b>3</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre><span class="c">// doubleEntry(&#x27;db-long&#x27;, &#x27;low&#x27;) — the same factory as dt-short</span>
+target = middle.price + height
+plan   = planFor(signal, &#x27;long&#x27;, target)
+         entry = high[signal] + tick
+         stop  = low[signal]  - tick</pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>the second trough, b.i</dd>
+<dt>direction</dt><dd>long</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>middle.price + |b.price − middle.price|</dd>
+<dt>order placed</dt><dd>b.confirmedAt</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">79</b><span>signals</span></div><div class="fact"><b class="">74</b><span>filled</span></div><div class="fact"><b class="">18</b><span>target hit</span></div><div class="fact"><b class="">24%</b><span>win rate</span></div><div class="fact"><b class="r-pos">+0.084 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li>Fills far more reliably than the short (74 of 79 against 87 of 112), because a long entry one tick above a swing low sits in the direction price is already turning.</li>
+<li>Wins less often than <code>dt-short</code> and still comes out positive, because the measured move is a long target and the winners are large.</li>
+</ul>
+</article><article class="rule" id="wedge-reversal">
+<div class="rule-head">
+<h3>Wedge reversal</h3>
+<span class="rule-id">wedge-reversal</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">Trade against the third push of a wedge, targeting the start of the wedge — where Brooks expects it to unwind to.</p>
+<div class="facts"><div class="fact"><b>66</b><span>marks</span></div><div class="fact"><b>1.0%</b><span>of sessions</span></div><div class="fact"><b>3</b><span>a year</span></div><div class="fact"><b>pivots</b><span>guard</span></div><div class="fact"><b>+strength</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>for w in findWedges(ctx):                    <span class="c">// the SHARED search</span>
+  third   = w.pushes[2]
+  signal  = third.i
+  target  = w.window[0].price                <span class="c">// back to where the wedge began</span>
+  orderAt = min(third.confirmedAt, n - 1)
+
+  dir = w.up ? &#x27;short&#x27; : &#x27;long&#x27;              <span class="c">// AGAINST the three pushes</span></pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>the third push, pushes[2].i</dd>
+<dt>direction</dt><dd>against the pushes</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>window[0].price — where the wedge began</dd>
+<dt>order placed</dt><dd>third.confirmedAt</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">66</b><span>signals</span></div><div class="fact"><b class="">58</b><span>filled</span></div><div class="fact"><b class="">28</b><span>target hit</span></div><div class="fact"><b class="">48%</b><span>win rate</span></div><div class="fact"><b class="r-neg">−0.182 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The longest target in the set. A wedge usually unwinds to where it began, which is a longer run than 2R and the reason the setup is worth taking at all.</li>
+<li><strong>The highest win rate here and still negative.</strong> 48% of filled trades reach the target, and the rule averages <span class="r-neg">−0.182R</span> — because the target is far, the stop is one tick beyond a swing extreme, and the losers are full-size.</li>
+<li>It was <span class="r-pos">+0.345R</span> before the <code>orderAt</code> fix. This is the rule that changed sign, and the clearest evidence that a two-session head start was doing the work.</li>
+</ul>
+</article><article class="rule" id="bo-pullback">
+<div class="rule-head">
+<h3>Breakout pullback</h3>
+<span class="rule-id">bo-pullback</span>
+<span class="pill on">on by default</span>
+</div>
+<p class="blurb">The first bar to give ground after a breakout, entered back in the breakout’s direction.</p>
+<div class="facts"><div class="fact"><b>282</b><span>marks</span></div><div class="fact"><b>4.3%</b><span>of sessions</span></div><div class="fact"><b>11</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>claimed = {}                               <span class="c">// shared across all breakouts</span>
+for (i, dir) in breakoutIndices(ctx):
+  for k in [i+1, i + BO_PULLBACK_WINDOW]:    <span class="c">// 5 sessions</span>
+    if !comparable(k): break
+    pulled = dir &gt; 0 ? high[k] &lt; high[k-1]
+                     : low[k]  &gt; low[k-1]
+    if !pulled: continue
+    if claimed.has(k): break                 <span class="c">// another breakout got here first</span>
+    claimed.add(k)
+    emit trade(signal = k, dir = the BREAKOUT&#x27;s direction)
+    break                                    <span class="c">// first pullback only</span></pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>the first bar that pulls back</dd>
+<dt>direction</dt><dd>the breakout's direction</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>default 2R</dd>
+<dt>order placed</dt><dd>the signal bar</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">282</b><span>signals</span></div><div class="fact"><b class="">138</b><span>filled</span></div><div class="fact"><b class="">31</b><span>target hit</span></div><div class="fact"><b class="">22%</b><span>win rate</span></div><div class="fact"><b class="r-neg">−0.300 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The <code>claimed</code> set is a correctness fix, not an optimisation. <strong>Two breakouts on consecutive sessions find the same first pullback</strong>, which without it emits two marks on one bar carrying one id — duplicate keys in a keyed list, two identical rows, and one verdict covering both. <code>--check</code> now asserts id uniqueness per rule.</li>
+<li>Only 138 of 282 fill: entering <em class="i">with</em> a breakout after a pullback means the order sits back in the direction price just left, and price often keeps going without it.</li>
+<li>The worst average in the set at <span class="r-neg">−0.300R</span>. It and <code>failed-bo</code> read the same breakout in opposite directions and both are shown — the outcome column adjudicates.</li>
+</ul>
+</article><article class="rule off" id="failed-bo">
+<div class="rule-head">
+<h3>Failed breakout</h3>
+<span class="rule-id">failed-bo</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">A breakout that closes back inside the range it cleared, faded the other way.</p>
+<div class="facts"><div class="fact"><b>102</b><span>marks</span></div><div class="fact"><b>1.6%</b><span>of sessions</span></div><div class="fact"><b>4</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>for (i, dir) in breakoutIndices(ctx):
+  <span class="c">// the level it broke: the extreme of the window it cleared</span>
+  level = dir &gt; 0 ? max(high[k]) : min(low[k])   for k in [i-20, i-1]
+
+  for k in [i+1, i + FAILED_BO_WINDOW]:      <span class="c">// 2 sessions</span>
+    if !comparable(k): break
+    backInside = dir &gt; 0 ? close[k] &lt; level
+                         : close[k] &gt; level
+    if !backInside: continue
+    if claimed.has(k): break
+    claimed.add(k)
+    emit trade(signal = k, dir = OPPOSITE the breakout)
+    break</pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>the bar that closes back inside</dd>
+<dt>direction</dt><dd>AGAINST the breakout</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>default 2R</dd>
+<dt>order placed</dt><dd>the signal bar</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">102</b><span>signals</span></div><div class="fact"><b class="">76</b><span>filled</span></div><div class="fact"><b class="">25</b><span>target hit</span></div><div class="fact"><b class="">33%</b><span>win rate</span></div><div class="fact"><b class="r-pos">+0.157 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li>The fade direction is the inversion: a failed <em class="i">up</em> breakout is a short.</li>
+<li>The level is re-derived here with a <strong>literal 20</strong> rather than the exported <code>BREAKOUT_LOOKBACK</code>. The values agree today; the coupling is by coincidence rather than by import, unlike every other shared threshold in this layer.</li>
+<li>Measured on the close, matching the breakout rule it inverts — a wick back inside is not a failure.</li>
+<li>Positive at <span class="r-pos">+0.157R</span> and the second-best win rate, which is the finding: on this series fading a failed breakout beat joining a successful one.</li>
+</ul>
+</article><article class="rule off" id="final-flag">
+<div class="rule-head">
+<h3>Final flag</h3>
+<span class="rule-id">final-flag</span>
+<span class="pill off">off · folded</span>
+</div>
+<p class="blurb">A tight consolidation late in a trend whose breakout closes straight back inside, faded. "Final" is retrospective — the rule only sees a failed late-trend flag.</p>
+<div class="facts"><div class="fact"><b>44</b><span>marks</span></div><div class="fact"><b>0.7%</b><span>of sessions</span></div><div class="fact"><b>2</b><span>a year</span></div><div class="fact"><b>comparable</b><span>guard</span></div><div class="fact"><b>at</b><span>knownAt</span></div><div class="fact"><b>trade</b><span>emits</span></div></div>
+<h4>Predicate</h4>
+<pre>age[i] = length of the current unbroken s.trend run, per bar
+
+for start in 1 .. n - FLAG_MIN_BARS:
+  dir = s.trend[start];  dir !== 0
+  age[start] &gt;= FLAG_TREND_BARS              <span class="c">// 20 bars into the trend</span>
+  atr[start] finite
+
+  <span class="c">// grow the flag while it stays tight</span>
+  hi, lo = high[start], low[start]
+  while length &lt; FLAG_MAX_BARS               <span class="c">// 10</span>
+        and isContractStart[end+1] === 0
+        and (widened hi - lo) &lt;= FLAG_MAX_ATR * atr * tol:   <span class="c">// 2 x ATR</span>
+    extend
+  length &gt;= FLAG_MIN_BARS                    <span class="c">// 3</span>
+
+  k = end + 1                                <span class="c">// the breakout is the VERY NEXT bar</span>
+  broke = dir &gt; 0 ? close[k] &gt; hi : close[k] &lt; lo
+  if !broke: no flag here
+
+  for f in [k+1, k + FLAG_FAIL_WINDOW]:      <span class="c">// 2 sessions</span>
+    backInside = dir &gt; 0 ? close[f] &lt; hi : close[f] &gt; lo
+    first such f is the signal; dir = AGAINST the trend</pre>
+<h4>Order</h4>
+<dl class="defs">
+<dt>signal bar</dt><dd>the bar that closes back inside the flag</dd>
+<dt>direction</dt><dd>AGAINST the trend</dd>
+<dt>entry / stop</dt><dd>one tick beyond the signal bar, both ends — <code>planFor()</code>, never the rule</dd>
+<dt>target</dt><dd>default 2R</dd>
+<dt>order placed</dt><dd>the signal bar</dd>
+</dl>
+<h4>Walk-forward, whole series</h4>
+<div class="facts"><div class="fact"><b class="">44</b><span>signals</span></div><div class="fact"><b class="">32</b><span>filled</span></div><div class="fact"><b class="">13</b><span>target hit</span></div><div class="fact"><b class="">41%</b><span>win rate</span></div><div class="fact"><b class="r-pos">+0.462 R</b><span>average</span></div></div>
+<h4>Notes</h4>
+<ul class="notes">
+<li><strong>The rule detects the causal half only.</strong> Brooks names the pattern for what it turns out to be — the last flag of the trend — and that is knowable only afterwards. Whether it was the final one is left to the outcome column.</li>
+<li>The breakout must be the <em class="i">immediately</em> following bar. The outer loop is written with a <code>FLAG_FAIL_WINDOW</code> bound but always terminates on its first iteration, so that bound never takes effect; the flag’s breakout is exactly <code>end + 1</code>.</li>
+<li>The flag is grown greedily and stops at the first bar that would widen it past <code>2 × ATR</code>, so overlapping start positions produce flags of different lengths and the <code>claimed</code> set keeps one mark per failure bar.</li>
+<li><strong>The best average in the set at <span class="r-pos">+0.462R</span></strong>, and the only rule here whose target is a plain 2R and still comes out clearly positive.</li>
+</ul>
+</article>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <span>Price Action Mark · the marking rules</span>
+  <span>31 rules · ES=F daily, 6,550 sessions to 2026-08-27</span>
+  <span>Counts from <code>npm run marks -- --catalogue</code>; outcomes from <code>--trades</code></span>
+</footer>
+
+</div>
+
+</body>
+</html>
