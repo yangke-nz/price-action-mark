@@ -386,6 +386,23 @@ Break one of these and it fails quietly, not loudly.
 - **Markers do not thin themselves.** All 104 roll arrows at MAX zoom become a
   picket fence; `#refreshMarkers()` drops them below ~18px separation and the
   readout says so rather than letting them silently vanish.
+- **BOTH AXES DRAG, and the price one TURNS AUTOSCALE OFF FOR GOOD.**
+  `handleScale.axisPressedMouseMove.price` was `false` on the argument that a
+  vertical drag fights the trackpad's pan; it is a press-and-drag ON THE AXIS,
+  which no two-finger scroll produces, and the pan it was said to fight is
+  `handleScroll`, untouched. Enabling it is one flag — the trap is the second
+  half: the library leaves that scale manual afterwards, so the next range
+  preset frames a different slice of time in the price window the reader chose
+  by hand. Measured with the restore disabled as the control: drag on a 6M
+  chart, press MAX, and the 6,550 candles run from y=160 to the pane's LAST
+  pixel row (566 of 566) at 2,849 lit pixels — most of 26 years below the
+  bottom edge — against y=45..499 and 5,645 lit with it. `#restoreAutoScale()`
+  therefore fires on `showLastDays` and on `setData`, and NOWHERE else: a pan,
+  a scroll-zoom and a theme change must keep the scale the reader set. A
+  double click on the axis resets it too (`axisDoubleClickReset`, left at its
+  default, verified 380 -> 454 span), which is the reader's own way back —
+  though pressing the preset ALREADY ACTIVE is not, since that patches no
+  setting and so runs no effect.
 
 ### Electron / tooling
 - **`ELECTRON_RUN_AS_NODE` may be set in your shell.** It makes the Electron
@@ -936,11 +953,19 @@ delete that directory first.
     dispatching pointerdown/mousedown/pointerup/mouseup/click on the canvas
     changes nothing. Anything testing this must use `sendInputEvent`, which
     works on a `show: false` window, so the smoke needed no window change.
-- **`revealBar` / `revealMark` SET; `selectBar` / `selectMark` toggle.** The
-  toggling pair is right for the tape, where the click lands on the highlight
-  itself and a second click is the obvious way out. It is wrong for the chart,
-  where the highlight is somewhere else on screen and clicking the same bar
-  twice would clear it out from under the reader. Escape still clears both.
+- **ALL FOUR TOGGLE NOW: `revealBar` / `revealMark` as well as `selectBar` /
+  `selectMark`.** They used to differ — the reveal pair SET, on the argument
+  that the chart's highlight is somewhere else on screen and a second click
+  would clear it out from under the reader. That is true of the TAPE half of a
+  reveal and false of the half the reader is looking at: the band is drawn on
+  the chart under the cursor that clicked it, so a second click lands on the
+  highlight exactly the way the tape's does. The reveal pair is now
+  select-plus-scroll — it calls the toggling one and RETURNS EARLY when that
+  cleared the selection, because there is no row to scroll to and
+  `#widenTapeFor` must not widen the filter for a selection that just went
+  away. For a mark it also makes the gesture whole: `setVerdict` has always
+  toggled, so a second click takes back the Keep and the highlight together
+  rather than half of the first click. Escape still clears both.
 - **The reveal states its TARGET; it must not be inferred.** The tape's scroll
   effect first worked it out as "the selected mark's session, or else the
   selected bar" — right until both are set, which happens the moment a reader

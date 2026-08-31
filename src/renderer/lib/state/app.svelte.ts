@@ -335,28 +335,38 @@ export class AppState {
   }
 
   /**
-   * Show a mark in the tape — SET, never toggled, and scrolled to.
+   * Show a mark in the tape — TOGGLED, like the tape's own click, and
+   * scrolled to when the click selects rather than clears.
    *
-   * The toggling pair above is right for the tape, where the click lands on
-   * the highlight itself and a second click is the obvious way out of it. It
-   * is wrong for the CHART: there the highlight the reader is looking at is
-   * somewhere else on screen, and clicking the same mark twice would clear it
-   * out from under them. Escape still clears both, which is where "a way out"
-   * lives for this direction.
+   * This used to SET, on the argument that the chart's highlight is somewhere
+   * else on screen and a second click would clear it out from under the
+   * reader. That is only true of the TAPE half of the reveal: the mark's band
+   * is drawn on the chart, under the cursor that clicked it, so a second click
+   * lands on the highlight exactly the way the tape's does — and the reader
+   * asked for the way out to be the same gesture in both places. For a mark it
+   * also makes the pair symmetric: `setVerdict` already toggles, so a second
+   * click now takes back the whole of the first one, the Keep and the
+   * highlight together. Escape still clears both selections.
+   *
+   * Nothing scrolls on the clearing click: there is no row to reveal, and
+   * `#widenTapeFor` must not widen the filter for a selection that just went
+   * away.
    */
   revealMark(id: string): void {
-    this.selectedMarkId = id;
+    this.selectMark(id);
+    if (this.selectedMarkId !== id) return;
     const at = this.marks.find((mk) => mk.id === id)?.at;
     if (at === undefined) return;
     this.#widenTapeFor(at);
     this.#reveal(at);
   }
 
-  /** The same, for a session. See `revealMark` for why it does not toggle. */
+  /** The same, for a session. See `revealMark` for why it toggles. */
   revealBar(i: number): void {
     const at = this.dataset?.d[i];
     if (at === undefined) return;
-    this.selectedBarDate = at;
+    this.selectBar(i);
+    if (this.selectedBarDate !== at) return;
     this.#widenTapeFor(at);
     this.#reveal(at);
   }

@@ -45,11 +45,17 @@
       // about the tape the reader is actually looking at; the verdict then
       // lands and the row leaves the queue, which is what working a queue
       // looks like. The strip shows the Keep either way — it re-renders.
+      //
+      // BOTH HALVES TOGGLE, and they toggle together: clicking the same mark
+      // again takes the Keep back off (`setVerdict` has always done that) and
+      // now clears the highlight with it, so one click's whole effect has one
+      // way out. See `revealMark` for why the highlight stopped being a SET.
       onMarkClick: (id) => { app.revealMark(id); app.setVerdict(id, 'confirmed'); },
       // A click with no mark under it is about the bar: show that session in
-      // the tape. The readout deliberately does NOT follow — `focusIndex` puts
-      // the pointer above a clicked line, and the crosshair is already on this
-      // bar, so the hover is the right answer while the pointer is here.
+      // the tape, and clicking it again clears it. The readout deliberately
+      // does NOT follow — `focusIndex` puts the pointer above a clicked line,
+      // and the crosshair is already on this bar, so the hover is the right
+      // answer while the pointer is here.
       onBarClick: (index) => app.revealBar(index),
     });
     chart = instance;

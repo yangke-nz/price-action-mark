@@ -526,6 +526,19 @@ v5 are not obvious:
 - **Per-bar colours only restyle via `setData`.** Candle colours live on the
   data points, not on series options, so a theme change cannot be applied to
   them with `applyOptions` alone.
+- **Both axes drag, and the price one turns autoscale off for good.**
+  `handleScale.axisPressedMouseMove.price` used to be `false`, on the argument
+  that a vertical drag fights the trackpad's pan — but that is a press-and-drag
+  *on the axis*, which no two-finger scroll produces, and the pan it was said
+  to fight is `handleScroll`. Turning it on is one flag; the trap is that the
+  library then leaves the scale manual, so the next range preset frames a
+  different slice of time inside a price window chosen by hand. Measured with
+  the restore disabled as a control: drag on a 6M chart, press MAX, and 6,550
+  candles run from y=160 to the pane's last pixel row, 2,849 lit pixels against
+  5,645 — most of 26 years below the bottom edge. `#restoreAutoScale()` fires
+  on a range preset and on new data and nowhere else, so a pan, a scroll-zoom
+  and a theme change all keep the scale the reader set; a double click on the
+  axis is the library's own way back.
 
 **Theming is ordered, and the order is load-bearing.** The chart cannot be
 styled with CSS, so `applyTheme()` calls `getComputedStyle` to pick up the new
@@ -1097,10 +1110,17 @@ the tape could show the row after the Keep had already removed it from
 *Unresolved*, so every Keep from the chart threw the reader back to the full
 tape.
 
-Two details carry the behaviour. `revealBar` and `revealMark` **set** where
-`selectBar` and `selectMark` toggle — toggling is right for the tape, where the
-click lands on the highlight itself, and wrong for the chart, where clicking the
-same bar twice would clear a highlight the reader is looking at somewhere else.
+Two details carry the behaviour. All four of `revealBar` / `revealMark` and
+`selectBar` / `selectMark` **toggle**: clicking a highlighted bar or mark on the
+chart clears the highlight, the same way clicking it in the tape does. The
+reveal pair used to *set*, on the argument that the chart's highlight is
+somewhere else on screen — true of the tape half of a reveal, false of the half
+under the cursor, since the band is drawn on the chart where the click landed.
+They are now select-plus-scroll: each calls the toggling one and returns early
+when that cleared the selection, because there is no row to scroll to and the
+widen-the-filter rule must not fire for a selection that just went away. On a
+mark it also completes the gesture — `setVerdict` has always toggled, so a
+second click takes the Keep and the highlight back together.
 And the reveal **states its target** rather than letting the tape infer it: both
 selections are allowed to be live at once, so "the selected mark's session, or
 else the selected bar" sent the tape back to a mark clicked earlier whenever the

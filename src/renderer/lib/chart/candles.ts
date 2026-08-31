@@ -228,8 +228,15 @@ export class CandleChart {
         vertLine: { color: t.axis, width: 1, style: LineStyle.Solid, labelBackgroundColor: t.ink },
         horzLine: { color: t.axis, width: 1, style: LineStyle.Solid, labelBackgroundColor: t.ink },
       },
-      // Vertical drag on the price axis fights the pan gesture on a trackpad.
-      handleScale: { axisPressedMouseMove: { time: true, price: false } },
+      // BOTH AXES DRAG. The price axis was `false` on the argument that a
+      // vertical drag on it fights the trackpad's pan gesture — but this is
+      // `axisPressedMouseMove`, a press-and-drag ON THE AXIS, which is a
+      // deliberate gesture rather than anything a two-finger scroll produces;
+      // the pan it was said to fight is `handleScroll`, untouched here.
+      // Dragging the price axis turns that scale's `autoScale` OFF, which is
+      // the whole point (the reader is choosing the vertical zoom) and also
+      // the trap — see `#restoreAutoScale`.
+      handleScale: { axisPressedMouseMove: { time: true, price: true } },
     });
 
     // FILLED up-candles, on request. They were hollow — a transparent body
@@ -334,6 +341,9 @@ export class CandleChart {
       this.#indexOfTime.set(time as unknown as string | number, i);
     }
     this.#candles.setData(bars);
+    // New bars are a new price range, and a scale the reader dragged for the
+    // old ones can leave them off the pane entirely.
+    this.#restoreAutoScale();
 
     // On the contract START, not on `data.rolls`, which holds the expiries.
     // The arrow exists to say "the change into this bar is carry", and that is
@@ -534,11 +544,34 @@ export class CandleChart {
     };
   }
 
+  /**
+   * Put the price scale back on autoscale.
+   *
+   * Dragging the price axis turns it off — deliberately, that IS the gesture —
+   * and it stays off, which is right while the reader pans and zooms and wrong
+   * the moment the chart is asked for a different slice.
+   *
+   * MEASURED, with the restore disabled as the control: drag the scale on a 6M
+   * chart, then press MAX, and the 6,550 candles are drawn from y=160 to the
+   * pane's last pixel row (566 of 566) with 2,849 lit pixels — most of 26
+   * years below the bottom edge. With it, the same click fits at y=45..499 and
+   * 5,645 lit. So a range preset and a new dataset refit; a pan, a scroll-zoom
+   * and a theme change do not, because the reader's scale is theirs to keep.
+   *
+   * They also have the library's own way back: a DOUBLE CLICK on the axis
+   * (`handleScale.axisDoubleClickReset`, left at its default) returns it to
+   * autoscale — verified, 380 -> 454 span on the shipped snapshot.
+   */
+  #restoreAutoScale(): void {
+    this.#chart.priceScale('right').applyOptions({ autoScale: true });
+  }
+
   /** Range presets move the viewport; they never reload or aggregate. Every
    *  one of the 6,500 sessions is loaded the whole time. */
   showLastDays(days: number): void {
     const n = this.#data.d.length;
     if (n === 0) return;
+    this.#restoreAutoScale();
     if (!Number.isFinite(days)) {
       this.#chart.timeScale().fitContent();
       this.#settle();
