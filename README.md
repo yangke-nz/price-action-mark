@@ -1,5 +1,12 @@
 # Price Action Mark
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-750014.svg)](LICENSE)
+[![Node >= 22.6](https://img.shields.io/badge/node-%3E%3D22.6-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Electron 44](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)](https://www.electronjs.org)
+[![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev)
+[![TypeScript 5.9](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+![Platforms: Windows x64, macOS Apple Silicon](https://img.shields.io/badge/platforms-Windows%20x64%20%C2%B7%20macOS%20arm64-555)
+
 Price action charting, daily and 5-minute — mark up the tape, then publish it. The
 chart reads itself with **31 rules drawn from Al Brooks's price action method**
 (special bars, the lines they form, the entries they set up); you keep the marks
@@ -10,6 +17,11 @@ source; the data layer is symbol-generic.
 
 Two timeframes — **daily** back to 2000, and the last 60 days of **5-minute**
 bars — from one keyless source.
+
+![The desktop app: E-Mini S&P 500 daily bars in the RTH session, dark theme. The
+chart marks micro channels, breakouts, follow-through, a two-bar reversal and
+inside and outside bars; the marking pane lists 21 rules with their hit counts,
+and the tape reads each session in words with its marks as chips.](docs/screenshot.png)
 
 One Svelte 5 codebase, **two build targets**:
 
